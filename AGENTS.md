@@ -6,3 +6,4 @@
 - Keep projects independent. Do not modify a sibling project unless the task explicitly requires it.
 - Read the nearest `SPEC.md` before making a change.
 - Run checks relevant to a change and report the result.
+- When requesting a user decision, present clear options labelled `A`, `B`, `C`, and so on. Put the recommended option first as `A` and identify it as recommended.
