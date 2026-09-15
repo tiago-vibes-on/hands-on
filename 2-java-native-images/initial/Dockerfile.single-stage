@@ -1,0 +1,10 @@
+FROM maven:3.9.16-eclipse-temurin-25
+
+WORKDIR /workspace
+
+COPY . .
+RUN mvn --batch-mode package -DskipTests
+
+EXPOSE 8080
+
+ENTRYPOINT ["java", "-jar", "target/quarkus-app/quarkus-run.jar"]
