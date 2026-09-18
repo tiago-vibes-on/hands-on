@@ -65,6 +65,43 @@ docker compose up --build
 
 The API is available at `http://localhost:8080/heroes`.
 
+### API examples
+
+Create Darth Vader:
+
+```bash
+curl --request POST http://localhost:8080/heroes \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "name": "Anakin Skywalker",
+    "alias": "Darth Vader",
+    "power": "The Force"
+  }'
+```
+
+Use the `id` returned by the creation request in the following examples. Patch
+only Darth Vader's power:
+
+```bash
+curl --request PATCH http://localhost:8080/heroes/1 \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "power": "The Force and lightsaber combat"
+  }'
+```
+
+Replace all mutable fields with `PUT`:
+
+```bash
+curl --request PUT http://localhost:8080/heroes/1 \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "name": "Anakin Skywalker",
+    "alias": "Darth Vader",
+    "power": "The Force and lightsaber combat"
+  }'
+```
+
 The PostgreSQL credentials in `compose.yaml` are local-development values only. To stop the stack while keeping hero data, run:
 
 ```bash
