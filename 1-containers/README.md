@@ -67,3 +67,29 @@ To remove the PostgreSQL volume as well, run:
 ```bash
 docker compose down --volumes
 ```
+
+### Single-stage image
+
+The final checkpoint keeps `Dockerfile.single-stage` as the intermediate,
+single-stage example. Build it from the `final` directory:
+
+```bash
+docker build -f Dockerfile.single-stage -t hero-association:single-stage .
+```
+
+Start PostgreSQL with Docker Compose, then run the single-stage image on the
+same Compose network:
+
+```bash
+docker compose up -d postgres
+docker run --rm --network hero-association_default -p 8080:8080 \
+  -e QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://postgres:5432/hero_association \
+  -e QUARKUS_DATASOURCE_USERNAME=hero_association \
+  -e QUARKUS_DATASOURCE_PASSWORD=hero_association \
+  hero-association:single-stage
+```
+
+The API is available at `http://localhost:8080/heroes`. Press `Ctrl-C` to stop
+the API container, then run `docker compose down` to stop PostgreSQL. The
+default `Dockerfile` remains the multi-stage image used by `docker compose up
+--build`.

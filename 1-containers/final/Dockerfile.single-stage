@@ -4,7 +4,7 @@ WORKDIR /workspace
 
 COPY . .
 
-RUN mvn --batch-mode package -DskipTests
+RUN mvn --batch-mode package
 
 EXPOSE 8080
 
