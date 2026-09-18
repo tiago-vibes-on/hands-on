@@ -64,6 +64,16 @@ class HeroResourceTest {
                 .then()
                 .statusCode(200)
                 .body("alias", is("Themysciran Champion"));
+
+        given()
+                .when().delete("/heroes/{id}", id)
+                .then()
+                .statusCode(204);
+
+        given()
+                .when().get("/heroes/{id}", id)
+                .then()
+                .statusCode(404);
     }
 
     @Test

@@ -8,6 +8,7 @@ import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.PATCH;
@@ -83,6 +84,14 @@ public class HeroResource {
             hero.power = request.power();
         }
         return HeroResponse.from(hero);
+    }
+
+    @DELETE
+    @Path("/{id}")
+    @Transactional
+    public Response delete(@PathParam("id") Long id) {
+        heroRepository.delete(findHero(id));
+        return Response.noContent().build();
     }
 
     private Hero findHero(Long id) {

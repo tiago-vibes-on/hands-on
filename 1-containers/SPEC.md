@@ -28,6 +28,7 @@ Containerize a small Quarkus Hero Association service, add PostgreSQL persistenc
   - `GET /heroes/{id}`
   - `PUT /heroes/{id}`
   - `PATCH /heroes/{id}`
+  - `DELETE /heroes/{id}`
 - `name`, `alias`, and `power` are required.
 - `alias` is unique.
 - A duplicate alias returns `409`.
@@ -43,7 +44,6 @@ Containerize a small Quarkus Hero Association service, add PostgreSQL persistenc
 - Native images
 - Authentication and authorization
 - Pagination
-- Delete operations
 - Database migrations
 - OpenAPI documentation
 - Kubernetes

@@ -102,6 +102,12 @@ curl --request PUT http://localhost:8080/heroes/1 \
   }'
 ```
 
+Delete Darth Vader:
+
+```bash
+curl --request DELETE http://localhost:8080/heroes/1
+```
+
 The PostgreSQL credentials in `compose.yaml` are local-development values only. To stop the stack while keeping hero data, run:
 
 ```bash
