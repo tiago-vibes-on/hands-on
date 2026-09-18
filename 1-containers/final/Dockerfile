@@ -5,7 +5,7 @@ WORKDIR /workspace
 COPY pom.xml .
 RUN mvn --batch-mode dependency:go-offline
 
-COPY src
+COPY src ./src
 RUN mvn --batch-mode package
 
 FROM eclipse-temurin:25-jre-alpine
