@@ -49,8 +49,17 @@ The application is available at `http://localhost:8080/status`.
 
 ### Final
 
+The default `Dockerfile` is the multi-stage image. Build it explicitly from
+the `final` directory:
+
 ```bash
 cd final
+docker build -f Dockerfile -t hero-association:multi-stage .
+```
+
+Run the multi-stage image with PostgreSQL using Docker Compose:
+
+```bash
 docker compose up --build
 ```
 
@@ -90,6 +99,4 @@ docker run --rm --network hero-association_default -p 8080:8080 \
 ```
 
 The API is available at `http://localhost:8080/heroes`. Press `Ctrl-C` to stop
-the API container, then run `docker compose down` to stop PostgreSQL. The
-default `Dockerfile` remains the multi-stage image used by `docker compose up
---build`.
+the API container, then run `docker compose down` to stop PostgreSQL.
