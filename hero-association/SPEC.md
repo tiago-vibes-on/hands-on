@@ -27,7 +27,8 @@ The API is exposed only at `/api/v1/heroes`.
 - `GET /api/v1/heroes` lists heroes.
 - `GET /api/v1/heroes/{id}` returns a hero or `404 Not Found`.
 - `PUT /api/v1/heroes/{id}` replaces all mutable fields.
-- `PATCH /api/v1/heroes/{id}` changes a non-empty subset of mutable fields.
+- `PATCH /api/v1/heroes/{id}` changes a non-empty subset of mutable fields;
+  an empty update returns `400 Bad Request`.
 - `DELETE /api/v1/heroes/{id}` removes a hero and returns `204 No Content`.
 
 Each hero has generated `id`, `name`, `alias`, and `power`. The mutable fields

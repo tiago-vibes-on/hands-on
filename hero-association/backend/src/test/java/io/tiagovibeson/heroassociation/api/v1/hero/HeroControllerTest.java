@@ -157,6 +157,17 @@ class HeroControllerTest {
     }
 
     @Test
+    void shouldRejectAnEmptyHeroUpdate() {
+        given()
+                .contentType(ContentType.JSON)
+                .body("{}")
+                .when().patch("/api/v1/heroes/1")
+                .then()
+                .statusCode(400)
+                .body("message", is("At least one field must be provided."));
+    }
+
+    @Test
     void shouldReturnNotFoundForAnUnknownHero() {
         given()
                 .when().get("/api/v1/heroes/999999")

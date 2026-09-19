@@ -4,6 +4,7 @@ import java.util.List;
 
 import io.tiagovibeson.heroassociation.application.exception.AliasAlreadyRegisteredException;
 import io.tiagovibeson.heroassociation.application.exception.HeroNotFoundException;
+import io.tiagovibeson.heroassociation.application.exception.InvalidHeroUpdateException;
 import io.tiagovibeson.heroassociation.domain.Hero;
 import io.tiagovibeson.heroassociation.repository.HeroRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -44,6 +45,10 @@ public class HeroApplicationService {
 
     @Transactional
     public Hero update(Long id, String name, String alias, String power) {
+        if (name == null && alias == null && power == null) {
+            throw new InvalidHeroUpdateException();
+        }
+
         Hero hero = findById(id);
         if (alias != null) {
             ensureAliasIsAvailable(alias, hero.getId());

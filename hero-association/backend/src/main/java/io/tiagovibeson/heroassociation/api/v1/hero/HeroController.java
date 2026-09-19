@@ -6,7 +6,6 @@ import java.util.List;
 import io.tiagovibeson.heroassociation.application.HeroApplicationService;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
-import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
@@ -58,10 +57,6 @@ public class HeroController {
     @PATCH
     @Path("/{id}")
     public HeroResponse updatePartially(@PathParam("id") Long id, @Valid PatchHeroRequest request) {
-        if (request.isEmpty()) {
-            throw new BadRequestException("At least one field must be provided.");
-        }
-
         return HeroResponse.from(heroApplicationService.update(id, request.name(), request.alias(), request.power()));
     }
 
