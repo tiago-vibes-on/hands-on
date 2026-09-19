@@ -2,6 +2,8 @@ package io.tiagovibeson.heroassociation.application;
 
 import java.util.List;
 
+import io.tiagovibeson.heroassociation.application.exception.AliasAlreadyRegisteredException;
+import io.tiagovibeson.heroassociation.application.exception.HeroNotFoundException;
 import io.tiagovibeson.heroassociation.domain.Hero;
 import io.tiagovibeson.heroassociation.repository.HeroRepository;
 import jakarta.enterprise.context.ApplicationScoped;

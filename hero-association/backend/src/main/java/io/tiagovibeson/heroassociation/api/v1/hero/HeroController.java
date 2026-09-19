@@ -1,4 +1,4 @@
-package io.tiagovibeson.heroassociation.api.v1;
+package io.tiagovibeson.heroassociation.api.v1.hero;
 
 import java.net.URI;
 import java.util.List;
@@ -30,7 +30,7 @@ public class HeroController {
     HeroApplicationService heroApplicationService;
 
     @POST
-    public Response create(@Valid HeroCreateRequest request, @Context UriInfo uriInfo) {
+    public Response create(@Valid CreateHeroRequest request, @Context UriInfo uriInfo) {
         HeroResponse hero = HeroResponse.from(
                 heroApplicationService.register(request.name(), request.alias(), request.power()));
 
@@ -51,13 +51,13 @@ public class HeroController {
 
     @PUT
     @Path("/{id}")
-    public HeroResponse replace(@PathParam("id") Long id, @Valid HeroUpdateRequest request) {
+    public HeroResponse replace(@PathParam("id") Long id, @Valid UpdateHeroRequest request) {
         return HeroResponse.from(heroApplicationService.replace(id, request.name(), request.alias(), request.power()));
     }
 
     @PATCH
     @Path("/{id}")
-    public HeroResponse updatePartially(@PathParam("id") Long id, @Valid HeroPatchRequest request) {
+    public HeroResponse updatePartially(@PathParam("id") Long id, @Valid PatchHeroRequest request) {
         if (request.isEmpty()) {
             throw new BadRequestException("At least one field must be provided.");
         }

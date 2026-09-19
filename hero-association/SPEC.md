@@ -10,8 +10,10 @@ managing heroes.
 The backend separates responsibilities into the following packages:
 
 - `domain`: the `Hero` model, which is also the JPA entity
-- `application`: hero use cases and application exceptions
-- `api.v1`: HTTP resources, request and response models, and exception mapping
+- `application`: hero use cases
+- `application.exception`: application exceptions
+- `api.v1.hero`: HTTP resources and hero request and response models
+- `api.v1.error`: HTTP error responses and exception mapping
 - `repository`: the Panache repository
 
 `HeroApplicationService` coordinates use cases. Application exceptions are

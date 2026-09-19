@@ -1,4 +1,4 @@
-package io.tiagovibeson.heroassociation.application;
+package io.tiagovibeson.heroassociation.application.exception;
 
 public class HeroNotFoundException extends HeroApplicationException {
 

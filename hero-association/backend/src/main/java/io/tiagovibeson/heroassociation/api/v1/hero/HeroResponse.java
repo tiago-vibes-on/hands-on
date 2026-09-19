@@ -1,4 +1,4 @@
-package io.tiagovibeson.heroassociation.api.v1;
+package io.tiagovibeson.heroassociation.api.v1.hero;
 
 import io.tiagovibeson.heroassociation.domain.Hero;
 
