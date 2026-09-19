@@ -1,6 +1,6 @@
-package io.tiagovibes.heroassociation.api.v1;
+package io.tiagovibeson.heroassociation.api.v1;
 
-import io.tiagovibes.heroassociation.domain.Hero;
+import io.tiagovibeson.heroassociation.domain.Hero;
 
 public record HeroResponse(Long id, String name, String alias, String power) {
 

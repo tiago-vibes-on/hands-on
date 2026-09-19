@@ -1,9 +1,9 @@
-package io.tiagovibes.heroassociation.api.v1;
+package io.tiagovibeson.heroassociation.api.v1;
 
 import java.net.URI;
 import java.util.List;
 
-import io.tiagovibes.heroassociation.application.HeroApplicationService;
+import io.tiagovibeson.heroassociation.application.HeroApplicationService;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.BadRequestException;

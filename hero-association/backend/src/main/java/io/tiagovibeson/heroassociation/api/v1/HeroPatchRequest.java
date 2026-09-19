@@ -1,4 +1,4 @@
-package io.tiagovibes.heroassociation.api.v1;
+package io.tiagovibeson.heroassociation.api.v1;
 
 import jakarta.validation.constraints.Size;
 

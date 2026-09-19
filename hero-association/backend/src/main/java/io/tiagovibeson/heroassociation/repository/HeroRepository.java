@@ -1,9 +1,9 @@
-package io.tiagovibes.heroassociation.repository;
+package io.tiagovibeson.heroassociation.repository;
 
 import java.util.Optional;
 
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
-import io.tiagovibes.heroassociation.domain.Hero;
+import io.tiagovibeson.heroassociation.domain.Hero;
 import jakarta.enterprise.context.ApplicationScoped;
 
 @ApplicationScoped

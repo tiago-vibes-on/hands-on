@@ -1,4 +1,4 @@
-package io.tiagovibes.heroassociation.domain;
+package io.tiagovibeson.heroassociation.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

@@ -1,9 +1,9 @@
-package io.tiagovibes.heroassociation.application;
+package io.tiagovibeson.heroassociation.application;
 
 import java.util.List;
 
-import io.tiagovibes.heroassociation.domain.Hero;
-import io.tiagovibes.heroassociation.repository.HeroRepository;
+import io.tiagovibeson.heroassociation.domain.Hero;
+import io.tiagovibeson.heroassociation.repository.HeroRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;

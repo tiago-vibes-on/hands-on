@@ -1,4 +1,4 @@
-package io.tiagovibes.heroassociation.application;
+package io.tiagovibeson.heroassociation.application;
 
 public abstract class HeroApplicationException extends RuntimeException {
 

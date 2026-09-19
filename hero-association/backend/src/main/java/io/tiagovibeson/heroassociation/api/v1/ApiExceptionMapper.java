@@ -1,7 +1,7 @@
-package io.tiagovibes.heroassociation.api.v1;
+package io.tiagovibeson.heroassociation.api.v1;
 
-import io.tiagovibes.heroassociation.application.HeroApplicationException;
-import io.tiagovibes.heroassociation.application.HeroNotFoundException;
+import io.tiagovibeson.heroassociation.application.HeroApplicationException;
+import io.tiagovibeson.heroassociation.application.HeroNotFoundException;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
