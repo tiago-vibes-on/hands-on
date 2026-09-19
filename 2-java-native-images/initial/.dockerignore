@@ -1,7 +1,0 @@
-.git
-.gitignore
-.idea
-.mvn
-target
-Dockerfile.single-stage
-README.md
