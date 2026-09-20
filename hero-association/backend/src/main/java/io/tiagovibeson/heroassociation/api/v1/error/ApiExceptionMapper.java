@@ -13,8 +13,8 @@ public class ApiExceptionMapper implements ExceptionMapper<HeroApplicationExcept
     @Override
     public Response toResponse(HeroApplicationException exception) {
         Response.Status status = switch (exception) {
-            case HeroNotFoundException ignored -> Response.Status.NOT_FOUND;
-            case InvalidHeroUpdateException ignored -> Response.Status.BAD_REQUEST;
+            case HeroNotFoundException _ -> Response.Status.NOT_FOUND;
+            case InvalidHeroUpdateException _ -> Response.Status.BAD_REQUEST;
             default -> Response.Status.CONFLICT;
         };
 

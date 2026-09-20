@@ -38,8 +38,18 @@ aliases return `409 Conflict`.
 ## Runtime
 
 - PostgreSQL stores hero data.
-- Docker Compose runs the backend and PostgreSQL.
-- Maven and Docker builds use the JVM.
+- Database tables use singular entity names; hero records are stored in the
+  `hero` table.
+- PostgreSQL can run independently through Docker Compose and is exposed to a
+  host-run microservice at `localhost:5432`.
+- Docker Compose runs the backend and PostgreSQL using the JVM package by
+  default.
+- Maven produces a JVM fast-jar by default.
+- Native compilation is available as an opt-in Maven build with `-Dnative`; it
+  produces a GraalVM-compatible native executable and does not change the
+  default Maven or Docker Compose workflow.
+- A separate native Docker Compose workflow packages the prebuilt Linux native
+  executable with `Dockerfile.native` and runs it with PostgreSQL.
 
 ## Verification
 

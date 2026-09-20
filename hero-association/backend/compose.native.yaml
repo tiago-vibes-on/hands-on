@@ -1,4 +1,4 @@
-name: hero-association
+name: hero-association-native
 
 services:
   postgres:
@@ -14,12 +14,11 @@ services:
       retries: 10
     volumes:
       - postgres_data:/var/lib/postgresql
-    ports:
-      - "5432:5432"
 
   api:
     build:
       context: .
+      dockerfile: Dockerfile.native
     depends_on:
       postgres:
         condition: service_healthy

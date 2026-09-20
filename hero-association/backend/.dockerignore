@@ -3,5 +3,7 @@
 .idea
 .mvn
 target
+!target/
+!target/*-runner
 Dockerfile.single-stage
 README.md
