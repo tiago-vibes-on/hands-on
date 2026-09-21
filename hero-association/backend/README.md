@@ -30,6 +30,12 @@ container:
 Quarkus Dev Services starts and removes a temporary PostgreSQL container when
 no datasource connection settings are supplied.
 
+### Development database reset
+
+Until Flyway is introduced, every application startup drops and recreates the
+database schema, then loads the seed heroes from `src/main/resources/import.sql`.
+Do not use this configuration with data that must be retained.
+
 ### Run PostgreSQL separately
 
 To keep the database running independently of the microservice, start only the
@@ -126,7 +132,7 @@ docker compose -f compose.native.yaml down
 
 The API is available at `http://localhost:8080/api/v1/heroes`.
 
-To stop the containers while retaining hero data:
+To stop the containers:
 
 ```bash
 docker compose down

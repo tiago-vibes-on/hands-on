@@ -40,6 +40,9 @@ aliases return `409 Conflict`.
 - PostgreSQL stores hero data.
 - Database tables use singular entity names; hero records are stored in the
   `hero` table.
+- Until Flyway is introduced, application startup drops and recreates the
+  schema, then loads deterministic seed heroes from `import.sql`. This
+  development-only workflow does not retain application data.
 - PostgreSQL can run independently through Docker Compose and is exposed to a
   host-run microservice at `localhost:5432`.
 - Docker Compose runs the backend and PostgreSQL using the JVM package by

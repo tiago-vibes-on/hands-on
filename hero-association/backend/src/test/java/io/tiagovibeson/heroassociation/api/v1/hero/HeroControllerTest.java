@@ -2,6 +2,7 @@ package io.tiagovibeson.heroassociation.api.v1.hero;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.notNullValue;
 
 import io.quarkus.test.junit.QuarkusTest;
@@ -10,6 +11,15 @@ import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class HeroControllerTest {
+
+    @Test
+    void shouldLoadSeedHeroes() {
+        given()
+                .when().get("/api/v1/heroes")
+                .then()
+                .statusCode(200)
+                .body("alias", hasItems("Ironwall", "Moonweaver", "Swiftarrow"));
+    }
 
     @Test
     void shouldCreateReplaceAndPatchAHero() {
