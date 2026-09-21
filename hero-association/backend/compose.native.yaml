@@ -19,6 +19,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.native
+      target: native-runtime
     depends_on:
       postgres:
         condition: service_healthy

@@ -105,6 +105,19 @@ Then build and run the native runtime image with its dedicated Compose file:
 docker compose -f compose.native.yaml up --build
 ```
 
+`compose.native.yaml` selects the `native-runtime` target from
+`Dockerfile.native`, which copies the prebuilt and tested executable. The same
+Dockerfile also has a `native-multistage` target that compiles natively during
+the Docker build:
+
+```bash
+docker build --file Dockerfile.native --target native-multistage --tag hero-association:native .
+```
+
+The multistage target skips tests because Docker builds cannot safely run the
+Testcontainers PostgreSQL workflow. Run `./mvnw test` separately before using
+that convenience target.
+
 Stop it with:
 
 ```bash

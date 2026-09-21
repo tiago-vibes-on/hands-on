@@ -48,8 +48,10 @@ aliases return `409 Conflict`.
 - Native compilation is available as an opt-in Maven build with `-Dnative`; it
   produces a GraalVM-compatible native executable and does not change the
   default Maven or Docker Compose workflow.
-- A separate native Docker Compose workflow packages the prebuilt Linux native
-  executable with `Dockerfile.native` and runs it with PostgreSQL.
+- `Dockerfile.native` provides a `native-runtime` target that packages the
+  prebuilt Linux native executable and a `native-multistage` target that
+  compiles it in Docker. The native Docker Compose workflow uses the runtime
+  target and PostgreSQL.
 
 ## Verification
 
