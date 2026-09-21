@@ -30,6 +30,8 @@ a hero in combat.
 
 - Heroes are recruitable non-player characters (NPCs).
 - Heroes can receive equipment.
+- Each hero has five item slots and two spell slots. The initial prototype
+  shows these slots empty; item and spell behavior is not implemented yet.
 - The initial hero classes are:
   - Warrior
   - Mage
@@ -46,6 +48,9 @@ Each initial class has two core training skills:
 | Mage | Magic Level |
 | Archer | Distance Level |
 
+Training happens only at the agency. Heroes assigned to a quest cannot train;
+they earn individual experience by fighting creatures instead.
+
 ### Initial class roles
 
 | Class | Role |
@@ -59,8 +64,17 @@ Each initial class has two core training skills:
 Managers are responsible for managing their heroes' stamina.
 
 - Quests consume hero stamina.
-- Rest restores hero stamina.
+- At the agency, a hero can train or rest. A resting hero recovers stamina,
+  health, and mana at twice the normal recovery rate. A training hero does not
+  receive this recovery bonus.
 - Lower stamina reduces a hero's effectiveness on quests.
+- Stamina also changes experience earned from creatures:
+
+| Stamina | Experience gain |
+| --- | ---: |
+| 80% or more | 150% |
+| 30% to 79% | 100% |
+| Below 30% | 50% |
 
 ## Agency progression
 
@@ -77,7 +91,8 @@ The Agency Level sets the maximum available level for each specialized upgrade.
 Managers do not need to upgrade every specialized level before advancing the
 Agency Level.
 
-The Rest Level improves the agency's ability to restore hero stamina.
+The Rest Level improves the agency's ability to restore hero stamina, health,
+and mana.
 
 The Size Level determines how much room the agency has for heroes and its
 facilities.
@@ -97,12 +112,20 @@ meaningful without becoming excessively grindy.
 
 ## Quests
 
-- Managers can send one hero or a team of heroes on a quest.
+- Managers always send a party on a quest. A party can contain one hero or
+  multiple heroes.
+- All heroes assigned to a quest belong to that quest's party and are
+  unavailable at the agency until the quest is complete. Other heroes remain
+  at the agency, where they are either training or resting before they can join
+  another party.
 - Quest outcomes depend on the heroes' abilities and stamina.
 - A poorly matched or exhausted hero can fail a quest.
 - Quests take time to complete and can require objectives such as killing a
   specified number of creatures or another defined objective.
 - Quest rewards can include gold, chests, and items dropped by creatures.
+- Each hero in the party earns their own experience from creatures defeated
+  during the quest, using the stamina-based experience gain, and can level up
+  independently.
 - The party has a shared Capacity that determines how many resources it can
   carry. Items are collected as soon as creatures are defeated.
 - Hero death is permanent. When a hero dies, the agency pays a fee based on
@@ -118,6 +141,33 @@ meaningful without becoming excessively grindy.
 - A combat encounter can contain one to four creatures.
 - Every hero and creature has its own attack timer.
 - When a combatant's timer is ready, that combatant performs its next attack.
+
+### Initial hero combat attributes
+
+Heroes begin at Level 1. The initial health and mana values are:
+
+| Class | Health | Mana |
+| --- | ---: | ---: |
+| Warrior | 300 | 50 |
+| Mage | 100 | 500 |
+| Archer | 200 | 200 |
+
+### First frontend combat prototype
+
+- In the Quests screen, clicking an in-progress quest card expands the card to
+  show the current encounter.
+- The battlefield is rendered inline with Phaser, while React continues to
+  own the surrounding application screens and quest interface.
+- The first encounter uses three heroes against three low-damage placeholder
+  trolls. It shows the Level 1 heroes' health and mana, damage events, and
+  independent attack timers.
+- Each combatant shows two empty spell slots beneath its resource bars. Spells
+  are intentionally not implemented yet.
+- Creatures also show a mana bar. The initial placeholder trolls each start
+  with 100 mana, though no creature ability consumes mana yet.
+- The prototype uses local mock state. Closing the expanded quest pauses its
+  battle state; a later backend implementation will make quest state
+  authoritative and able to continue while the player is away.
 
 ## Market
 

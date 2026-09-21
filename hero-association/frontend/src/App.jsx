@@ -1,5 +1,8 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
+import { createBattle } from './combat/battle'
 import './App.css'
+
+const CombatScene = lazy(() => import('./combat/CombatScene'))
 
 const navigation = [
   { id: 'overview', label: 'Overview', icon: '◇' },
@@ -11,10 +14,22 @@ const navigation = [
 ]
 
 const heroes = [
-  { name: 'Brom Ironwall', alias: 'Ironwall', role: 'Warrior', level: 8, stamina: 82, color: 'gold', training: 'Melee 16 · Shield 14' },
-  { name: 'Elara Moonweaver', alias: 'Moonweaver', role: 'Mage', level: 7, stamina: 64, color: 'violet', training: 'Magic 18' },
-  { name: 'Kael Swiftarrow', alias: 'Swiftarrow', role: 'Archer', level: 6, stamina: 91, color: 'teal', training: 'Distance 17' },
+  { name: 'Brom Ironwall', alias: 'Ironwall', role: 'Warrior', level: 1, stamina: 82, color: 'gold', partyId: 'broken-pass-party', status: 'quest' },
+  { name: 'Elara Moonweaver', alias: 'Moonweaver', role: 'Mage', level: 1, stamina: 24, color: 'violet', partyId: 'broken-pass-party', status: 'quest' },
+  { name: 'Kael Swiftarrow', alias: 'Swiftarrow', role: 'Archer', level: 1, stamina: 91, color: 'teal', partyId: 'broken-pass-party', status: 'quest' },
+  { name: 'Dorian Oakshield', alias: 'Oakshield', role: 'Warrior', level: 1, color: 'gold', activity: 'Training', status: 'agency' },
+  { name: 'Runa Emberveil', alias: 'Emberveil', role: 'Mage', level: 1, color: 'violet', activity: 'Resting', status: 'agency' },
+  { name: 'Lyra Hawkeye', alias: 'Hawkeye', role: 'Archer', level: 1, color: 'teal', activity: 'Training', status: 'agency' },
 ]
+
+const activeParty = {
+  id: 'broken-pass-party',
+  name: 'Broken Pass Party',
+  quest: 'Trolls at Broken Pass',
+}
+
+const questHeroes = heroes.filter((hero) => hero.partyId === activeParty.id)
+const agencyHeroes = heroes.filter((hero) => hero.status === 'agency')
 
 const metrics = [
   { label: 'Gold', value: '2,480', detail: '+240 this week', icon: 'G' },
@@ -35,11 +50,43 @@ function HeroAvatar({ hero, size = 'normal' }) {
   return <div className={`hero-avatar hero-avatar--${hero.color} hero-avatar--${size}`} aria-hidden="true">{hero.alias.slice(0, 1)}</div>
 }
 
+function experienceGain(stamina) {
+  if (stamina >= 80) {
+    return 150
+  }
+  if (stamina >= 30) {
+    return 100
+  }
+  return 50
+}
+
 function StaminaBar({ value }) {
+  const status = value < 30 ? 'critical' : value < 80 ? 'warning' : 'healthy'
+
   return (
-    <div className="stamina" aria-label={`${value}% stamina`}>
+    <div className={`stamina stamina--${status}`} aria-label={`${value}% stamina`}>
+      <span className="stamina__label">Stamina</span>
       <div className="stamina__track"><span className="stamina__value" style={{ width: `${value}%` }} /></div>
       <span>{value}%</span>
+    </div>
+  )
+}
+
+function HeroLoadoutSlots() {
+  return (
+    <div className="hero-loadout" aria-label="Empty item and spell slots">
+      <div className="hero-loadout__group">
+        <span>Items</span>
+        <div className="hero-loadout__slots" aria-label="Five empty item slots">
+          {Array.from({ length: 5 }, (_, index) => <span className="hero-loadout__slot" key={index} aria-hidden="true" />)}
+        </div>
+      </div>
+      <div className="hero-loadout__group">
+        <span>Spells</span>
+        <div className="hero-loadout__slots" aria-label="Two empty spell slots">
+          {Array.from({ length: 2 }, (_, index) => <span className="hero-loadout__slot hero-loadout__slot--spell" key={index} aria-hidden="true" />)}
+        </div>
+      </div>
     </div>
   )
 }
@@ -87,8 +134,8 @@ function Overview({ onNavigate }) {
           </div>
           <div className="active-quest__footer">
             <div className="party-avatars" aria-label="Quest party">
-              {heroes.map((hero) => <HeroAvatar hero={hero} size="small" key={hero.alias} />)}
-              <span>3 heroes</span>
+              {questHeroes.map((hero) => <HeroAvatar hero={hero} size="small" key={hero.alias} />)}
+              <span>{questHeroes.length} heroes</span>
             </div>
             <div className="quest-time"><span>Estimated time</span><strong>18m remaining</strong></div>
           </div>
@@ -106,15 +153,15 @@ function Overview({ onNavigate }) {
       </section>
       <section className="panel roster-panel">
         <div className="panel__header">
-          <div><p className="eyebrow">Your roster</p><h2>Heroes</h2></div>
+          <div><p className="eyebrow">Active quest</p><h2>Party</h2></div>
           <button className="text-button" type="button" onClick={() => onNavigate('heroes')}>View all</button>
         </div>
         <div className="hero-list">
-          {heroes.map((hero) => (
+          {questHeroes.map((hero) => (
             <article className="hero-row" key={hero.alias}>
               <HeroAvatar hero={hero} />
               <div className="hero-row__identity"><strong>{hero.alias}</strong><span>{hero.role} · Level {hero.level}</span></div>
-              <div className="hero-row__training">{hero.training}</div>
+              <div className="hero-row__training">Earning experience from creatures</div>
               <StaminaBar value={hero.stamina} />
             </article>
           ))}
@@ -124,32 +171,76 @@ function Overview({ onNavigate }) {
   )
 }
 
+function HeroCards({ roster }) {
+  return (
+    <div className="hero-cards">
+      {roster.map((hero) => (
+        <article className="panel hero-card" key={hero.alias}>
+          <div className="hero-card__topline"><HeroAvatar hero={hero} size="large" /><span className={`status ${hero.status === 'quest' ? 'status--progress' : ''}`}>{hero.status === 'quest' ? 'On quest' : hero.activity}</span></div>
+          <div><p className="eyebrow">{hero.role}</p><h2>{hero.alias}</h2><p className="hero-card__name">{hero.name} · Level {hero.level}</p></div>
+          {hero.status === 'quest' ? (
+            <>
+              <div className="hero-card__details"><span>Experience</span><strong>{experienceGain(hero.stamina)}% XP gain from creatures</strong></div>
+              <StaminaBar value={hero.stamina} />
+            </>
+          ) : <div className="hero-card__agency-activity"><span>At the agency</span><strong>{hero.activity}</strong><p>{hero.activity === 'Training' ? 'Improving for the next quest without a recovery bonus.' : 'Recovering stamina, health, and mana at 2× speed.'}</p></div>}
+          <HeroLoadoutSlots />
+        </article>
+      ))}
+    </div>
+  )
+}
+
 function Heroes() {
   return (
     <>
-      <PageHeading eyebrow="Dawnwatch Agency" title="Heroes" description="A small roster, ready for its next challenge." action={<button className="button button--primary" type="button">Recruit hero</button>} />
-      <section className="hero-cards" aria-label="Hero roster">
-        {heroes.map((hero) => (
-          <article className="panel hero-card" key={hero.alias}>
-            <HeroAvatar hero={hero} size="large" />
-            <div><p className="eyebrow">{hero.role}</p><h2>{hero.alias}</h2><p className="hero-card__name">{hero.name} · Level {hero.level}</p></div>
-            <div className="hero-card__details"><span>Training</span><strong>{hero.training}</strong></div>
-            <StaminaBar value={hero.stamina} />
-          </article>
-        ))}
+      <PageHeading eyebrow="Dawnwatch Agency" title="Heroes" description="Manage the party on a quest and the heroes training or resting at the agency." action={<button className="button button--primary" type="button">Recruit hero</button>} />
+      <section className="hero-group" aria-labelledby="quest-party-heading">
+        <div className="hero-group__header party-card"><div><p className="eyebrow">Active party</p><h2 id="quest-party-heading">{activeParty.name}</h2><p>On quest: {activeParty.quest} · {questHeroes.length} heroes.</p></div><span className="status status--progress">{questHeroes.length} in party</span></div>
+        <HeroCards roster={questHeroes} />
+      </section>
+      <section className="hero-group" aria-labelledby="agency-heroes-heading">
+        <div className="hero-group__header"><div><p className="eyebrow">Agency roster</p><h2 id="agency-heroes-heading">At the agency</h2><p>Heroes are training or resting before they join another party.</p></div><span className="status">{agencyHeroes.length} at agency</span></div>
+        <HeroCards roster={agencyHeroes} />
       </section>
     </>
   )
 }
 
-function Quests() {
+function Quests({ battle, combatLog, isCombatExpanded, onBattleChange, onCombatEvent, onResetBattle, onToggleCombat }) {
+  const defeatedCreatures = battle.status === 'victory' ? 10 : 7
+
+  function handleQuestCardKeyDown(event) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      onToggleCombat()
+    }
+  }
+
   return (
     <>
       <PageHeading eyebrow="Quest board" title="Quests" description="Choose a party that can finish the job and return safely." action={<button className="button button--primary" type="button">Find quests</button>} />
       <section className="quest-list">
-        <article className="panel quest-card quest-card--active">
-          <div><span className="status status--progress">In progress</span><h2>Trolls at Broken Pass</h2><p>Defeat 10 trolls to reopen the northern trade route.</p></div>
-          <div className="quest-card__facts"><span><b>7 / 10</b> defeated</span><span><b>18m</b> remaining</span><span><b>120</b> gold reward</span></div>
+        <article className={`panel quest-card quest-card--active ${isCombatExpanded ? 'quest-card--expanded' : ''}`}>
+          <div className="quest-card__trigger" role="button" tabIndex="0" aria-expanded={isCombatExpanded} onClick={onToggleCombat} onKeyDown={handleQuestCardKeyDown}>
+            <div><span className="status status--progress">{battle.status === 'in-progress' ? 'In progress' : battle.status}</span><h2>Trolls at Broken Pass</h2><p>Defeat 10 trolls to reopen the northern trade route.</p></div>
+            <div className="quest-card__facts"><span><b>{defeatedCreatures} / 10</b> defeated</span><span><b>18m</b> remaining</span><span><b>120</b> gold reward</span><span className="quest-card__expand-icon" aria-hidden="true">{isCombatExpanded ? '−' : '+'}</span></div>
+          </div>
+          {isCombatExpanded && (
+            <div className="combat-panel">
+              <div className="combat-panel__header">
+                <div><p className="eyebrow">Current encounter</p><h3>Automatic combat</h3></div>
+                {battle.status === 'in-progress' ? <span className="combat-panel__hint">Each combatant attacks on its own timer.</span> : <button className="text-button" type="button" onClick={onResetBattle}>Reset encounter</button>}
+              </div>
+              <Suspense fallback={<div className="combat-scene combat-scene--loading">Preparing the battlefield…</div>}>
+                <CombatScene battle={battle} onBattleChange={onBattleChange} onCombatEvent={onCombatEvent} />
+              </Suspense>
+              <div className="combat-log" aria-live="polite">
+                <strong>Combat log</strong>
+                <ul>{combatLog.map((event, index) => <li key={`${event}-${index}`}>{event}</li>)}</ul>
+              </div>
+            </div>
+          )}
         </article>
         <article className="panel quest-card">
           <div><span className="status">Available</span><h2>Lost Courier</h2><p>Find the missing courier in the old forest.</p></div>
@@ -218,10 +309,23 @@ function Feed() {
 
 function App() {
   const [activePage, setActivePage] = useState('overview')
+  const [battle, setBattle] = useState(() => createBattle())
+  const [combatLog, setCombatLog] = useState([])
+  const [isCombatExpanded, setIsCombatExpanded] = useState(false)
+
+  function addCombatEvent(message) {
+    setCombatLog((events) => [message, ...events].slice(0, 4))
+  }
+
+  function resetBattle() {
+    setBattle((currentBattle) => createBattle(currentBattle.encounterId + 1))
+    setCombatLog([])
+  }
+
   const pages = {
     overview: <Overview onNavigate={setActivePage} />,
     heroes: <Heroes />,
-    quests: <Quests />,
+    quests: <Quests battle={battle} combatLog={combatLog} isCombatExpanded={isCombatExpanded} onBattleChange={setBattle} onCombatEvent={addCombatEvent} onResetBattle={resetBattle} onToggleCombat={() => setIsCombatExpanded((expanded) => !expanded)} />,
     agency: <Agency />,
     market: <Market />,
     feed: <Feed />,

@@ -56,6 +56,36 @@ aliases return `409 Conflict`.
   compiles it in Docker. The native Docker Compose workflow uses the runtime
   target and PostgreSQL.
 
+## Frontend prototype
+
+- The independently runnable React frontend lives in `frontend`.
+- It currently uses mock data and does not call this API.
+- Clicking the in-progress quest expands an inline Phaser combat scene. The
+  scene is a frontend prototype; it does not yet persist or resolve quests in
+  the backend.
+- The combat prototype starts the three heroes at Level 1 and displays their
+  current health and mana beside their respective bars. Placeholder trolls
+  also display a 100-mana bar.
+- Resource values appear to the left of hero bars and to the right of creature
+  bars.
+- Hero resource bars empty from the right; creature resource bars empty from
+  the left.
+- Each combatant has two empty visual spell slots; spell behavior is not yet
+  implemented.
+- The mock Heroes screen separates the active quest's named party from heroes
+  at the agency. Agency heroes show a Training or Resting activity without
+  numeric stats. A party can contain one or more heroes. Assignment is
+  frontend-only and not persisted.
+- A Resting agency hero is described as recovering stamina, health, and mana
+  at twice the normal rate. Timed recovery is not implemented yet.
+- Party members are shown as earning experience from creatures.
+- The stamina display is green at 80% or more, yellow from 30% through 79%,
+  and red below 30%. The matching experience gain is 150%, 100%, and 50%.
+- Every mock hero card ends with five empty item slots and two empty spell
+  slots. They do not yet change gameplay.
+- The active party card displays the party name once above its hero cards;
+  each active party hero displays their stamina.
+
 ## Verification
 
 Run the backend test suite with:
