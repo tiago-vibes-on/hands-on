@@ -1,0 +1,26 @@
+export const mageSpells = [
+  {
+    id: 'fire-ball',
+    name: 'Fire Ball',
+    symbol: '●',
+    type: 'Active',
+    target: 'Single target',
+    baseDamage: 10,
+    magicLevelScaling: 1.5,
+    requiredMagicLevel: 10,
+    manaCost: 20,
+    cooldown: 3000,
+  },
+  {
+    id: 'lightning-rail',
+    name: 'Lightning Rail',
+    symbol: 'ϟ',
+    type: 'Active',
+    target: 'All targets',
+    baseDamage: 2,
+    magicLevelScaling: 0.8,
+    requiredMagicLevel: 15,
+    manaCost: 40,
+    cooldown: 5000,
+  },
+]

@@ -1,0 +1,66 @@
+export const initialRunes = [
+  {
+    id: 'attack-rune',
+    name: 'Attack Rune',
+    symbol: '✦',
+    stats: '+8 attack',
+    description: 'A carved rune that strengthens every basic attack.',
+    quantity: 1,
+  },
+  {
+    id: 'guard-rune',
+    name: 'Guard Rune',
+    symbol: '◈',
+    stats: '+6 armor',
+    description: 'A protective rune etched with an unbroken circle.',
+    quantity: 0,
+  },
+  {
+    id: 'vitality-rune',
+    name: 'Vitality Rune',
+    symbol: '✚',
+    stats: '+20 health',
+    description: 'A living rune that reinforces a hero’s endurance.',
+    quantity: 1,
+  },
+  {
+    id: 'haste-rune',
+    name: 'Haste Rune',
+    symbol: '🪶',
+    stats: '+4% attack speed',
+    description: 'A quicksilver rune that accelerates basic attacks.',
+    quantity: 0,
+  },
+  {
+    id: 'mana-rune',
+    name: 'Mana Rune',
+    symbol: '♦',
+    stats: '+30 mana',
+    description: 'A blue rune that stores a reserve of magical energy.',
+    quantity: 0,
+  },
+  {
+    id: 'critical-chance-rune',
+    name: 'Critical Chance Rune',
+    symbol: '✧',
+    stats: '+1% critical chance',
+    description: 'A precise rune that gives its bearer a chance to critically strike.',
+    effects: { criticalChance: 0.01 },
+    quantity: 0,
+  },
+  {
+    id: 'critical-damage-rune',
+    name: 'Critical Damage Rune',
+    symbol: '✹',
+    stats: '+10% critical damage',
+    description: 'A forceful rune that increases the damage dealt by critical hits.',
+    effects: { criticalDamage: 0.1 },
+    quantity: 0,
+  },
+]
+
+export const initialEquippedRunes = {
+  Ironwall: [initialRunes[0], initialRunes[1], initialRunes[5], null, null],
+  Moonweaver: [initialRunes[4], initialRunes[5], initialRunes[6], null, null],
+  Swiftarrow: [initialRunes[2], initialRunes[3], initialRunes[5], null, null],
+}

@@ -29,9 +29,12 @@ a hero in combat.
 ## Heroes
 
 - Heroes are recruitable non-player characters (NPCs).
-- Heroes can receive equipment.
-- Each hero has five item slots and two spell slots. The initial prototype
-  shows these slots empty; item and spell behavior is not implemented yet.
+- Heroes can equip runes.
+- Each hero has five rune slots. A hero who has learned spells also displays
+  spell slots.
+- Unequipped runes are stored in the agency rune inventory. During the initial
+  prototype, any available agency rune can be equipped in any hero rune slot;
+  compatibility rules will be added later.
 - The initial hero classes are:
   - Warrior
   - Mage
@@ -50,6 +53,21 @@ Each initial class has two core training skills:
 
 Training happens only at the agency. Heroes assigned to a quest cannot train;
 they earn individual experience by fighting creatures instead.
+
+### Initial mage spells
+
+Spells can eventually be active or passive and may consume mana or life. The
+first prototype implements these active, mana-consuming mage spells:
+
+| Spell | Target | Damage | Requirement | Mana | Cooldown |
+| --- | --- | --- | ---: | ---: | ---: |
+| Fire Ball | One creature | 10 + 150% of Magic Level | Magic Level 10 | 20 | 3 seconds |
+| Lightning Rail | Every living creature | 2 + 80% of Magic Level | Magic Level 15 | 40 | 5 seconds |
+
+The prototype auto-casts a learned spell when its cooldown ends and the mage
+has enough mana. Passive spells, life-cost spells, and spells for Warriors and
+Archers remain undefined. While a spell is cooling down, a dark radial overlay
+clears from right to left across its combat spell icon.
 
 ### Initial class roles
 
@@ -123,6 +141,8 @@ meaningful without becoming excessively grindy.
 - Quests take time to complete and can require objectives such as killing a
   specified number of creatures or another defined objective.
 - Quest rewards can include gold, chests, and items dropped by creatures.
+- After a quest, loot moves from the party's shared Capacity to the agency
+  inventory, where it can be equipped or traded.
 - Each hero in the party earns their own experience from creatures defeated
   during the quest, using the stamina-based experience gain, and can level up
   independently.
@@ -141,16 +161,26 @@ meaningful without becoming excessively grindy.
 - A combat encounter can contain one to four creatures.
 - Every hero and creature has its own attack timer.
 - When a combatant's timer is ready, that combatant performs its next attack.
+- Attack-speed rune bonuses are intended to shorten a hero's attack timer.
+  Rune stat effects are not implemented in the initial prototype yet.
+- Damage popups cycle through three lanes above each target and drift outward,
+  so closely timed hits remain readable. Basic damage is gold and magic damage
+  is purple.
+- There is no base critical-hit chance. Critical Chance Runes each add 1%
+  critical chance. Critical Damage Runes each add 10 percentage points to the
+  critical-damage multiplier: a normal critical hit deals 200% damage, while
+  one Critical Damage Rune makes it deal 210%. A critical hit shakes the target
+  and appears as a larger highlighted damage popup.
 
 ### Initial hero combat attributes
 
 Heroes begin at Level 1. The initial health and mana values are:
 
-| Class | Health | Mana |
-| --- | ---: | ---: |
-| Warrior | 300 | 50 |
-| Mage | 100 | 500 |
-| Archer | 200 | 200 |
+| Class | Health | Mana | Health recovery / second | Mana recovery / second |
+| --- | ---: | ---: | ---: | ---: |
+| Warrior | 300 | 50 | 10 | 2 |
+| Mage | 100 | 500 | 2 | 10 |
+| Archer | 200 | 200 | 6 | 6 |
 
 ### First frontend combat prototype
 
@@ -161,8 +191,17 @@ Heroes begin at Level 1. The initial health and mana values are:
 - The first encounter uses three heroes against three low-damage placeholder
   trolls. It shows the Level 1 heroes' health and mana, damage events, and
   independent attack timers.
-- Each combatant shows two empty spell slots beneath its resource bars. Spells
-  are intentionally not implemented yet.
+- Elara Moonweaver is Magic Level 15 and automatically casts Fire Ball at one
+  target and Lightning Rail at every living target when their cooldowns are
+  ready and she has enough mana. Her displayed spell slots show those spells.
+- Hero health and mana recover once per second in this combat prototype using
+  their class recovery values. Agency Rest is intended to recover both at 2×
+  the base rate; timed agency recovery is still not implemented.
+- Each hero shows five read-only rune slots in combat so the party's equipped
+  runes are visible. The initial quest party equips one Critical Chance Rune
+  per hero, while Elara also equips a Critical Damage Rune. Creatures do not
+  have rune slots.
+- Each initial troll has a 10% critical-hit chance.
 - Creatures also show a mana bar. The initial placeholder trolls each start
   with 100 mana, though no creature ability consumes mana yet.
 - The prototype uses local mock state. Closing the expanded quest pauses its

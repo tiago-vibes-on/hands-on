@@ -70,19 +70,48 @@ aliases return `409 Conflict`.
   bars.
 - Hero resource bars empty from the right; creature resource bars empty from
   the left.
-- Each combatant has two empty visual spell slots; spell behavior is not yet
-  implemented.
+- Damage popups cycle through three horizontal lanes above each target and
+  drift outward to keep closely timed hits readable. Basic damage is gold and
+  magic damage is purple.
+- There is no base critical-hit chance. A Critical Chance Rune adds 1% critical
+  chance, and a Critical Damage Rune adds 10 percentage points to the
+  critical-damage multiplier: 200% damage becomes 210%. A critical hit shakes
+  the target and uses a larger highlighted damage popup. These rune effects
+  apply when a new mock encounter is started.
+- Elara Moonweaver is Magic Level 15 and has two displayed mage spell slots.
+  Fire Ball costs 20 mana, deals `10 + 150% of Magic Level` to one creature,
+  and has a three-second cooldown. Lightning Rail costs 40 mana, deals
+  `2 + 80% of Magic Level` to every living creature, and has a five-second
+  cooldown. The combat prototype auto-casts an available spell when its
+  cooldown is ready and Elara has sufficient mana. A dark radial overlay
+  clears from right to left across a spell icon to visualize its independent
+  cooldown.
 - The mock Heroes screen separates the active quest's named party from heroes
   at the agency. Agency heroes show a Training or Resting activity without
   numeric stats. A party can contain one or more heroes. Assignment is
   frontend-only and not persisted.
 - A Resting agency hero is described as recovering stamina, health, and mana
   at twice the normal rate. Timed recovery is not implemented yet.
+- The combat prototype recovers hero health and mana once per second. Warrior
+  recovery is 10 health and 2 mana; Mage recovery is 2 health and 10 mana;
+  Archer recovery is 6 health and 6 mana. Agency Rest is intended to use twice
+  those base rates when timed agency recovery is implemented.
 - Party members are shown as earning experience from creatures.
 - The stamina display is green at 80% or more, yellow from 30% through 79%,
   and red below 30%. The matching experience gain is 150%, 100%, and 50%.
-- Every mock hero card ends with five empty item slots and two empty spell
-  slots. They do not yet change gameplay.
+- Every mock hero card ends with five rune slots. Heroes with learned spells
+  also show their spell slots; currently only Elara has the two mage spells.
+  Critical Chance and Critical Damage Runes affect mock combat; other rune
+  stat effects do not yet change gameplay.
+- Combat displays five read-only rune slots for each hero so their equipped
+  loadout is visible. Creatures do not display rune slots.
+- The initial quest party equips a Critical Chance Rune on every hero, and
+  Elara also equips a Critical Damage Rune. Each initial troll has a 10%
+  critical-hit chance.
+- The mock Agency screen shows a rune inventory with quantities, stats, and
+  descriptions. Clicking a hero rune slot opens a rune drawer that lets any
+  available agency rune fill that slot. Replacing or removing a rune returns
+  the previous rune to agency inventory.
 - The active party card displays the party name once above its hero cards;
   each active party hero displays their stamina.
 

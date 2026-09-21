@@ -1,5 +1,7 @@
 import { lazy, Suspense, useState } from 'react'
 import { createBattle } from './combat/battle'
+import { initialEquippedRunes, initialRunes } from './data/inventory'
+import { mageSpells } from './data/spells'
 import './App.css'
 
 const CombatScene = lazy(() => import('./combat/CombatScene'))
@@ -14,12 +16,12 @@ const navigation = [
 ]
 
 const heroes = [
-  { name: 'Brom Ironwall', alias: 'Ironwall', role: 'Warrior', level: 1, stamina: 82, color: 'gold', partyId: 'broken-pass-party', status: 'quest' },
-  { name: 'Elara Moonweaver', alias: 'Moonweaver', role: 'Mage', level: 1, stamina: 24, color: 'violet', partyId: 'broken-pass-party', status: 'quest' },
-  { name: 'Kael Swiftarrow', alias: 'Swiftarrow', role: 'Archer', level: 1, stamina: 91, color: 'teal', partyId: 'broken-pass-party', status: 'quest' },
-  { name: 'Dorian Oakshield', alias: 'Oakshield', role: 'Warrior', level: 1, color: 'gold', activity: 'Training', status: 'agency' },
-  { name: 'Runa Emberveil', alias: 'Emberveil', role: 'Mage', level: 1, color: 'violet', activity: 'Resting', status: 'agency' },
-  { name: 'Lyra Hawkeye', alias: 'Hawkeye', role: 'Archer', level: 1, color: 'teal', activity: 'Training', status: 'agency' },
+  { name: 'Brom Ironwall', alias: 'Ironwall', role: 'Warrior', level: 1, healthRecovery: 10, manaRecovery: 2, stamina: 82, color: 'gold', partyId: 'broken-pass-party', status: 'quest' },
+  { name: 'Elara Moonweaver', alias: 'Moonweaver', role: 'Mage', level: 1, magicLevel: 15, healthRecovery: 2, manaRecovery: 10, spells: mageSpells, stamina: 24, color: 'violet', partyId: 'broken-pass-party', status: 'quest' },
+  { name: 'Kael Swiftarrow', alias: 'Swiftarrow', role: 'Archer', level: 1, healthRecovery: 6, manaRecovery: 6, stamina: 91, color: 'teal', partyId: 'broken-pass-party', status: 'quest' },
+  { name: 'Dorian Oakshield', alias: 'Oakshield', role: 'Warrior', level: 1, healthRecovery: 10, manaRecovery: 2, color: 'gold', activity: 'Training', status: 'agency' },
+  { name: 'Runa Emberveil', alias: 'Emberveil', role: 'Mage', level: 1, healthRecovery: 2, manaRecovery: 10, color: 'violet', activity: 'Resting', status: 'agency' },
+  { name: 'Lyra Hawkeye', alias: 'Hawkeye', role: 'Archer', level: 1, healthRecovery: 6, manaRecovery: 6, color: 'teal', activity: 'Training', status: 'agency' },
 ]
 
 const activeParty = {
@@ -72,21 +74,57 @@ function StaminaBar({ value }) {
   )
 }
 
-function HeroLoadoutSlots() {
+function HeroLoadoutSlots({ hero, runes, onSelectRuneSlot }) {
+  const runeSlots = runes[hero.alias] ?? Array(5).fill(null)
+
   return (
-    <div className="hero-loadout" aria-label="Empty item and spell slots">
+    <div className="hero-loadout" role="group" aria-label={`${hero.alias} rune slots`}>
       <div className="hero-loadout__group">
-        <span>Items</span>
-        <div className="hero-loadout__slots" aria-label="Five empty item slots">
-          {Array.from({ length: 5 }, (_, index) => <span className="hero-loadout__slot" key={index} aria-hidden="true" />)}
+        <span>Runes</span>
+        <div className="hero-loadout__slots" role="group" aria-label="Five rune slots">
+          {runeSlots.map((rune, index) => (
+            <button className={`hero-loadout__slot hero-loadout__slot--rune ${rune ? 'hero-loadout__slot--equipped' : ''}`} type="button" key={index} aria-label={`${hero.alias} rune slot ${index + 1}${rune ? `: ${rune.name}` : ', empty'}`} onClick={() => onSelectRuneSlot(hero, index)}>
+              {rune?.symbol}
+            </button>
+          ))}
         </div>
       </div>
-      <div className="hero-loadout__group">
+      {hero.spells?.length > 0 && <div className="hero-loadout__group">
         <span>Spells</span>
-        <div className="hero-loadout__slots" aria-label="Two empty spell slots">
-          {Array.from({ length: 2 }, (_, index) => <span className="hero-loadout__slot hero-loadout__slot--spell" key={index} aria-hidden="true" />)}
+        <div className="hero-loadout__slots" role="group" aria-label={`${hero.alias} equipped spells`}>
+          {hero.spells.map((spell) => <span className="hero-loadout__slot hero-loadout__slot--spell" key={spell.id} title={`${spell.name}: ${spell.target}, base ${spell.baseDamage} + ${spell.magicLevelScaling * 100}% Magic Level, needs Magic Level ${spell.requiredMagicLevel}, ${spell.manaCost} mana, ${spell.cooldown / 1000}s cooldown`} aria-label={spell.name}>{spell.symbol}</span>)}
         </div>
-      </div>
+      </div>}
+    </div>
+  )
+}
+
+function RuneDrawer({ selectedSlot, runes, runeInventory, onClose, onEquipRune, onUnequipRune }) {
+  if (!selectedSlot) {
+    return null
+  }
+
+  const { hero, slotIndex } = selectedSlot
+  const equippedRune = runes[hero.alias]?.[slotIndex]
+
+  return (
+    <div className="equipment-drawer__backdrop" onClick={onClose}>
+      <aside className="equipment-drawer" role="dialog" aria-modal="true" aria-labelledby="equipment-drawer-title" onClick={(event) => event.stopPropagation()}>
+        <div className="equipment-drawer__header">
+          <div><p className="eyebrow">Agency rune inventory</p><h2 id="equipment-drawer-title">Equip rune</h2><p>{hero.alias} · Rune slot {slotIndex + 1}</p></div>
+          <button className="equipment-drawer__close" type="button" aria-label="Close rune drawer" onClick={onClose}>×</button>
+        </div>
+        {equippedRune && <div className="equipment-drawer__equipped"><span>Currently equipped</span><strong>{equippedRune.symbol} {equippedRune.name}</strong><button className="text-button" type="button" onClick={onUnequipRune}>Unequip</button></div>}
+        <div className="equipment-drawer__items">
+          {runeInventory.map((rune) => (
+            <button className="inventory-item" type="button" key={rune.id} disabled={rune.quantity === 0} onClick={() => onEquipRune(rune)}>
+              <span className="inventory-item__symbol" aria-hidden="true">{rune.symbol}</span>
+              <span className="inventory-item__content"><strong>{rune.name}</strong><small>{rune.stats}</small><span>{rune.description}</span></span>
+              <span className="inventory-item__quantity">×{rune.quantity}</span>
+            </button>
+          ))}
+        </div>
+      </aside>
     </div>
   )
 }
@@ -171,37 +209,37 @@ function Overview({ onNavigate }) {
   )
 }
 
-function HeroCards({ roster }) {
+function HeroCards({ roster, runes, onSelectRuneSlot }) {
   return (
     <div className="hero-cards">
       {roster.map((hero) => (
         <article className="panel hero-card" key={hero.alias}>
           <div className="hero-card__topline"><HeroAvatar hero={hero} size="large" /><span className={`status ${hero.status === 'quest' ? 'status--progress' : ''}`}>{hero.status === 'quest' ? 'On quest' : hero.activity}</span></div>
-          <div><p className="eyebrow">{hero.role}</p><h2>{hero.alias}</h2><p className="hero-card__name">{hero.name} · Level {hero.level}</p></div>
+          <div><p className="eyebrow">{hero.role}</p><h2>{hero.alias}</h2><p className="hero-card__name">{hero.name} · Level {hero.level}</p>{hero.magicLevel && <p className="hero-card__magic-level">Magic Level {hero.magicLevel}</p>}<p className="hero-card__recovery">Recovery: +{hero.healthRecovery} health/s · +{hero.manaRecovery} mana/s</p></div>
           {hero.status === 'quest' ? (
             <>
               <div className="hero-card__details"><span>Experience</span><strong>{experienceGain(hero.stamina)}% XP gain from creatures</strong></div>
               <StaminaBar value={hero.stamina} />
             </>
           ) : <div className="hero-card__agency-activity"><span>At the agency</span><strong>{hero.activity}</strong><p>{hero.activity === 'Training' ? 'Improving for the next quest without a recovery bonus.' : 'Recovering stamina, health, and mana at 2× speed.'}</p></div>}
-          <HeroLoadoutSlots />
+          <HeroLoadoutSlots hero={hero} runes={runes} onSelectRuneSlot={onSelectRuneSlot} />
         </article>
       ))}
     </div>
   )
 }
 
-function Heroes() {
+function Heroes({ runes, onSelectRuneSlot }) {
   return (
     <>
       <PageHeading eyebrow="Dawnwatch Agency" title="Heroes" description="Manage the party on a quest and the heroes training or resting at the agency." action={<button className="button button--primary" type="button">Recruit hero</button>} />
       <section className="hero-group" aria-labelledby="quest-party-heading">
         <div className="hero-group__header party-card"><div><p className="eyebrow">Active party</p><h2 id="quest-party-heading">{activeParty.name}</h2><p>On quest: {activeParty.quest} · {questHeroes.length} heroes.</p></div><span className="status status--progress">{questHeroes.length} in party</span></div>
-        <HeroCards roster={questHeroes} />
+        <HeroCards roster={questHeroes} runes={runes} onSelectRuneSlot={onSelectRuneSlot} />
       </section>
       <section className="hero-group" aria-labelledby="agency-heroes-heading">
         <div className="hero-group__header"><div><p className="eyebrow">Agency roster</p><h2 id="agency-heroes-heading">At the agency</h2><p>Heroes are training or resting before they join another party.</p></div><span className="status">{agencyHeroes.length} at agency</span></div>
-        <HeroCards roster={agencyHeroes} />
+        <HeroCards roster={agencyHeroes} runes={runes} onSelectRuneSlot={onSelectRuneSlot} />
       </section>
     </>
   )
@@ -229,7 +267,7 @@ function Quests({ battle, combatLog, isCombatExpanded, onBattleChange, onCombatE
           {isCombatExpanded && (
             <div className="combat-panel">
               <div className="combat-panel__header">
-                <div><p className="eyebrow">Current encounter</p><h3>Automatic combat</h3></div>
+                <div><p className="eyebrow">Current encounter</p></div>
                 {battle.status === 'in-progress' ? <span className="combat-panel__hint">Each combatant attacks on its own timer.</span> : <button className="text-button" type="button" onClick={onResetBattle}>Reset encounter</button>}
               </div>
               <Suspense fallback={<div className="combat-scene combat-scene--loading">Preparing the battlefield…</div>}>
@@ -251,7 +289,7 @@ function Quests({ battle, combatLog, isCombatExpanded, onBattleChange, onCombatE
   )
 }
 
-function Agency() {
+function Agency({ runeInventory }) {
   return (
     <>
       <PageHeading eyebrow="Dawnwatch Agency" title="Agency upgrades" description="Agency level caps each specialized upgrade. You choose which areas to prioritize." action={<button className="button button--primary" type="button">Upgrade agency</button>} />
@@ -263,6 +301,18 @@ function Agency() {
             <button className="text-button" type="button">Details</button>
           </article>
         ))}
+      </section>
+      <section className="panel agency-inventory">
+        <div className="panel__header"><div><p className="eyebrow">Agency storage</p><h2>Rune inventory</h2></div><span className="status">{runeInventory.reduce((total, rune) => total + rune.quantity, 0)} runes</span></div>
+        <div className="agency-inventory__items">
+          {runeInventory.map((rune) => (
+            <article className="agency-inventory__item" key={rune.id}>
+              <span className="agency-inventory__symbol" aria-hidden="true">{rune.symbol}</span>
+              <div><strong>{rune.name}</strong><span>{rune.stats}</span><small>{rune.description}</small></div>
+              <b>×{rune.quantity}</b>
+            </article>
+          ))}
+        </div>
       </section>
     </>
   )
@@ -309,24 +359,73 @@ function Feed() {
 
 function App() {
   const [activePage, setActivePage] = useState('overview')
-  const [battle, setBattle] = useState(() => createBattle())
+  const [runeInventory, setRuneInventory] = useState(() => initialRunes.map((rune) => ({ ...rune })))
+  const [equippedRunes, setEquippedRunes] = useState(() => Object.fromEntries(Object.entries(initialEquippedRunes).map(([hero, runes]) => [hero, [...runes]])))
+  const [battle, setBattle] = useState(() => createBattle(1, initialEquippedRunes))
   const [combatLog, setCombatLog] = useState([])
   const [isCombatExpanded, setIsCombatExpanded] = useState(false)
+  const [selectedSlot, setSelectedSlot] = useState(null)
 
   function addCombatEvent(message) {
     setCombatLog((events) => [message, ...events].slice(0, 4))
   }
 
   function resetBattle() {
-    setBattle((currentBattle) => createBattle(currentBattle.encounterId + 1))
+    setBattle((currentBattle) => createBattle(currentBattle.encounterId + 1, equippedRunes))
     setCombatLog([])
+  }
+
+  function equipRune(rune) {
+    if (!selectedSlot || rune.quantity === 0) {
+      return
+    }
+
+    const { hero, slotIndex } = selectedSlot
+    const heroRunes = equippedRunes[hero.alias] ?? Array(5).fill(null)
+    const previousRune = heroRunes[slotIndex]
+    if (previousRune?.id === rune.id) {
+      setSelectedSlot(null)
+      return
+    }
+
+    setEquippedRunes((allRunes) => ({
+      ...allRunes,
+      [hero.alias]: heroRunes.map((equippedRune, index) => index === slotIndex ? rune : equippedRune),
+    }))
+    setRuneInventory((runes) => runes.map((inventoryRune) => {
+      const leavingInventory = inventoryRune.id === rune.id ? 1 : 0
+      const returningToInventory = inventoryRune.id === previousRune?.id ? 1 : 0
+      const quantityChange = returningToInventory - leavingInventory
+      return quantityChange === 0 ? inventoryRune : { ...inventoryRune, quantity: inventoryRune.quantity + quantityChange }
+    }))
+    setSelectedSlot(null)
+  }
+
+  function unequipRune() {
+    if (!selectedSlot) {
+      return
+    }
+
+    const { hero, slotIndex } = selectedSlot
+    const heroRunes = equippedRunes[hero.alias] ?? Array(5).fill(null)
+    const previousRune = heroRunes[slotIndex]
+    if (!previousRune) {
+      return
+    }
+
+    setEquippedRunes((allRunes) => ({
+      ...allRunes,
+      [hero.alias]: heroRunes.map((rune, index) => index === slotIndex ? null : rune),
+    }))
+    setRuneInventory((runes) => runes.map((rune) => rune.id === previousRune.id ? { ...rune, quantity: rune.quantity + 1 } : rune))
+    setSelectedSlot(null)
   }
 
   const pages = {
     overview: <Overview onNavigate={setActivePage} />,
-    heroes: <Heroes />,
+    heroes: <Heroes runes={equippedRunes} onSelectRuneSlot={(hero, slotIndex) => setSelectedSlot({ hero, slotIndex })} />,
     quests: <Quests battle={battle} combatLog={combatLog} isCombatExpanded={isCombatExpanded} onBattleChange={setBattle} onCombatEvent={addCombatEvent} onResetBattle={resetBattle} onToggleCombat={() => setIsCombatExpanded((expanded) => !expanded)} />,
-    agency: <Agency />,
+    agency: <Agency runeInventory={runeInventory} />,
     market: <Market />,
     feed: <Feed />,
   }
@@ -345,6 +444,7 @@ function App() {
         <div className="sidebar__bottom"><div className="player-card"><span className="player-card__avatar">T</span><span><strong>Tiago</strong><small>Agency leader</small></span></div></div>
       </aside>
       <main className="main-content"><div className="main-content__inner">{pages[activePage]}</div></main>
+      <RuneDrawer selectedSlot={selectedSlot} runes={equippedRunes} runeInventory={runeInventory} onClose={() => setSelectedSlot(null)} onEquipRune={equipRune} onUnequipRune={unequipRune} />
     </div>
   )
 }

@@ -13,8 +13,15 @@ function snapshotCombatant(combatant) {
     maxMana: combatant.maxMana,
     currentMana: combatant.currentMana,
     level: combatant.level,
+    magicLevel: combatant.magicLevel,
+    healthRecovery: combatant.healthRecovery,
+    manaRecovery: combatant.manaRecovery,
+    runes: combatant.runes,
+    spells: combatant.spells,
     damage: combatant.damage,
     attackInterval: combatant.attackInterval,
+    criticalChance: combatant.criticalChance,
+    criticalDamageMultiplier: combatant.criticalDamageMultiplier,
     color: combatant.color,
     alive: combatant.alive,
   }
@@ -70,7 +77,11 @@ function CombatScene({ battle, onBattleChange, onCombatEvent }) {
 
         if (this.status === 'in-progress') {
           this.emitEvent('Combat started. Every combatant attacks on its own timer.')
-          this.heroes.forEach((hero, index) => this.scheduleAttack(hero, 480 + (index * 170)))
+          this.heroes.forEach((hero, index) => {
+            this.scheduleAttack(hero, 480 + (index * 170))
+            hero.spells?.forEach((spell, spellIndex) => this.scheduleSpell(hero, spell, 900 + (spellIndex * 450)))
+            this.scheduleRecovery(hero)
+          })
           this.creatures.forEach((creature, index) => this.scheduleAttack(creature, 760 + (index * 160)))
         }
       }
@@ -95,7 +106,8 @@ function CombatScene({ battle, onBattleChange, onCombatEvent }) {
           fontSize: '11px',
           fontStyle: 'bold',
         }).setOrigin(0.5)
-        const role = this.add.text(0, 59, combatant.role ?? 'Creature', {
+        const roleLabel = combatant.magicLevel ? `${combatant.role} · ML ${combatant.magicLevel}` : combatant.role ?? 'Creature'
+        const role = this.add.text(0, 59, roleLabel, {
           color: '#94a0b9',
           fontFamily: 'system-ui, sans-serif',
           fontSize: '9px',
@@ -134,12 +146,44 @@ function CombatScene({ battle, onBattleChange, onCombatEvent }) {
           elements.push(manaTrack, manaValue, manaText)
         }
 
-        const firstSpellSlot = this.add.rectangle(-11, 104, 18, 18, 0x111a2b, 1).setStrokeStyle(1, 0x67738f, 0.9)
-        const secondSpellSlot = this.add.rectangle(11, 104, 18, 18, 0x111a2b, 1).setStrokeStyle(1, 0x67738f, 0.9)
-        elements.push(firstSpellSlot, secondSpellSlot)
+        if (combatant.spells?.length) {
+          const spellSlots = combatant.spells.map((spell, spellIndex) => {
+            const x = -13 + (spellIndex * 26)
+            const slot = this.add.rectangle(x, 104, 22, 22, 0x2a2542, 1).setStrokeStyle(1, 0x8a70bd, 0.95)
+            const symbol = this.add.text(x, 104, spell.symbol, {
+              color: '#f1dc9c',
+              fontFamily: 'system-ui, sans-serif',
+              fontSize: '14px',
+              fontStyle: 'bold',
+            }).setOrigin(0.5)
+            const cooldownOverlay = this.add.graphics()
+            cooldownOverlay.setPosition(x, 104).setVisible(false)
+            elements.push(slot, symbol, cooldownOverlay)
+            return { spellId: spell.id, slot, symbol, cooldownOverlay, cooldownState: { remaining: 0 } }
+          })
+          combatant.view = { ...combatant.view, spellSlots }
+        }
+
+        if (combatant.role) {
+          const equippedRunes = combatant.runes ?? []
+          equippedRunes.forEach((rune, runeIndex) => {
+            const x = -32 + (runeIndex * 16)
+            const slot = this.add.rectangle(x, 128, 14, 14, rune ? 0x2b2b36 : 0x121a2b, 1).setStrokeStyle(1, rune ? 0xdcb662 : 0x59667e, 0.9)
+            elements.push(slot)
+            if (rune) {
+              const symbol = this.add.text(x, 128, rune.symbol, {
+                color: '#f2dfab',
+                fontFamily: 'system-ui, sans-serif',
+                fontSize: '9px',
+                fontStyle: 'bold',
+              }).setOrigin(0.5)
+              elements.push(symbol)
+            }
+          })
+        }
 
         container.add(elements)
-        combatant.view = { ...combatant.view, container, healthValue, healthText, side, index }
+        combatant.view = { ...combatant.view, container, healthValue, healthText, side, index, nextDamageLane: 0 }
         this.refreshCombatant(combatant)
       }
 
@@ -192,8 +236,115 @@ function CombatScene({ battle, onBattleChange, onCombatEvent }) {
         })
       }
 
+      scheduleRecovery(combatant) {
+        if (!combatant.healthRecovery && !combatant.manaRecovery) {
+          return
+        }
+
+        this.time.delayedCall(1000, () => {
+          if (this.status !== 'in-progress' || !combatant.alive) {
+            return
+          }
+
+          const nextHealth = Math.min(combatant.maxHealth, combatant.currentHealth + combatant.healthRecovery)
+          const nextMana = Math.min(combatant.maxMana, combatant.currentMana + combatant.manaRecovery)
+          if (nextHealth !== combatant.currentHealth || nextMana !== combatant.currentMana) {
+            combatant.currentHealth = nextHealth
+            combatant.currentMana = nextMana
+            this.refreshCombatant(combatant)
+            this.publishState()
+          }
+          this.scheduleRecovery(combatant)
+        })
+      }
+
+      scheduleSpell(caster, spell, delay) {
+        this.time.delayedCall(delay, () => {
+          if (this.status !== 'in-progress' || !caster.alive || caster.magicLevel < spell.requiredMagicLevel) {
+            return
+          }
+
+          const spellSlot = caster.view.spellSlots?.find((entry) => entry.spellId === spell.id)
+          spellSlot?.slot.setAlpha(1)
+          spellSlot?.symbol.setAlpha(1)
+          if (caster.currentMana < spell.manaCost) {
+            spellSlot?.slot.setAlpha(0.35)
+            spellSlot?.symbol.setAlpha(0.35)
+            this.clearSpellCooldown(spellSlot)
+            this.scheduleSpell(caster, spell, 1000)
+            return
+          }
+
+          const opponents = this.creatures.filter((creature) => creature.alive)
+          const targets = spell.target === 'All targets' ? opponents : opponents.slice(0, 1)
+          if (targets.length === 0) {
+            return
+          }
+
+          const damage = Math.round(spell.baseDamage + (caster.magicLevel * spell.magicLevelScaling))
+          caster.currentMana -= spell.manaCost
+          this.refreshCombatant(caster)
+          spellSlot?.slot.setAlpha(0.45)
+          spellSlot?.symbol.setAlpha(0.45)
+          this.playSpellCooldown(spellSlot, spell.cooldown)
+          this.showSpell(caster, spell.symbol)
+          const hits = targets.map((target) => this.resolveDamage(target, damage, 'magic', caster.criticalChance, caster.criticalDamageMultiplier))
+          const criticalHits = hits.filter((hit) => hit.isCritical).length
+          this.emitEvent(`${caster.name} casts ${spell.name} for ${damage} damage${targets.length > 1 ? ' to all targets' : ''}${criticalHits ? ` (${criticalHits} critical hit${criticalHits === 1 ? '' : 's'})` : ''}.`)
+          this.finishIfNeeded()
+          this.publishState()
+
+          if (this.status === 'in-progress') {
+            this.scheduleSpell(caster, spell, spell.cooldown)
+          }
+        })
+      }
+
+      playSpellCooldown(spellSlot, cooldown) {
+        if (!spellSlot) {
+          return
+        }
+
+        this.tweens.killTweensOf(spellSlot.cooldownState)
+        spellSlot.cooldownState.remaining = 1
+        this.drawSpellCooldown(spellSlot.cooldownOverlay, 1)
+        spellSlot.cooldownOverlay.setVisible(true)
+        this.tweens.add({
+          targets: spellSlot.cooldownState,
+          remaining: 0,
+          duration: cooldown,
+          ease: 'Linear',
+          onUpdate: () => this.drawSpellCooldown(spellSlot.cooldownOverlay, spellSlot.cooldownState.remaining),
+          onComplete: () => spellSlot.cooldownOverlay.clear().setVisible(false),
+        })
+      }
+
+      drawSpellCooldown(overlay, remaining) {
+        overlay.clear()
+        if (remaining <= 0) {
+          return
+        }
+
+        const startAngle = -Math.PI / 2
+        const endAngle = startAngle - (Math.min(remaining, 0.9999) * Math.PI * 2)
+        overlay.fillStyle(0x080d18, 0.76)
+        overlay.beginPath()
+        overlay.moveTo(0, 0)
+        overlay.arc(0, 0, 10, startAngle, endAngle, true)
+        overlay.closePath()
+        overlay.fillPath()
+      }
+
+      clearSpellCooldown(spellSlot) {
+        if (!spellSlot) {
+          return
+        }
+
+        this.tweens.killTweensOf(spellSlot.cooldownState)
+        spellSlot.cooldownOverlay.clear().setVisible(false)
+      }
+
       performAttack(attacker, target) {
-        target.currentHealth = Math.max(0, target.currentHealth - attacker.damage)
         const direction = attacker.view.side === 'heroes' ? 1 : -1
 
         this.tweens.add({
@@ -202,40 +353,103 @@ function CombatScene({ battle, onBattleChange, onCombatEvent }) {
           yoyo: true,
           duration: 120,
         })
+        const hit = this.resolveDamage(target, attacker.damage, 'basic', attacker.criticalChance, attacker.criticalDamageMultiplier)
+        this.emitEvent(`${attacker.name}${hit.isCritical ? ' critically hits' : ' hits'} ${target.name} for ${hit.damage}.`)
+        this.finishIfNeeded()
+        this.publishState()
+      }
+
+      resolveDamage(target, baseDamage, damageType, criticalChance, criticalDamageMultiplier) {
+        const isCritical = Math.random() < criticalChance
+        const damage = isCritical ? Math.round(baseDamage * criticalDamageMultiplier) : baseDamage
+        this.applyDamage(target, damage, damageType, isCritical)
+        return { damage, isCritical }
+      }
+
+      applyDamage(target, damage, damageType, isCritical) {
+        target.currentHealth = Math.max(0, target.currentHealth - damage)
         this.tweens.add({
           targets: target.view.container,
           alpha: 0.35,
           yoyo: true,
           duration: 110,
         })
-        this.showDamage(target, attacker.damage)
+        if (isCritical) {
+          this.showCriticalImpact(target)
+        }
+        this.showDamage(target, damage, damageType, isCritical)
         this.refreshCombatant(target)
-        this.emitEvent(`${attacker.name} hits ${target.name} for ${attacker.damage}.`)
 
         if (target.currentHealth === 0) {
           target.alive = false
           target.view.container.setAlpha(0.32)
           this.emitEvent(`${target.name} is defeated.`)
-          this.finishIfNeeded()
         }
-
-        this.publishState()
       }
 
-      showDamage(target, damage) {
-        const text = this.add.text(target.view.homeX, target.view.homeY - 43, `-${damage}`, {
-          color: '#f4ce78',
+      showSpell(caster, symbol) {
+        const text = this.add.text(caster.view.homeX, caster.view.homeY - 48, symbol, {
+          color: '#d9b9ff',
           fontFamily: 'system-ui, sans-serif',
-          fontSize: '15px',
+          fontSize: '22px',
           fontStyle: 'bold',
         }).setOrigin(0.5)
 
         this.tweens.add({
           targets: text,
-          y: text.y - 20,
+          y: text.y - 18,
           alpha: 0,
           duration: 650,
           onComplete: () => text.destroy(),
+        })
+      }
+
+      showDamage(target, damage, damageType, isCritical) {
+        const lanes = [-13, 0, 13]
+        const laneIndex = target.view.nextDamageLane
+        const laneOffset = lanes[laneIndex]
+        target.view.nextDamageLane = (laneIndex + 1) % lanes.length
+        const startX = target.view.homeX + laneOffset
+        const startY = target.view.homeY - 43 - (laneIndex === 1 ? 5 : 0)
+        const text = this.add.text(startX, startY, `-${damage}`, {
+          color: isCritical ? '#fff0a8' : damageType === 'magic' ? '#d9b9ff' : '#f4ce78',
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: isCritical ? '20px' : '16px',
+          fontStyle: 'bold',
+        }).setOrigin(0.5).setStroke(isCritical ? '#a85536' : '#080d18', isCritical ? 4 : 3)
+
+        this.tweens.add({
+          targets: text,
+          x: startX + (laneOffset * 0.7),
+          y: startY - 24,
+          alpha: 0,
+          duration: 650,
+          onComplete: () => text.destroy(),
+        })
+      }
+
+      showCriticalImpact(target) {
+        const impact = this.add.text(target.view.homeX, target.view.homeY - 4, '✦', {
+          color: '#fff0a8',
+          fontFamily: 'system-ui, sans-serif',
+          fontSize: '40px',
+          fontStyle: 'bold',
+        }).setOrigin(0.5).setStroke('#a85536', 3)
+
+        this.tweens.add({
+          targets: target.view.container,
+          x: target.view.homeX + 5,
+          yoyo: true,
+          repeat: 3,
+          duration: 40,
+          onComplete: () => target.view.container.setX(target.view.homeX),
+        })
+        this.tweens.add({
+          targets: impact,
+          scale: 1.5,
+          alpha: 0,
+          duration: 320,
+          onComplete: () => impact.destroy(),
         })
       }
 

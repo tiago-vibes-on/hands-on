@@ -34,11 +34,27 @@ npm run build
   experience from creatures
 - Stamina color and XP gain preview: 150% at 80% or more, 100% from 30% to
   79%, and 50% below 30%
-- Five empty item slots and two empty spell slots on every hero card
+- Five rune slots on every hero card and two displayed mage spell slots for
+  Elara Moonweaver
+- Five read-only rune slots beneath each hero in combat, populated from the
+  party's mock equipped loadouts
+- Mock agency rune inventory and rune-slot drawer, with compatibility
+  intentionally ignored for now
 - Resting activity explains the future 2× stamina, health, and mana recovery
 - Phaser-backed automatic combat inside the expanded active quest card
 - Health and mana bars for Level 1 heroes and placeholder creatures
-- Empty spell slots for heroes and creatures, ready for later spell behavior
+- Class-based health and mana recovery every second in combat: Warrior 10/2,
+  Mage 2/10, and Archer 6/6
+- Three-lane floating damage indicators: gold for basic damage and purple for
+  magic damage
+- Critical runes: Critical Chance Rune (+1% chance) and Critical Damage Rune
+  (+10 percentage points to the critical multiplier); they apply when a new
+  mock encounter starts and trigger the target shake and highlighted popup
+- The initial party equips a Critical Chance Rune on every hero; placeholder
+  trolls have a 10% critical chance
+- Automatic mage spells in combat: Fire Ball against one target and Lightning
+  Rail against all living targets, with mana costs, cooldowns, and radial
+  right-to-left cooldown sweeps on each spell icon
 - Responsive layout for desktop and mobile screens
 
 The game rules and the intended gameplay model live in

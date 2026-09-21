@@ -92,6 +92,8 @@
 .hero-card__topline { display: flex; width: 100%; align-items: start; justify-content: space-between; gap: 12px; }
 .hero-card h2 { margin-top: 2px; font-size: 22px; }
 .hero-card__name { margin: 5px 0 0; color: var(--text-muted); font-size: 12px; }
+.hero-card__magic-level { margin: 4px 0 0; color: #b7a7de; font-size: 11px; }
+.hero-card__recovery { margin: 5px 0 0; color: #8bc5af; font-size: 11px; }
 .hero-card__details { margin-top: auto; }
 .hero-card__details span, .hero-card__details strong { display: block; }
 .hero-card__details span { color: var(--text-muted); font-size: 11px; }
@@ -106,8 +108,11 @@
 .hero-loadout__group { display: grid; gap: 6px; }
 .hero-loadout__group > span { color: #c8cfdf; font-size: 13px; font-weight: 700; }
 .hero-loadout__slots { display: flex; gap: 4px; }
-.hero-loadout__slot { display: block; width: 32px; height: 32px; background: #121a2b; border: 1px solid #59667e; border-radius: 5px; }
-.hero-loadout__slot--spell { border-color: #667fc2; background: #182442; }
+.hero-loadout__slot { display: grid; width: 32px; height: 32px; padding: 0; place-items: center; color: #f2dfab; font: 16px/1 system-ui, sans-serif; background: #121a2b; border: 1px solid #59667e; border-radius: 5px; }
+.hero-loadout__slot--rune { cursor: pointer; }
+.hero-loadout__slot--rune:hover { border-color: #dcb662; background: #202b42; }
+.hero-loadout__slot--equipped { border-color: #dcb662; background: #2b2b36; }
+.hero-loadout__slot--spell { color: #f1dc9c; background: #2a2542; border-color: #8a70bd; }
 .quest-list, .feed-list { display: grid; gap: 14px; }
 .quest-card { padding: 0; overflow: hidden; }
 .quest-card__trigger { display: flex; align-items: center; justify-content: space-between; gap: 28px; padding: 25px; cursor: pointer; }
@@ -137,6 +142,37 @@
 .upgrade-card__level { display: grid; width: 42px; height: 42px; place-items: center; color: var(--accent); font-family: var(--display-font); font-weight: 700; background: var(--accent-soft); border: 1px solid var(--accent-border); border-radius: 9px; }
 .upgrade-card h2 { font-size: 16px; }
 .upgrade-card p { margin: 5px 0 0; color: var(--text-muted); font-size: 12px; }
+.agency-inventory { margin-top: 18px; }
+.agency-inventory__items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 18px; }
+.agency-inventory__item { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 11px; background: #131c2e; border: 1px solid var(--border-soft); border-radius: 8px; }
+.agency-inventory__symbol { display: grid; width: 34px; height: 34px; place-items: center; color: #f2d783; font-size: 18px; background: #25304a; border: 1px solid #45546f; border-radius: 6px; }
+.agency-inventory__item > div strong, .agency-inventory__item > div span, .agency-inventory__item > div small { display: block; }
+.agency-inventory__item > div strong { color: var(--text-strong); font-size: 12px; }
+.agency-inventory__item > div span { margin-top: 3px; color: #e0b95e; font-size: 11px; }
+.agency-inventory__item > div small { margin-top: 4px; color: var(--text-muted); font-size: 10px; line-height: 1.35; }
+.agency-inventory__item b { align-self: start; color: #c6cede; font-size: 12px; }
+.equipment-drawer__backdrop { position: fixed; z-index: 10; inset: 0; display: flex; justify-content: flex-end; background: rgba(5, 9, 20, 0.7); }
+.equipment-drawer { width: min(430px, 100%); min-height: 100%; padding: 29px 24px; overflow-y: auto; background: #151e31; border-left: 1px solid #3b4965; box-shadow: -18px 0 42px rgba(0, 0, 0, 0.3); }
+.equipment-drawer__header { display: flex; justify-content: space-between; gap: 18px; padding-bottom: 20px; border-bottom: 1px solid var(--border-soft); }
+.equipment-drawer__header .eyebrow { margin-bottom: 5px; }
+.equipment-drawer__header h2 { margin: 0; color: var(--text-strong); font-family: var(--display-font); font-size: 26px; letter-spacing: -0.03em; }
+.equipment-drawer__header p:not(.eyebrow) { margin: 6px 0 0; color: var(--text-muted); font-size: 12px; }
+.equipment-drawer__close { display: grid; width: 30px; height: 30px; padding: 0; place-items: center; color: #c4cbe0; font-size: 24px; line-height: 1; background: #202b43; border: 1px solid #42516f; border-radius: 6px; cursor: pointer; }
+.equipment-drawer__close:hover { color: #fff2cc; border-color: #cba95b; }
+.equipment-drawer__equipped { display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; padding: 17px 0; border-bottom: 1px solid var(--border-soft); }
+.equipment-drawer__equipped span { grid-column: 1 / -1; color: var(--text-muted); font-size: 11px; }
+.equipment-drawer__equipped strong { color: var(--text-strong); font-size: 13px; }
+.equipment-drawer__equipped .text-button { align-self: end; }
+.equipment-drawer__items { display: grid; gap: 9px; padding-top: 18px; }
+.inventory-item { display: grid; grid-template-columns: 43px minmax(0, 1fr) auto; align-items: start; gap: 11px; width: 100%; padding: 11px; color: inherit; text-align: left; background: #182238; border: 1px solid #364560; border-radius: 8px; cursor: pointer; }
+.inventory-item:hover:not(:disabled) { background: #202d47; border-color: #d5ae58; }
+.inventory-item:disabled { opacity: 0.45; cursor: not-allowed; }
+.inventory-item__symbol { display: grid; width: 40px; height: 40px; place-items: center; color: #f2d783; font-size: 21px; background: #27334d; border: 1px solid #52627e; border-radius: 6px; }
+.inventory-item__content strong, .inventory-item__content small, .inventory-item__content > span { display: block; }
+.inventory-item__content strong { color: var(--text-strong); font-size: 13px; }
+.inventory-item__content small { margin-top: 3px; color: #e0b95e; font-size: 11px; }
+.inventory-item__content > span { margin-top: 5px; color: var(--text-muted); font-size: 11px; line-height: 1.4; }
+.inventory-item__quantity { color: #c7d0e3; font-size: 12px; font-weight: 700; }
 .market-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .offer-panel { padding-bottom: 9px; }
 .offer-row { display: grid; grid-template-columns: 1fr auto auto; gap: 18px; padding: 17px 0; color: var(--text-muted); font-size: 13px; border-top: 1px solid var(--border-soft); }
@@ -152,4 +188,4 @@
 .feed-post__item { width: fit-content; padding: 8px 10px; color: #c3cbe0; font-size: 11px; background: #1c263d; border: 1px solid #31405d; border-radius: 6px; }
 @media (max-width: 860px) { .app-shell { display: block; } .sidebar { min-height: auto; padding: 15px 16px 11px; border-right: 0; border-bottom: 1px solid var(--sidebar-border); } .navigation { display: flex; gap: 3px; margin: 16px -16px -11px; padding: 0 16px 11px; overflow-x: auto; } .navigation__item { width: auto; flex: 0 0 auto; } .sidebar__bottom { display: none; } .main-content__inner { padding-top: 38px; } }
 @media (max-width: 1050px) { .hero-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 660px) { .main-content__inner { padding: 32px 18px 48px; } .page-heading, .quest-card__trigger, .hero-group__header { align-items: start; flex-direction: column; } .page-heading { margin-bottom: 28px; } .metrics, .dashboard-grid, .market-grid, .hero-cards, .upgrade-grid { grid-template-columns: 1fr; } .hero-row { grid-template-columns: 38px 1fr; } .hero-row__training, .hero-row .stamina { grid-column: 2; } .quest-card__facts { width: 100%; justify-content: space-between; } .quest-card__expand-icon { margin-left: auto; } .combat-panel { padding: 0 14px 18px; } .combat-panel__header { align-items: start; flex-direction: column; } .combat-log { grid-template-columns: 1fr; gap: 6px; } .upgrade-card { grid-template-columns: 46px 1fr; } .upgrade-card .text-button { grid-column: 2; justify-self: start; } }
+@media (max-width: 660px) { .main-content__inner { padding: 32px 18px 48px; } .page-heading, .quest-card__trigger, .hero-group__header { align-items: start; flex-direction: column; } .page-heading { margin-bottom: 28px; } .metrics, .dashboard-grid, .market-grid, .hero-cards, .upgrade-grid, .agency-inventory__items { grid-template-columns: 1fr; } .hero-row { grid-template-columns: 38px 1fr; } .hero-row__training, .hero-row .stamina { grid-column: 2; } .quest-card__facts { width: 100%; justify-content: space-between; } .quest-card__expand-icon { margin-left: auto; } .combat-panel { padding: 0 14px 18px; } .combat-panel__header { align-items: start; flex-direction: column; } .combat-log { grid-template-columns: 1fr; gap: 6px; } .upgrade-card { grid-template-columns: 46px 1fr; } .upgrade-card .text-button { grid-column: 2; justify-self: start; } .equipment-drawer { width: 100%; } }
