@@ -3,6 +3,7 @@ package io.tiagovibeson.heroassociation.api.v1.agency;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.time.Instant;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -12,11 +13,14 @@ import io.tiagovibeson.heroassociation.domain.Hero;
 import io.tiagovibeson.heroassociation.domain.HeroRune;
 import io.tiagovibeson.heroassociation.domain.Party;
 import io.tiagovibeson.heroassociation.domain.Quest;
+import io.tiagovibeson.heroassociation.domain.QuestCombat;
+import io.tiagovibeson.heroassociation.domain.QuestCombatant;
 import io.tiagovibeson.heroassociation.domain.Rune;
 
 public record AgencyStateResponse(
         AgencyResponse agency,
         List<PartyResponse> parties,
+        List<QuestResponse> quests,
         List<HeroResponse> heroes,
         List<InventoryRuneResponse> runeInventory) {
 
@@ -24,6 +28,7 @@ public record AgencyStateResponse(
             Agency agency,
             List<Hero> heroes,
             List<Party> parties,
+            List<Quest> quests,
             List<AgencyRune> runeInventory) {
         Map<UUID, List<UUID>> heroIdsByParty = heroes.stream()
                 .filter(hero -> hero.getParty() != null)
@@ -34,6 +39,7 @@ public record AgencyStateResponse(
         return new AgencyStateResponse(
                 AgencyResponse.from(agency),
                 parties.stream().map(party -> PartyResponse.from(party, heroIdsByParty.getOrDefault(party.getId(), List.of()))).toList(),
+                quests.stream().map(QuestResponse::from).toList(),
                 heroes.stream().map(HeroResponse::from).toList(),
                 runeInventory.stream().map(InventoryRuneResponse::from).toList());
     }
@@ -82,10 +88,19 @@ public record AgencyStateResponse(
     public record QuestResponse(
             UUID id,
             String title,
+            String description,
             String status,
             String creatureName,
             int creaturesDefeated,
-            int creaturesRequired) {
+            int creaturesRequired,
+            int minimumHeroes,
+            int maximumHeroes,
+            int durationMinutes,
+            long goldReward,
+            Instant startedAt,
+            Instant expectedCompletionAt,
+            UUID partyId,
+            QuestCombatResponse combat) {
 
         private static QuestResponse from(Quest quest) {
             if (quest == null) {
@@ -95,10 +110,82 @@ public record AgencyStateResponse(
             return new QuestResponse(
                     quest.getId(),
                     quest.getTitle(),
+                    quest.getDescription(),
                     quest.getStatus().name(),
                     quest.getCreatureName(),
                     quest.getCreaturesDefeated(),
-                    quest.getCreaturesRequired());
+                    quest.getCreaturesRequired(),
+                    quest.getMinimumHeroes(),
+                    quest.getMaximumHeroes(),
+                    quest.getDurationMinutes(),
+                    quest.getGoldReward(),
+                    quest.getStartedAt(),
+                    quest.getExpectedCompletionAt(),
+                    quest.getParty() == null ? null : quest.getParty().getId(),
+                    QuestCombatResponse.from(quest.getCombat()));
+        }
+    }
+
+    public record QuestCombatResponse(
+            String status,
+            long currentTimeMilliseconds,
+            List<CombatantResponse> combatants) {
+
+        private static QuestCombatResponse from(QuestCombat combat) {
+            if (combat == null) {
+                return null;
+            }
+            return new QuestCombatResponse(
+                    combat.getStatus().name(),
+                    combat.getCurrentTimeMilliseconds(),
+                    combat.getCombatants().stream().map(CombatantResponse::from).toList());
+        }
+    }
+
+    public record CombatantResponse(
+            UUID id,
+            UUID heroId,
+            String team,
+            int formationIndex,
+            String name,
+            String heroClass,
+            int magicLevel,
+            int maxHealth,
+            int currentHealth,
+            int maxMana,
+            int currentMana,
+            int attackDamage,
+            long attackIntervalMilliseconds,
+            int healthRecoveryPerSecond,
+            int manaRecoveryPerSecond,
+            double criticalChance,
+            double criticalDamageMultiplier,
+            long nextBasicAttackAt,
+            Long fireBallNextCastAt,
+            Long lightningRailNextCastAt) {
+
+        private static CombatantResponse from(QuestCombatant combatant) {
+            return new CombatantResponse(
+                    combatant.getId(),
+                    combatant.getHero() == null ? null : combatant.getHero().getId(),
+                    combatant.getTeam().name(),
+                    combatant.getFormationIndex(),
+                    combatant.getName(),
+                    combatant.getHeroClass() == null ? null : combatant.getHeroClass().name(),
+                    combatant.getMagicLevel(),
+                    combatant.getMaxHealth(),
+                    combatant.getCurrentHealth(),
+                    combatant.getMaxMana(),
+                    combatant.getCurrentMana(),
+                    combatant.getAttackDamage(),
+                    combatant.getAttackIntervalMilliseconds(),
+                    combatant.getHealthRecoveryPerSecond(),
+                    combatant.getManaRecoveryPerSecond(),
+                    combatant.getCriticalChance(),
+                    combatant.getCriticalDamageMultiplier(),
+                    combatant.getNextBasicAttackAt(),
+                    combatant.getFireBallNextCastAt(),
+                    combatant.getLightningRailNextCastAt());
         }
     }
 

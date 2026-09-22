@@ -49,6 +49,9 @@ npm run build
 - Prepared parties can be named and have available heroes added or removed
   through the backend; their members retain Training or Resting until a quest
   starts
+- API-loaded available quests show party-size, duration, and gold-reward
+  details. Selecting an eligible prepared party starts a quest and moves its
+  heroes to `ON_QUEST`
 - Agency heroes shown as Training or Resting; quest party members shown earning
   experience from creatures
 - Training and Resting actions persist through the backend when it is available
@@ -62,6 +65,8 @@ npm run build
   compatibility rules are intentionally not implemented yet
 - Resting activity explains the future 2× stamina, health, and mana recovery
 - Phaser-backed automatic combat inside the expanded active quest card
+- The Phaser encounter remains a local prototype for the seeded active quest;
+  newly started quests are persisted but do not yet advance or resolve combat
 - Health and mana bars for Level 1 heroes and placeholder creatures
 - Class-based health and mana recovery every second in combat: Warrior 10/2,
   Mage 2/10, and Archer 6/6

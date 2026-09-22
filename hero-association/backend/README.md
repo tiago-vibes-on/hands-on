@@ -36,9 +36,10 @@ no datasource connection settings are supplied.
 Until Flyway is introduced, every application startup drops and recreates the
 database schema, then loads deterministic game data from
 `src/main/resources/import.sql`. The seed contains Dawnwatch Agency, its
-leader, six heroes, Broken Pass Party, an in-progress troll quest, seven rune
-definitions, agency inventory, and the party's equipped runes. Do not use this
-configuration with data that must be retained.
+leader, six heroes, Broken Pass Party, an in-progress troll quest and its
+initial combat snapshot, seven rune definitions, agency inventory, and the
+party's equipped runes. Do not use this configuration with data that must be
+retained.
 
 ### Run PostgreSQL separately
 
@@ -160,12 +161,15 @@ The first API supports agency-state reads and persisted rune loadouts:
 - `POST /api/v1/agencies/{agencyId}/parties`
 - `PUT /api/v1/agencies/{agencyId}/parties/{partyId}/heroes/{heroId}`
 - `DELETE /api/v1/agencies/{agencyId}/parties/{partyId}/heroes/{heroId}`
+- `PUT /api/v1/agencies/{agencyId}/quests/{questId}/start`
 
 It returns the agency and leader, Agency, Training, Rest, Size, Reputation, and
 Intelligence upgrade levels, all heroes and their class recovery values,
 parties with quests and member IDs, agency rune inventory, and each hero's five
 rune slots. Rest is the single upgrade for hero recovery; there is no Medical
-Level. Equipping or replacing a rune decrements its
+Level. Quest definitions include their description, creature objective,
+party-size range, duration estimate, gold reward, and status. Equipping or
+replacing a rune decrements its
 agency inventory quantity and returns any replaced rune to inventory in the
 same transaction. An unknown agency or hero returns `404 Not Found`; an
 unavailable rune returns `409 Conflict`. Agency heroes can switch between
@@ -174,7 +178,15 @@ unavailable rune returns `409 Conflict`. Agency heroes can switch between
 or remove available agency heroes. Prepared members keep their activity until
 a quest starts. An in-progress quest party cannot have its membership changed,
 and a hero already on a quest cannot move to another party; both return `409
-Conflict`.
+Conflict`. Starting an `AVAILABLE` quest with an eligible prepared party moves
+all of its members to `ON_QUEST`; a party outside the quest's required size
+returns `400 Bad Request`. The resulting quest state includes its persisted
+start and expected-completion timestamps. The backend includes a deterministic,
+unit-tested combat rules engine for independent attack timers, hero recovery,
+mage spells, critical hits, deaths, and battle completion. The seeded Troll
+quest has an API-visible, persisted combat snapshot. The engine does not yet
+advance a snapshot and new quests do not yet create one, so backend quest
+progression and resolution are still unavailable.
 
 Read the seeded state:
 
@@ -184,5 +196,6 @@ curl http://localhost:8080/api/v1/agencies/019c4c00-0001-7000-8000-000000000001/
 
 The React frontend loads this endpoint when it starts and persists rune drawer,
 agency-activity, and prepared-party changes through the API. Combat simulation
-remains local. Future endpoints will cover recruiting heroes and starting
-quests.
+and the Phaser encounter remain local. The frontend also loads the quest board
+and starts available quests through the API. Future endpoints will cover
+recruiting heroes and progressing or resolving quests.

@@ -42,4 +42,8 @@ public class Party extends UuidEntity {
     public Agency getAgency() {
         return agency;
     }
+
+    public void assignQuest(Quest newQuest) {
+        quest = newQuest;
+    }
 }

@@ -137,6 +137,11 @@ meaningful without becoming excessively grindy.
 - A manager can prepare a party at the agency before choosing a quest. Its
   members remain at the agency and keep training or resting until the quest
   begins.
+- The first available quest is Lost Courier: find the missing courier in the
+  old forest. It requires one to two heroes, has an estimated duration of 30
+  minutes, and offers 85 gold. Starting it moves every selected party member
+  from their agency activity to the quest. The game records the start and
+  expected completion time; it does not yet advance or resolve the quest.
 - All heroes assigned to a quest belong to that quest's party and are
   unavailable at the agency until the quest is complete. Other heroes remain
   at the agency, where they are either training or resting before they can join
@@ -177,15 +182,40 @@ meaningful without becoming excessively grindy.
   one Critical Damage Rune makes it deal 210%. A critical hit shakes the target
   and appears as a larger highlighted damage popup.
 
+### Initial server combat rules
+
+- The backend has a deterministic combat engine. It advances only when a caller
+  supplies a target combat timestamp and supplies the random value used for
+  critical-hit rolls; it never reads the system clock or generates randomness
+  itself.
+- A basic attack targets the first living opponent in that encounter. Each
+  combatant has an independent initial attack time and then attacks again after
+  its own attack interval.
+- A critical hit is rolled independently for every basic or spell hit. It deals
+  the base damage multiplied by the attacker's critical-damage multiplier,
+  rounded to the nearest whole number.
+- Living heroes recover their class health and mana values once each combat
+  second. On the same combat time, recovery resolves before spells, and spells
+  resolve before basic attacks, making ties deterministic.
+- Mages who meet a spell's Magic Level requirement cast it automatically when
+  its timer is ready and they have enough mana. A spell without enough mana
+  retries one second later. Fire Ball targets the first living creature and
+  Lightning Rail targets every living creature.
+- The initial Troll encounter has a persisted server snapshot containing every
+  combatant's state and next action times. The engine does not advance that
+  snapshot yet. Armor, attack speed, attack, health, and mana rune formulas
+  still need a game-design decision; only the established critical values are
+  represented in the engine inputs.
+
 ### Initial hero combat attributes
 
 Heroes begin at Level 1. The initial health and mana values are:
 
-| Class | Health | Mana | Health recovery / second | Mana recovery / second |
-| --- | ---: | ---: | ---: | ---: |
-| Warrior | 300 | 50 | 10 | 2 |
-| Mage | 100 | 500 | 2 | 10 |
-| Archer | 200 | 200 | 6 | 6 |
+| Class | Health | Mana | Basic damage | Attack interval | Health recovery / second | Mana recovery / second |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Warrior | 300 | 50 | 22 | 1.3 seconds | 10 | 2 |
+| Mage | 100 | 500 | 32 | 1.7 seconds | 2 | 10 |
+| Archer | 200 | 200 | 26 | 1.1 seconds | 6 | 6 |
 
 ### First frontend combat prototype
 
@@ -209,9 +239,9 @@ Heroes begin at Level 1. The initial health and mana values are:
 - Each initial troll has a 10% critical-hit chance.
 - Creatures also show a mana bar. The initial placeholder trolls each start
   with 100 mana, though no creature ability consumes mana yet.
-- The prototype uses local mock state. Closing the expanded quest pauses its
-  battle state; a later backend implementation will make quest state
-  authoritative and able to continue while the player is away.
+- The prototype still uses local mock state. Closing the expanded quest pauses
+  its battle state; a later integration will persist the backend combat state
+  and allow it to continue while the player is away.
 
 ## Market
 

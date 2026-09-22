@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { addHeroToParty, changeHeroActivity, createParty, equipHeroRune, fetchAgencyState, removeHeroFromParty, unequipHeroRune } from './api/agency'
+import { addHeroToParty, changeHeroActivity, createParty, equipHeroRune, fetchAgencyState, removeHeroFromParty, startQuest, unequipHeroRune } from './api/agency'
 import { createBattle } from './combat/battle'
 import { initialEquippedRunes, initialRunes } from './data/inventory'
 import { mageSpells } from './data/spells'
@@ -41,6 +41,21 @@ const fallbackParty = {
 
 const fallbackQuestHeroes = fallbackHeroes.filter((hero) => hero.partyId === fallbackParty.id)
 const fallbackAgencyHeroes = fallbackHeroes.filter((hero) => hero.status === 'agency')
+const fallbackAvailableQuests = [
+  {
+    id: 'lost-courier',
+    title: 'Lost Courier',
+    description: 'Find the missing courier in the old forest.',
+    status: 'AVAILABLE',
+    creatureName: 'Forest Wolf',
+    creaturesDefeated: 0,
+    creaturesRequired: 4,
+    minimumHeroes: 1,
+    maximumHeroes: 2,
+    durationMinutes: 30,
+    goldReward: 85,
+  },
+]
 
 const fallbackMetrics = [
   { label: 'Gold', value: '2,480', detail: '+240 this week', icon: 'G' },
@@ -102,9 +117,11 @@ function mapAgencyState(state) {
     spells: hero.heroClass === 'MAGE' && hero.magicLevel >= 10 ? mageSpells : undefined,
     runeSlots: hero.runeSlots.map((slot) => slot.rune ? mapRune(slot.rune) : null),
   }))
-  const activeParty = parties.find((party) => party.questState?.status === 'IN_PROGRESS') ?? parties[0]
+  const activeParties = parties.filter((party) => party.questState?.status === 'IN_PROGRESS')
+  const activeParty = activeParties[0] ?? null
   const questHeroes = heroes.filter((hero) => hero.partyId === activeParty?.id)
   const preparedParties = parties.filter((party) => !party.questState || party.questState.status !== 'IN_PROGRESS')
+  const availableQuests = state.quests.filter((quest) => quest.status === 'AVAILABLE')
   const agencyHeroes = heroes.filter((hero) => hero.status === 'agency' && !hero.partyId)
   const runeInventory = state.runeInventory.map(({ rune, quantity }) => ({ ...mapRune(rune), quantity }))
   const equippedRunes = Object.fromEntries(heroes.map((hero) => [hero.alias, hero.runeSlots]))
@@ -121,8 +138,10 @@ function mapAgencyState(state) {
     heroes,
     parties,
     activeParty,
+    activeParties,
     questHeroes,
     preparedParties,
+    availableQuests,
     agencyHeroes,
     runeInventory,
     equippedRunes,
@@ -130,7 +149,7 @@ function mapAgencyState(state) {
     metrics: [
       { label: 'Gold', value: state.agency.gold.toLocaleString(), detail: 'Agency funds', icon: 'G' },
       { label: 'Reputation', value: state.agency.reputation.toLocaleString(), detail: 'Agency standing', icon: 'R' },
-      { label: 'Active party', value: `${questHeroes.length} heroes`, detail: activeParty?.name ?? 'No active party', icon: 'P' },
+      { label: 'Active parties', value: `${activeParties.length}`, detail: activeParties.length === 1 ? '1 party on a quest' : `${activeParties.length} parties on quests`, icon: 'P' },
     ],
   }
 }
@@ -139,8 +158,10 @@ const fallbackGameState = {
   agency: { name: 'Dawnwatch Agency', leaderName: 'Tiago', levels: { agency: 4 } },
   heroes: fallbackHeroes,
   activeParty: fallbackParty,
+  activeParties: [fallbackParty],
   questHeroes: fallbackQuestHeroes,
   preparedParties: [],
+  availableQuests: fallbackAvailableQuests,
   agencyHeroes: fallbackAgencyHeroes,
   runeInventory: initialRunes.map((rune) => ({ ...rune })),
   equippedRunes: initialEquippedRunes,
@@ -333,14 +354,14 @@ function HeroCards({ roster, runes, onSelectRuneSlot, onChangeActivity, isUpdati
   )
 }
 
-function Heroes({ agency, heroes, activeParty, questHeroes, agencyHeroes, preparedParties, runes, isUpdatingActivity, activityError, isUpdatingParty, partyError, isCreatingParty, partyName, onPartyNameChange, onCreateParty, onCancelCreateParty, onStartCreateParty, onSelectRuneSlot, onChangeActivity, onAddToParty, onRemoveFromParty }) {
+function Heroes({ agency, heroes, activeParties, agencyHeroes, preparedParties, runes, isUpdatingActivity, activityError, isUpdatingParty, partyError, isCreatingParty, partyName, onPartyNameChange, onCreateParty, onCancelCreateParty, onStartCreateParty, onSelectRuneSlot, onChangeActivity, onAddToParty, onRemoveFromParty }) {
   return (
     <>
       <PageHeading eyebrow={agency.name} title="Heroes" description="Prepare parties at the agency, then send one on a quest." action={<button className="button button--primary" type="button" onClick={onStartCreateParty}>Create party</button>} />
-      <section className="hero-group" aria-labelledby="quest-party-heading">
-        <div className="hero-group__header party-card"><div><p className="eyebrow">Active party</p><h2 id="quest-party-heading">{activeParty.name}</h2><p>On quest: {activeParty.quest} · {questHeroes.length} heroes.</p></div><span className="status status--progress">{questHeroes.length} in party</span></div>
-        <HeroCards roster={questHeroes} runes={runes} onSelectRuneSlot={onSelectRuneSlot} />
-      </section>
+      {activeParties.map((party) => {
+        const partyHeroes = heroes.filter((hero) => hero.partyId === party.id)
+        return <section className="hero-group" aria-labelledby={`party-${party.id}`} key={party.id}><div className="hero-group__header party-card"><div><p className="eyebrow">Active party</p><h2 id={`party-${party.id}`}>{party.name}</h2><p>On quest: {party.quest} · {partyHeroes.length} heroes.</p></div><span className="status status--progress">{partyHeroes.length} in party</span></div><HeroCards roster={partyHeroes} runes={runes} onSelectRuneSlot={onSelectRuneSlot} /></section>
+      })}
       {isCreatingParty && <form className="party-form" onSubmit={onCreateParty}><label><span>Party name</span><input value={partyName} maxLength="100" autoFocus disabled={isUpdatingParty} onChange={(event) => onPartyNameChange(event.target.value)} placeholder="Forest Scouts" /></label><div className="party-form__actions"><button className="button button--primary" type="submit" disabled={isUpdatingParty}>{isUpdatingParty ? 'Creating…' : 'Create party'}</button><button className="text-button" type="button" disabled={isUpdatingParty} onClick={onCancelCreateParty}>Cancel</button></div></form>}
       {partyError && <p className="inline-error" role="alert">{partyError}</p>}
       {preparedParties.map((party) => {
@@ -357,7 +378,24 @@ function Heroes({ agency, heroes, activeParty, questHeroes, agencyHeroes, prepar
   )
 }
 
-function Quests({ activeParty, battle, combatLog, isCombatExpanded, onBattleChange, onCombatEvent, onResetBattle, onToggleCombat }) {
+function AvailableQuestCard({ quest, preparedParties, isStartingQuest, onStartQuest }) {
+  const [partyId, setPartyId] = useState('')
+  const hasPreparedParty = preparedParties.length > 0
+
+  return (
+    <article className="panel quest-card">
+      <div className="quest-card__content">
+        <div><span className="status">Available</span><h2>{quest.title}</h2><p>{quest.description}</p></div>
+        <div className="quest-card__facts"><span className="quest-card__fact"><b>{quest.minimumHeroes}–{quest.maximumHeroes}</b><small>heroes</small></span><span className="quest-card__fact"><b>{quest.durationMinutes}m</b><small>estimated</small></span><span className="quest-card__fact"><b>{quest.goldReward}</b><small>gold reward</small></span></div>
+      </div>
+      <div className="quest-card__start">
+        {hasPreparedParty ? <><label><span>Prepared party</span><select value={partyId} disabled={isStartingQuest} onChange={(event) => setPartyId(event.target.value)}><option value="" disabled>Select a party</option>{preparedParties.map((party) => <option value={party.id} key={party.id}>{party.name} · {party.heroIds.length} heroes</option>)}</select></label><button className="button button--primary" type="button" disabled={isStartingQuest || !partyId} onClick={() => onStartQuest(quest.id, partyId)}>{isStartingQuest ? 'Starting…' : 'Start quest'}</button></> : <p>Create a prepared party before starting this quest.</p>}
+      </div>
+    </article>
+  )
+}
+
+function Quests({ activeParty, activeParties, availableQuests, preparedParties, battle, combatLog, isCombatExpanded, isStartingQuest, questError, onBattleChange, onCombatEvent, onResetBattle, onStartQuest, onToggleCombat }) {
   const quest = activeParty.questState
   const defeatedCreatures = battle.status === 'victory' ? quest.creaturesRequired : quest.creaturesDefeated
 
@@ -371,6 +409,7 @@ function Quests({ activeParty, battle, combatLog, isCombatExpanded, onBattleChan
   return (
     <>
       <PageHeading eyebrow="Quest board" title="Quests" description="Choose a party that can finish the job and return safely." action={<button className="button button--primary" type="button">Find quests</button>} />
+      {questError && <p className="inline-error" role="alert">{questError}</p>}
       <section className="quest-list">
         <article className={`panel quest-card quest-card--active ${isCombatExpanded ? 'quest-card--expanded' : ''}`}>
           <div className="quest-card__trigger" role="button" tabIndex="0" aria-expanded={isCombatExpanded} onClick={onToggleCombat} onKeyDown={handleQuestCardKeyDown}>
@@ -393,12 +432,8 @@ function Quests({ activeParty, battle, combatLog, isCombatExpanded, onBattleChan
             </div>
           )}
         </article>
-        <article className="panel quest-card">
-          <div className="quest-card__content">
-            <div><span className="status">Available</span><h2>Lost Courier</h2><p>Find the missing courier in the old forest.</p></div>
-            <div className="quest-card__facts"><span className="quest-card__fact"><b>1–2</b><small>heroes</small></span><span className="quest-card__fact"><b>30m</b><small>estimated</small></span><span className="quest-card__fact"><b>85</b><small>gold reward</small></span></div>
-          </div>
-        </article>
+        {activeParties.slice(1).map((party) => <article className="panel quest-card" key={party.id}><div className="quest-card__content"><div><span className="status status--progress">In progress</span><h2>{party.quest}</h2><p>{party.questState.description}</p></div><div className="quest-card__facts"><span className="quest-card__fact"><b>{party.questState.creaturesDefeated} / {party.questState.creaturesRequired}</b><small>defeated</small></span><span className="quest-card__fact"><b>{party.heroIds.length}</b><small>heroes</small></span></div></div></article>)}
+        {availableQuests.map((availableQuest) => <AvailableQuestCard quest={availableQuest} preparedParties={preparedParties} isStartingQuest={isStartingQuest} onStartQuest={onStartQuest} key={availableQuest.id} />)}
       </section>
     </>
   )
@@ -492,6 +527,8 @@ function App() {
   const [partyError, setPartyError] = useState(null)
   const [isCreatingParty, setIsCreatingParty] = useState(false)
   const [partyName, setPartyName] = useState('')
+  const [isStartingQuest, setIsStartingQuest] = useState(false)
+  const [questError, setQuestError] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -756,10 +793,32 @@ function App() {
     }
   }
 
+  async function handleStartQuest(questId, partyId) {
+    if (apiStatus !== 'ready') {
+      setQuestError('Starting a quest requires the backend connection.')
+      return
+    }
+
+    setIsStartingQuest(true)
+    setQuestError(null)
+    try {
+      const state = await startQuest({
+        agencyId: gameState.agency.id,
+        questId,
+        partyId,
+      })
+      applyRemoteAgencyState(state)
+    } catch (error) {
+      setQuestError(error.message)
+    } finally {
+      setIsStartingQuest(false)
+    }
+  }
+
   const pages = {
     overview: <Overview agency={gameState.agency} metrics={gameState.metrics} activeParty={gameState.activeParty} questHeroes={gameState.questHeroes} onNavigate={setActivePage} />,
-    heroes: <Heroes agency={gameState.agency} heroes={gameState.heroes} activeParty={gameState.activeParty} questHeroes={gameState.questHeroes} agencyHeroes={gameState.agencyHeroes} preparedParties={gameState.preparedParties} runes={equippedRunes} isUpdatingActivity={isUpdatingActivity} activityError={activityError} isUpdatingParty={isUpdatingParty} partyError={partyError} isCreatingParty={isCreatingParty} partyName={partyName} onPartyNameChange={setPartyName} onCreateParty={handleCreateParty} onCancelCreateParty={cancelCreatingParty} onStartCreateParty={startCreatingParty} onSelectRuneSlot={(hero, slotIndex) => { setLoadoutError(null); setSelectedSlot({ hero, slotIndex }) }} onChangeActivity={updateHeroActivity} onAddToParty={assignHeroToParty} onRemoveFromParty={removeHeroFromPreparedParty} />,
-    quests: <Quests activeParty={gameState.activeParty} battle={battle} combatLog={combatLog} isCombatExpanded={isCombatExpanded} onBattleChange={setBattle} onCombatEvent={addCombatEvent} onResetBattle={resetBattle} onToggleCombat={() => setIsCombatExpanded((expanded) => !expanded)} />,
+    heroes: <Heroes agency={gameState.agency} heroes={gameState.heroes} activeParties={gameState.activeParties} agencyHeroes={gameState.agencyHeroes} preparedParties={gameState.preparedParties} runes={equippedRunes} isUpdatingActivity={isUpdatingActivity} activityError={activityError} isUpdatingParty={isUpdatingParty} partyError={partyError} isCreatingParty={isCreatingParty} partyName={partyName} onPartyNameChange={setPartyName} onCreateParty={handleCreateParty} onCancelCreateParty={cancelCreatingParty} onStartCreateParty={startCreatingParty} onSelectRuneSlot={(hero, slotIndex) => { setLoadoutError(null); setSelectedSlot({ hero, slotIndex }) }} onChangeActivity={updateHeroActivity} onAddToParty={assignHeroToParty} onRemoveFromParty={removeHeroFromPreparedParty} />,
+    quests: <Quests activeParty={gameState.activeParty} activeParties={gameState.activeParties} availableQuests={gameState.availableQuests} preparedParties={gameState.preparedParties} battle={battle} combatLog={combatLog} isCombatExpanded={isCombatExpanded} isStartingQuest={isStartingQuest} questError={questError} onBattleChange={setBattle} onCombatEvent={addCombatEvent} onResetBattle={resetBattle} onStartQuest={handleStartQuest} onToggleCombat={() => setIsCombatExpanded((expanded) => !expanded)} />,
     agency: <Agency agency={gameState.agency} upgrades={gameState.upgrades} runeInventory={runeInventory} />,
     market: <Market />,
     feed: <Feed agency={gameState.agency} heroes={gameState.heroes} />,

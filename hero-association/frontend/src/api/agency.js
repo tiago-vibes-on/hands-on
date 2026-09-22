@@ -46,6 +46,14 @@ export async function removeHeroFromParty({ agencyId, partyId, heroId }) {
   })
 }
 
+export async function startQuest({ agencyId, questId, partyId }) {
+  return request(`/api/v1/agencies/${agencyId}/quests/${questId}/start`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ partyId }),
+  })
+}
+
 async function request(path, options) {
   const response = await fetch(path, options)
 

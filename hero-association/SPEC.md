@@ -10,7 +10,8 @@ an agency and its heroes.
 The backend separates responsibilities into the following packages:
 
 - `domain`: JPA models for managers, agencies, heroes, parties, quests, runes,
-  agency inventory, and equipped hero runes
+  agency inventory, and equipped hero runes; it also contains the pure,
+  non-persistent `domain.combat` rules engine
 - `application`: game-state use cases
 - `application.exception`: application exceptions
 - `api.v1.agency`: HTTP resource and response models for agency state
@@ -26,8 +27,8 @@ The initial API exposes agency game state and persisted rune loadouts at
 `/api/v1/agencies/{agencyId}`.
 
 - `GET /api/v1/agencies/{agencyId}/state` returns an agency, its leader and
-  upgrade levels, heroes, parties and quests, rune inventory, and hero rune
-  slots.
+  upgrade levels, heroes, parties and quests, rune inventory, hero rune slots,
+  and any persisted quest-combat snapshot.
 - `PUT /api/v1/agencies/{agencyId}/heroes/{heroId}/rune-slots/{slotIndex}`
   equips the requested available rune in a slot and returns the updated agency
   state.
@@ -43,6 +44,9 @@ The initial API exposes agency game state and persisted rune loadouts at
   state.
 - `DELETE /api/v1/agencies/{agencyId}/parties/{partyId}/heroes/{heroId}`
   removes a hero from a prepared party and returns the updated agency state.
+- `PUT /api/v1/agencies/{agencyId}/quests/{questId}/start` starts an available
+  quest with the `partyId` in its request body and returns the updated agency
+  state.
 - An unknown agency returns `404 Not Found` with an error message.
 
 The response includes all five rune slots for every hero, including empty
@@ -59,6 +63,21 @@ Prepared-party members remain at the agency and retain their `TRAINING` or
 the party is on an in-progress quest, and a quest hero cannot be moved into a
 prepared party; both return `409 Conflict`. Party names must be unique within
 an agency. Other game actions are still being specified.
+Quest definitions include a description, creature objective, party-size range,
+duration estimate, and gold reward. Starting a quest requires a prepared party
+whose member count is inside that quest's range. It changes the quest to
+`IN_PROGRESS`, links it to the party, and changes every party member to
+`ON_QUEST`. It persists `startedAt` and `expectedCompletionAt`, calculated
+from the quest duration. A quest that is not `AVAILABLE` returns `409
+Conflict`; an ineligible party size returns `400 Bad Request`. Timed
+progression and combat resolution are not exposed or persisted on the backend
+yet. The internal combat engine is deterministic: callers advance a supplied
+combat time and supply its random source. It resolves independent basic-attack
+timers, hero health and mana recovery, mage spell cooldowns and mana costs,
+critical hits, deaths, and battle completion. The seeded Troll quest has a
+persisted, API-visible combat snapshot with every combatant's resources,
+statistics, and next action times. The engine does not advance that snapshot
+yet, and newly started quests do not yet create one.
 
 All persistent entity IDs and API resource IDs use RFC 9562 UUID version 7
 (UUIDv7). PostgreSQL stores them in native `uuid` columns. Sequential numeric
@@ -68,12 +87,14 @@ IDs must not be added for entities or exposed through the API.
 
 - PostgreSQL stores game state.
 - Database tables use singular entity names, including `agency`, `manager`,
-  `hero`, `party`, `quest`, `rune`, `agency_rune`, and `hero_rune`.
+  `hero`, `party`, `quest`, `quest_combat`, `quest_combatant`, `rune`,
+  `agency_rune`, and `hero_rune`.
 - Until Flyway is introduced, application startup drops and recreates the
   schema, then loads deterministic state from `import.sql`. The seed contains
-  Dawnwatch Agency, its leader, six heroes, Broken Pass Party, an in-progress
-  quest, rune inventory, and equipped runes. This development-only workflow
-  does not retain application data.
+  Dawnwatch Agency, its leader, six heroes, Broken Pass Party and its
+  in-progress quest and its initial Troll combat snapshot, the available Lost
+  Courier quest, rune inventory, and equipped runes. This development-only
+  workflow does not retain application data.
 - PostgreSQL can run independently through Docker Compose and is exposed to a
   host-run microservice at `localhost:5432`.
 - Docker Compose runs the backend and PostgreSQL using the JVM package by
@@ -123,10 +144,16 @@ IDs must not be added for entities or exposed through the API.
   clears from right to left across a spell icon to visualize its independent
   cooldown.
 - The Heroes screen separates the active quest's named party, prepared
-  parties, and unassigned heroes at the agency. Agency heroes can persistently
-  switch between Training and Resting, without numeric training stats.
+  parties, and unassigned heroes at the agency. Multiple active parties are
+  displayed independently. Agency heroes can persistently switch between
+  Training and Resting, without numeric training stats.
   Prepared parties can be named, filled, and changed through the backend;
   their members retain their agency activity until a quest starts.
+- The Quests screen reads available and active quests from the API. A manager
+  can select a prepared party and start an eligible available quest. The
+  Phaser combat prototype remains attached only to the initially seeded active
+  quest and still uses local mock state; newly started quests do not yet create,
+  advance, or resolve combat snapshots.
 - A Resting agency hero is described as recovering stamina, health, and mana
   at twice the normal rate. Timed recovery is not implemented yet.
 - The combat prototype recovers hero health and mana once per second. Warrior

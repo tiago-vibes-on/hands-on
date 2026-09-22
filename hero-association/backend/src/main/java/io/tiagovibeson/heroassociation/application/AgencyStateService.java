@@ -9,10 +9,12 @@ import io.tiagovibeson.heroassociation.domain.Agency;
 import io.tiagovibeson.heroassociation.domain.AgencyRune;
 import io.tiagovibeson.heroassociation.domain.Hero;
 import io.tiagovibeson.heroassociation.domain.Party;
+import io.tiagovibeson.heroassociation.domain.Quest;
 import io.tiagovibeson.heroassociation.repository.AgencyRepository;
 import io.tiagovibeson.heroassociation.repository.AgencyRuneRepository;
 import io.tiagovibeson.heroassociation.repository.HeroRepository;
 import io.tiagovibeson.heroassociation.repository.PartyRepository;
+import io.tiagovibeson.heroassociation.repository.QuestRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -30,6 +32,9 @@ public class AgencyStateService {
     PartyRepository partyRepository;
 
     @Inject
+    QuestRepository questRepository;
+
+    @Inject
     AgencyRuneRepository agencyRuneRepository;
 
     @Transactional
@@ -38,7 +43,8 @@ public class AgencyStateService {
                 .orElseThrow(() -> new AgencyNotFoundException(agencyId));
         List<Hero> heroes = heroRepository.list("agency.id = ?1 order by id", agencyId);
         List<Party> parties = partyRepository.list("agency.id = ?1 order by id", agencyId);
+        List<Quest> quests = questRepository.list("agency.id = ?1 order by id", agencyId);
         List<AgencyRune> runeInventory = agencyRuneRepository.list("agency.id = ?1 order by rune.id", agencyId);
-        return AgencyStateResponse.from(agency, heroes, parties, runeInventory);
+        return AgencyStateResponse.from(agency, heroes, parties, quests, runeInventory);
     }
 }
