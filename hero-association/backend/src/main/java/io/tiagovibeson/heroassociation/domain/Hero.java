@@ -1,19 +1,22 @@
 package io.tiagovibeson.heroassociation.domain;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "hero")
-public class Hero {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+public class Hero extends UuidEntity {
 
     @Column(nullable = false, length = 100)
     private String name;
@@ -21,40 +24,42 @@ public class Hero {
     @Column(nullable = false, unique = true, length = 100)
     private String alias;
 
-    @Column(nullable = false, length = 255)
-    private String power;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "hero_class", nullable = false, length = 20)
+    private HeroClass heroClass;
+
+    @Column(nullable = false)
+    private int level;
+
+    @Column(name = "magic_level", nullable = false)
+    private int magicLevel;
+
+    @Column(name = "current_health", nullable = false)
+    private int currentHealth;
+
+    @Column(name = "current_mana", nullable = false)
+    private int currentMana;
+
+    @Column(nullable = false)
+    private int stamina;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private HeroActivity activity;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "agency_id", nullable = false)
+    private Agency agency;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "party_id")
+    private Party party;
+
+    @OneToMany(mappedBy = "hero", fetch = FetchType.LAZY)
+    @OrderBy("slotIndex")
+    private List<HeroRune> runeSlots = new ArrayList<>();
 
     protected Hero() {
-    }
-
-    private Hero(String name, String alias, String power) {
-        replace(name, alias, power);
-    }
-
-    public static Hero register(String name, String alias, String power) {
-        return new Hero(name, alias, power);
-    }
-
-    public void replace(String name, String alias, String power) {
-        this.name = name;
-        this.alias = alias;
-        this.power = power;
-    }
-
-    public void update(String name, String alias, String power) {
-        if (name != null) {
-            this.name = name;
-        }
-        if (alias != null) {
-            this.alias = alias;
-        }
-        if (power != null) {
-            this.power = power;
-        }
-    }
-
-    public Long getId() {
-        return id;
     }
 
     public String getName() {
@@ -65,7 +70,51 @@ public class Hero {
         return alias;
     }
 
-    public String getPower() {
-        return power;
+    public HeroClass getHeroClass() {
+        return heroClass;
+    }
+
+    public int getLevel() {
+        return level;
+    }
+
+    public int getMagicLevel() {
+        return magicLevel;
+    }
+
+    public int getCurrentHealth() {
+        return currentHealth;
+    }
+
+    public int getCurrentMana() {
+        return currentMana;
+    }
+
+    public int getStamina() {
+        return stamina;
+    }
+
+    public HeroActivity getActivity() {
+        return activity;
+    }
+
+    public void changeActivity(HeroActivity newActivity) {
+        activity = newActivity;
+    }
+
+    public Party getParty() {
+        return party;
+    }
+
+    public void assignToParty(Party newParty) {
+        party = newParty;
+    }
+
+    public void removeFromParty() {
+        party = null;
+    }
+
+    public List<HeroRune> getRuneSlots() {
+        return runeSlots;
     }
 }

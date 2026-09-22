@@ -1,5 +1,8 @@
 # Hero Association Game Design
 
+The implementation order and unfinished engineering tasks are tracked in
+[`ROADMAP.md`](ROADMAP.md).
+
 ## Concept
 
 Hero Association is a social management game in which players manage agencies
@@ -102,7 +105,6 @@ An agency has an overall Agency Level and specialized upgrade levels:
 - Rest Level
 - Size Level
 - Reputation Level
-- Medical Level
 - Intelligence Level
 
 The Agency Level sets the maximum available level for each specialized upgrade.
@@ -132,6 +134,9 @@ meaningful without becoming excessively grindy.
 
 - Managers always send a party on a quest. A party can contain one hero or
   multiple heroes.
+- A manager can prepare a party at the agency before choosing a quest. Its
+  members remain at the agency and keep training or resting until the quest
+  begins.
 - All heroes assigned to a quest belong to that quest's party and are
   unavailable at the agency until the quest is complete. Other heroes remain
   at the agency, where they are either training or resting before they can join

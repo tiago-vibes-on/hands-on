@@ -1,8 +1,10 @@
 package io.tiagovibeson.heroassociation.application.exception;
 
-public class HeroNotFoundException extends HeroApplicationException {
+import java.util.UUID;
 
-    public HeroNotFoundException(Long id) {
-        super("Hero with id " + id + " was not found.");
+public class HeroNotFoundException extends RuntimeException {
+
+    public HeroNotFoundException(UUID heroId) {
+        super("Hero with id %s was not found in this agency.".formatted(heroId));
     }
 }
