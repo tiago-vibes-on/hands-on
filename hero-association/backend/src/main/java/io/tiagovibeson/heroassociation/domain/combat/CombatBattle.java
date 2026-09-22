@@ -29,6 +29,31 @@ public final class CombatBattle {
         return new CombatBattle(heroes, creatures);
     }
 
+    public static CombatBattle restore(CombatBattleSnapshot snapshot) {
+        Objects.requireNonNull(snapshot, "snapshot must not be null");
+        CombatBattle battle = new CombatBattle(
+                snapshot.heroes().stream().map(Combatant::restore).toList(),
+                snapshot.creatures().stream().map(Combatant::restore).toList(),
+                snapshot.currentTimeMilliseconds(),
+                snapshot.nextRecoveryAt(),
+                snapshot.status());
+        return battle;
+    }
+
+    private CombatBattle(
+            List<Combatant> heroes,
+            List<Combatant> creatures,
+            long currentTimeMilliseconds,
+            long nextRecoveryAt,
+            CombatStatus status) {
+        this.heroes = List.copyOf(heroes);
+        this.creatures = List.copyOf(creatures);
+        validateTeams();
+        this.currentTimeMilliseconds = currentTimeMilliseconds;
+        this.nextRecoveryAt = nextRecoveryAt;
+        this.status = status;
+    }
+
     public long getCurrentTimeMilliseconds() {
         return currentTimeMilliseconds;
     }
@@ -43,6 +68,15 @@ public final class CombatBattle {
 
     public List<Combatant> getCreatures() {
         return creatures;
+    }
+
+    public CombatBattleSnapshot snapshot() {
+        return new CombatBattleSnapshot(
+                currentTimeMilliseconds,
+                nextRecoveryAt,
+                status,
+                heroes.stream().map(Combatant::snapshot).toList(),
+                creatures.stream().map(Combatant::snapshot).toList());
     }
 
     public List<CombatEvent> advanceTo(long targetTimeMilliseconds, CombatRandom random) {

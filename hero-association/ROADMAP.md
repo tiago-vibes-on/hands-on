@@ -30,8 +30,8 @@ resulting state.
 
 ## Milestone 2 — Inventory and rune loadouts
 
-- [ ] Model an agency inventory that can contain runes, items, gold, and quest
-  loot.
+- [x] Model agency storage for gold, runes, and read-only stackable item
+  materials. Quest loot and item transfers remain to be added.
 - [x] Add commands to equip and unequip a rune, atomically moving it between
   agency inventory and a hero's five rune slots.
 - [x] Validate that a rune belongs to the agency and that a target slot exists.
@@ -49,7 +49,9 @@ resulting state.
 - [ ] Persist quest status and timestamps. `AVAILABLE` and `IN_PROGRESS`, plus
   start and expected-completion timestamps, are persisted; completion, failure,
   cancellation, and completion timestamps remain to be added.
-- [ ] Add a command or scheduled process that advances an in-progress quest.
+- [x] Add a command or scheduled process that advances an in-progress quest.
+  The seeded combat snapshot advances through an explicit sync command and a
+  five-second background worker; quest completion still remains to be added.
 - [x] Replace the frontend's fixed active quest and available quest cards with
   API data and persisted quest starts.
 
@@ -64,11 +66,14 @@ resulting state.
   the initial mage spells in the server-side rules engine.
 - [ ] Apply rune effects that are already displayed: attack, armor, health,
   mana, attack speed, critical chance, and critical damage.
-- [ ] Persist a compact quest-combat snapshot and combat event history for the
-  frontend to render. The initial Troll encounter now has a persisted snapshot;
-  snapshot creation for new quests, event history, and progression remain.
-- [ ] Replace the local Phaser combat simulation with state and events from the
-  backend.
+- [x] Persist a compact quest-combat snapshot and bounded event history. The
+  initial Troll encounter stores its current snapshot plus the latest 100
+  server-generated events. New quests still need snapshot creation.
+- [x] Replace the local Phaser combat simulation with server state. The Phaser
+  view renders the synchronized snapshot.
+- [x] Render new server combat events in Phaser, including attacks, spells,
+  recovery, critical hits, and defeats. The scene does not replay history that
+  happened before it was opened.
 
 ## Milestone 5 — Rewards, progression, and recovery
 
@@ -76,8 +81,11 @@ resulting state.
   respecting party Capacity.
 - [ ] Award individual hero experience using the stamina thresholds in
   `GAME.md`, and implement level-ups.
-- [ ] Apply quest stamina costs, health and mana state, recovery over time,
-  and the 2× Rest bonus.
+- [x] Synchronize current health and mana from authoritative combat snapshots
+  to quest heroes.
+- [x] Recover agency hero health and mana over time at the base Training rate
+  and twice that rate while Resting.
+- [ ] Apply quest stamina costs and stamina recovery over time.
 - [ ] Implement permanent hero death and the agency fee. The fee formula needs
   a game-design decision before implementation.
 - [ ] Transfer completed-quest rewards from party capacity to agency inventory.
@@ -102,8 +110,8 @@ resulting state.
 
 ## Milestone 8 — Social feed and multiplayer
 
-- [ ] Add feed posts by agencies, managers, and heroes, supporting text and
-  references to in-game items.
+- [x] Add agency-scoped text feed posts by agencies, the current leader, and
+  heroes, including one non-consuming reference to an agency item stack.
 - [ ] Add agency invitations, membership permissions, manager departure, and
   starting a new agency.
 - [ ] Define feed visibility and moderation rules before exposing posts beyond
@@ -114,8 +122,9 @@ resulting state.
 - [ ] Add authentication and authorization before exposing player-owned data
   outside local development.
 - [ ] Enforce agency membership and leader permissions on every write command.
-- [ ] Decide whether polling is sufficient for initial quest, feed, and market
-  refreshes.
+- [x] Use five-second browser polling for initial agency, quest, and feed
+  refreshes while the tab is visible. Revisit real-time transport when market
+  matching or higher-frequency updates need it.
 - [ ] Add WebSocket or server-sent event updates only for features that need
   near-real-time changes, such as combat progress, matched market orders, and
   new feed posts.
@@ -128,5 +137,5 @@ resulting state.
   attributes.
 - [ ] Define agency revenue sharing between participating managers and the
   agency.
-- [ ] Define market-tradable item categories and fee destination.
+- [ ] Define which item categories can be traded, and the fee destination.
 - [ ] Define agency invitation, ownership transfer, and permission rules.

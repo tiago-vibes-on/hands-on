@@ -54,6 +54,20 @@ export async function startQuest({ agencyId, questId, partyId }) {
   })
 }
 
+export async function synchronizeQuestCombat({ agencyId, questId }) {
+  return request(`/api/v1/agencies/${agencyId}/quests/${questId}/combat/sync`, {
+    method: 'POST',
+  })
+}
+
+export async function createFeedPost({ agencyId, authorType, authorId, content, itemId, itemQuantity }) {
+  return request(`/api/v1/agencies/${agencyId}/feed-posts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ authorType, authorId, content, itemId, itemQuantity }),
+  })
+}
+
 async function request(path, options) {
   const response = await fetch(path, options)
 

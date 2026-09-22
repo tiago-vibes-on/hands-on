@@ -105,6 +105,7 @@
 .hero-card h2 { margin-top: 2px; font-size: 22px; }
 .hero-card__name { margin: 5px 0 0; color: var(--text-muted); font-size: 12px; }
 .hero-card__magic-level { margin: 4px 0 0; color: #b7a7de; font-size: 11px; }
+.hero-card__resources { margin: 5px 0 0; color: var(--text-muted); font-size: 11px; }
 .hero-card__recovery { margin: 5px 0 0; color: #8bc5af; font-size: 11px; }
 .hero-card__details { margin-top: auto; }
 .hero-card__details span, .hero-card__details strong { display: block; }
@@ -162,16 +163,13 @@
 .combat-scene { width: 100%; overflow: hidden; border: 1px solid #33425e; border-radius: 8px; }
 .combat-scene canvas { display: block; width: 100% !important; }
 .combat-scene--loading { display: grid; min-height: 160px; place-items: center; color: var(--text-muted); font-size: 12px; }
-.combat-log { display: grid; grid-template-columns: 88px 1fr; gap: 12px; padding: 15px 0 0; color: var(--text-muted); font-size: 11px; }
-.combat-log strong { color: #c9cfdd; font-size: 11px; }
-.combat-log ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
-.combat-log li::before { margin-right: 6px; color: var(--accent); content: '•'; }
 .upgrade-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .upgrade-card { display: grid; grid-template-columns: 46px 1fr auto; align-items: center; gap: 15px; }
 .upgrade-card__level { display: grid; width: 42px; height: 42px; place-items: center; color: var(--accent); font-family: var(--display-font); font-weight: 700; background: var(--accent-soft); border: 1px solid var(--accent-border); border-radius: 9px; }
 .upgrade-card h2 { font-size: 16px; }
 .upgrade-card p { margin: 5px 0 0; color: var(--text-muted); font-size: 12px; }
 .agency-inventory { margin-top: 18px; }
+.agency-inventory__heading { margin: 22px 0 -8px; color: var(--text-muted); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .agency-inventory__items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 18px; }
 .agency-inventory__item { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 11px; background: #131c2e; border: 1px solid var(--border-soft); border-radius: 8px; }
 .agency-inventory__symbol { display: grid; width: 34px; height: 34px; place-items: center; color: #f2d783; font-size: 18px; background: #25304a; border: 1px solid #45546f; border-radius: 6px; }
@@ -210,12 +208,24 @@
 .offer-row strong { color: #efc46b; }
 .offer-row small { font-size: 11px; }
 .feed-post { max-width: 740px; }
+.feed-composer { display: grid; max-width: 740px; gap: 14px; margin-bottom: 14px; }
+.feed-composer label { display: grid; gap: 6px; }
+.feed-composer label > span { color: var(--text-muted); font-size: 11px; font-weight: 700; }
+.feed-composer select, .feed-composer textarea, .feed-composer input { box-sizing: border-box; width: 100%; color: var(--text-strong); font: inherit; font-size: 13px; background: #101827; border: 1px solid #485875; border-radius: 6px; }
+.feed-composer select, .feed-composer input { height: 36px; padding: 0 10px; }
+.feed-composer textarea { min-height: 92px; padding: 10px; line-height: 1.45; resize: vertical; }
+.feed-composer select:focus, .feed-composer textarea:focus, .feed-composer input:focus { outline: 2px solid #d8a74c; outline-offset: 1px; }
+.feed-composer__attachment { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 12px; }
+.feed-composer__attachment label { min-width: 0; }
+.feed-composer__actions { display: flex; align-items: center; justify-content: flex-end; gap: 13px; }
+.feed-composer__actions small { margin-right: auto; color: var(--text-muted); font-size: 11px; }
 .feed-post__author { display: flex; align-items: center; gap: 10px; }
 .feed-post__author strong, .feed-post__author small { display: block; }
 .feed-post__author strong { color: var(--text-strong); font-size: 13px; }
 .feed-post__author small { margin-top: 3px; color: var(--text-muted); font-size: 11px; }
 .feed-post > p { margin: 18px 0; color: #c9cdd8; font-size: 14px; line-height: 1.6; }
-.feed-post__item { width: fit-content; padding: 8px 10px; color: #c3cbe0; font-size: 11px; background: #1c263d; border: 1px solid #31405d; border-radius: 6px; }
+.feed-post__item { display: flex; width: fit-content; align-items: center; gap: 7px; padding: 8px 10px; color: #c3cbe0; font-size: 11px; background: #1c263d; border: 1px solid #31405d; border-radius: 6px; }
+.feed-post__item > span { color: #f2d783; font-size: 15px; }
 @media (max-width: 860px) { .app-shell { display: block; } .sidebar { min-height: auto; padding: 15px 16px 11px; border-right: 0; border-bottom: 1px solid var(--sidebar-border); } .navigation { display: flex; gap: 3px; margin: 16px -16px -11px; padding: 0 16px 11px; overflow-x: auto; } .navigation__item { width: auto; flex: 0 0 auto; } .sidebar__bottom { display: none; } .main-content__inner { padding-top: 38px; } }
 @media (max-width: 1050px) { .hero-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 660px) { .main-content__inner { padding: 32px 18px 48px; } .page-heading, .quest-card__trigger, .quest-card__content, .quest-card__start, .hero-group__header, .party-form { align-items: start; flex-direction: column; } .page-heading { margin-bottom: 28px; } .metrics, .dashboard-grid, .market-grid, .hero-cards, .upgrade-grid, .agency-inventory__items { grid-template-columns: 1fr; } .party-form { margin-top: -14px; } .party-form label, .quest-card__start label { width: 100%; } .hero-row { grid-template-columns: 38px 1fr; } .hero-row__training, .hero-row .stamina { grid-column: 2; } .quest-card__facts { width: 100%; justify-content: space-between; } .quest-card__expand-icon { margin-left: auto; } .combat-panel { padding: 0 14px 18px; } .combat-panel__header { align-items: start; flex-direction: column; } .combat-log { grid-template-columns: 1fr; gap: 6px; } .upgrade-card { grid-template-columns: 46px 1fr; } .upgrade-card .text-button { grid-column: 2; justify-self: start; } .equipment-drawer { width: 100%; } }
+@media (max-width: 660px) { .main-content__inner { padding: 32px 18px 48px; } .page-heading, .quest-card__trigger, .quest-card__content, .quest-card__start, .hero-group__header, .party-form { align-items: start; flex-direction: column; } .page-heading { margin-bottom: 28px; } .metrics, .dashboard-grid, .market-grid, .hero-cards, .upgrade-grid, .agency-inventory__items, .feed-composer__attachment { grid-template-columns: 1fr; } .party-form { margin-top: -14px; } .party-form label, .quest-card__start label { width: 100%; } .hero-row { grid-template-columns: 38px 1fr; } .hero-row__training, .hero-row .stamina { grid-column: 2; } .quest-card__facts { width: 100%; justify-content: space-between; } .quest-card__expand-icon { margin-left: auto; } .combat-panel { padding: 0 14px 18px; } .combat-panel__header { align-items: start; flex-direction: column; } .upgrade-card { grid-template-columns: 46px 1fr; } .upgrade-card .text-button { grid-column: 2; justify-self: start; } .equipment-drawer { width: 100%; } }

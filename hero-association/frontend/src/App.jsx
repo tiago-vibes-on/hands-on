@@ -1,6 +1,5 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
-import { addHeroToParty, changeHeroActivity, createParty, equipHeroRune, fetchAgencyState, removeHeroFromParty, startQuest, unequipHeroRune } from './api/agency'
-import { createBattle } from './combat/battle'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { addHeroToParty, changeHeroActivity, createFeedPost, createParty, equipHeroRune, fetchAgencyState, removeHeroFromParty, startQuest, synchronizeQuestCombat, unequipHeroRune } from './api/agency'
 import { initialEquippedRunes, initialRunes } from './data/inventory'
 import { mageSpells } from './data/spells'
 import './App.css'
@@ -17,13 +16,30 @@ const navigation = [
 ]
 
 const fallbackHeroes = [
-  { name: 'Brom Ironwall', alias: 'Ironwall', role: 'Warrior', level: 1, healthRecovery: 10, manaRecovery: 2, stamina: 58, color: 'gold', partyId: 'broken-pass-party', status: 'quest' },
-  { name: 'Elara Moonweaver', alias: 'Moonweaver', role: 'Mage', level: 1, magicLevel: 15, healthRecovery: 2, manaRecovery: 10, spells: mageSpells, stamina: 24, color: 'violet', partyId: 'broken-pass-party', status: 'quest' },
-  { name: 'Kael Swiftarrow', alias: 'Swiftarrow', role: 'Archer', level: 1, healthRecovery: 6, manaRecovery: 6, stamina: 91, color: 'teal', partyId: 'broken-pass-party', status: 'quest' },
-  { name: 'Dorian Oakshield', alias: 'Oakshield', role: 'Warrior', level: 1, healthRecovery: 10, manaRecovery: 2, color: 'gold', activity: 'Training', status: 'agency' },
-  { name: 'Runa Emberveil', alias: 'Emberveil', role: 'Mage', level: 1, healthRecovery: 2, manaRecovery: 10, color: 'violet', activity: 'Resting', status: 'agency' },
-  { name: 'Lyra Hawkeye', alias: 'Hawkeye', role: 'Archer', level: 1, healthRecovery: 6, manaRecovery: 6, color: 'teal', activity: 'Training', status: 'agency' },
+  { name: 'Brom Ironwall', alias: 'Ironwall', role: 'Warrior', level: 1, currentHealth: 300, maxHealth: 300, currentMana: 50, maxMana: 50, healthRecovery: 10, manaRecovery: 2, stamina: 58, color: 'gold', partyId: 'broken-pass-party', status: 'quest' },
+  { name: 'Elara Moonweaver', alias: 'Moonweaver', role: 'Mage', level: 1, magicLevel: 15, currentHealth: 100, maxHealth: 100, currentMana: 500, maxMana: 500, healthRecovery: 2, manaRecovery: 10, spells: mageSpells, stamina: 24, color: 'violet', partyId: 'broken-pass-party', status: 'quest' },
+  { name: 'Kael Swiftarrow', alias: 'Swiftarrow', role: 'Archer', level: 1, currentHealth: 200, maxHealth: 200, currentMana: 200, maxMana: 200, healthRecovery: 6, manaRecovery: 6, stamina: 91, color: 'teal', partyId: 'broken-pass-party', status: 'quest' },
+  { name: 'Dorian Oakshield', alias: 'Oakshield', role: 'Warrior', level: 1, currentHealth: 300, maxHealth: 300, currentMana: 50, maxMana: 50, healthRecovery: 10, manaRecovery: 2, color: 'gold', activity: 'Training', status: 'agency' },
+  { name: 'Runa Emberveil', alias: 'Emberveil', role: 'Mage', level: 1, currentHealth: 100, maxHealth: 100, currentMana: 500, maxMana: 500, healthRecovery: 2, manaRecovery: 10, color: 'violet', activity: 'Resting', status: 'agency' },
+  { name: 'Lyra Hawkeye', alias: 'Hawkeye', role: 'Archer', level: 1, currentHealth: 200, maxHealth: 200, currentMana: 200, maxMana: 200, healthRecovery: 6, manaRecovery: 6, color: 'teal', activity: 'Training', status: 'agency' },
 ]
+
+const fallbackCombat = {
+  version: 'local-fixture',
+  status: 'in-progress',
+  currentTimeMilliseconds: 0,
+  events: [],
+  heroes: [
+    { id: 'brom', name: 'Ironwall', role: 'Warrior', level: 1, maxHealth: 300, currentHealth: 300, maxMana: 50, currentMana: 50, color: 0xa67434, alive: true, runes: initialEquippedRunes.Ironwall, nextSpellCastAt: {} },
+    { id: 'elara', name: 'Moonweaver', role: 'Mage', level: 1, magicLevel: 15, maxHealth: 100, currentHealth: 100, maxMana: 500, currentMana: 500, color: 0x835d9a, alive: true, runes: initialEquippedRunes.Moonweaver, spells: mageSpells, nextSpellCastAt: {} },
+    { id: 'kael', name: 'Swiftarrow', role: 'Archer', level: 1, maxHealth: 200, currentHealth: 200, maxMana: 200, currentMana: 200, color: 0x357c79, alive: true, runes: initialEquippedRunes.Swiftarrow, nextSpellCastAt: {} },
+  ],
+  creatures: [
+    { id: 'young-troll-1', name: 'Troll', maxHealth: 2000, currentHealth: 2000, maxMana: 100, currentMana: 100, color: 0x7c6047, alive: true },
+    { id: 'young-troll-2', name: 'Troll', maxHealth: 2000, currentHealth: 2000, maxMana: 100, currentMana: 100, color: 0x8d6c4d, alive: true },
+    { id: 'young-troll-3', name: 'Troll', maxHealth: 2000, currentHealth: 2000, maxMana: 100, currentMana: 100, color: 0x74583e, alive: true },
+  ],
+}
 
 const fallbackParty = {
   id: 'broken-pass-party',
@@ -35,6 +51,7 @@ const fallbackParty = {
     creatureName: 'Troll',
     creaturesDefeated: 0,
     creaturesRequired: 3,
+    combat: fallbackCombat,
   },
   heroIds: ['ironwall', 'moonweaver', 'swiftarrow'],
 }
@@ -65,10 +82,15 @@ const fallbackMetrics = [
 
 const fallbackUpgrades = [
   { name: 'Training', level: 4, detail: 'Improves available hero training.' },
-  { name: 'Rest', level: 3, detail: 'Restores stamina faster.' },
+  { name: 'Rest', level: 3, detail: 'Supports hero recovery facilities.' },
   { name: 'Size', level: 4, detail: 'Room for heroes and facilities.' },
   { name: 'Reputation', level: 3, detail: 'Unlocks better opportunities.' },
   { name: 'Intelligence', level: 3, detail: 'Reveals quest risks and rewards.' },
+]
+
+const fallbackItemInventory = [
+  { id: 'magic-crystal', code: 'magic-crystal', name: 'Magic Crystal', symbol: '◇', description: 'A concentrated shard of arcane energy used in trade and crafting.', quantity: 3 },
+  { id: 'iron-ingot', code: 'iron-ingot', name: 'Iron Ingot', symbol: '▰', description: 'Refined iron ready for weapons, armor, or trade.', quantity: 24 },
 ]
 
 const heroColors = {
@@ -76,6 +98,14 @@ const heroColors = {
   MAGE: 'violet',
   ARCHER: 'teal',
 }
+
+const combatHeroColors = {
+  WARRIOR: 0xa67434,
+  MAGE: 0x835d9a,
+  ARCHER: 0x357c79,
+}
+
+const creatureColors = [0x7c6047, 0x8d6c4d, 0x74583e, 0x876747]
 
 const runeEffects = {
   CRITICAL_CHANCE: 'criticalChance',
@@ -94,12 +124,53 @@ function mapRune(rune) {
   }
 }
 
+function mapCombatSnapshot(combat, heroesById) {
+  if (!combat) {
+    return null
+  }
+
+  const combatants = combat.combatants.map((combatant) => {
+    const hero = combatant.heroId ? heroesById.get(combatant.heroId) : null
+    return {
+      id: combatant.id,
+      name: combatant.name,
+      team: combatant.team,
+      role: hero?.role,
+      level: hero?.level,
+      magicLevel: combatant.magicLevel,
+      maxHealth: combatant.maxHealth,
+      currentHealth: combatant.currentHealth,
+      maxMana: combatant.maxMana,
+      currentMana: combatant.currentMana,
+      alive: combatant.currentHealth > 0,
+      color: hero ? combatHeroColors[combatant.heroClass] : creatureColors[combatant.formationIndex % creatureColors.length],
+      runes: hero?.runeSlots ?? [],
+      spells: hero?.spells,
+      nextSpellCastAt: {
+        'fire-ball': combatant.fireBallNextCastAt,
+        'lightning-rail': combatant.lightningRailNextCastAt,
+      },
+      formationIndex: combatant.formationIndex,
+    }
+  })
+  const status = {
+    IN_PROGRESS: 'in-progress',
+    HERO_VICTORY: 'victory',
+    CREATURE_VICTORY: 'defeat',
+  }[combat.status] ?? 'in-progress'
+
+  return {
+    version: combat.lastSynchronizedAt ?? `${combat.currentTimeMilliseconds}`,
+    status,
+    currentTimeMilliseconds: combat.currentTimeMilliseconds,
+    lastSynchronizedAt: combat.lastSynchronizedAt,
+    events: [...(combat.events ?? [])].sort((left, right) => left.sequenceNumber - right.sequenceNumber),
+    heroes: combatants.filter((combatant) => combatant.team === 'HEROES').sort((left, right) => left.formationIndex - right.formationIndex),
+    creatures: combatants.filter((combatant) => combatant.team === 'CREATURES').sort((left, right) => left.formationIndex - right.formationIndex),
+  }
+}
+
 function mapAgencyState(state) {
-  const parties = state.parties.map((party) => ({
-    ...party,
-    quest: party.quest?.title,
-    questState: party.quest,
-  }))
   const heroes = state.heroes.map((hero) => ({
     id: hero.id,
     name: hero.name,
@@ -107,6 +178,10 @@ function mapAgencyState(state) {
     role: titleCase(hero.heroClass),
     level: hero.level,
     magicLevel: hero.magicLevel,
+    currentHealth: hero.currentHealth,
+    maxHealth: hero.maxHealth,
+    currentMana: hero.currentMana,
+    maxMana: hero.maxMana,
     healthRecovery: hero.healthRecoveryPerSecond,
     manaRecovery: hero.manaRecoveryPerSecond,
     stamina: hero.stamina,
@@ -117,6 +192,13 @@ function mapAgencyState(state) {
     spells: hero.heroClass === 'MAGE' && hero.magicLevel >= 10 ? mageSpells : undefined,
     runeSlots: hero.runeSlots.map((slot) => slot.rune ? mapRune(slot.rune) : null),
   }))
+  const heroesById = new Map(heroes.map((hero) => [hero.id, hero]))
+  const quests = state.quests.map((quest) => ({ ...quest, combat: mapCombatSnapshot(quest.combat, heroesById) }))
+  const questsById = new Map(quests.map((quest) => [quest.id, quest]))
+  const parties = state.parties.map((party) => {
+    const quest = party.quest ? questsById.get(party.quest.id) : null
+    return { ...party, quest: quest?.title, questState: quest }
+  })
   const activeParties = parties.filter((party) => party.questState?.status === 'IN_PROGRESS')
   const activeParty = activeParties[0] ?? null
   const questHeroes = heroes.filter((hero) => hero.partyId === activeParty?.id)
@@ -124,10 +206,11 @@ function mapAgencyState(state) {
   const availableQuests = state.quests.filter((quest) => quest.status === 'AVAILABLE')
   const agencyHeroes = heroes.filter((hero) => hero.status === 'agency' && !hero.partyId)
   const runeInventory = state.runeInventory.map(({ rune, quantity }) => ({ ...mapRune(rune), quantity }))
+  const itemInventory = (state.itemInventory ?? []).map(({ item, quantity }) => ({ ...item, quantity }))
   const equippedRunes = Object.fromEntries(heroes.map((hero) => [hero.alias, hero.runeSlots]))
   const upgrades = [
     { name: 'Training', level: state.agency.levels.training, detail: 'Improves available hero training.' },
-    { name: 'Rest', level: state.agency.levels.rest, detail: 'Restores stamina faster.' },
+    { name: 'Rest', level: state.agency.levels.rest, detail: 'Supports hero recovery facilities.' },
     { name: 'Size', level: state.agency.levels.size, detail: 'Room for heroes and facilities.' },
     { name: 'Reputation', level: state.agency.levels.reputation, detail: 'Unlocks better opportunities.' },
     { name: 'Intelligence', level: state.agency.levels.intelligence, detail: 'Reveals quest risks and rewards.' },
@@ -137,6 +220,7 @@ function mapAgencyState(state) {
     agency: state.agency,
     heroes,
     parties,
+    quests,
     activeParty,
     activeParties,
     questHeroes,
@@ -144,7 +228,9 @@ function mapAgencyState(state) {
     availableQuests,
     agencyHeroes,
     runeInventory,
+    itemInventory,
     equippedRunes,
+    feedPosts: state.feedPosts.map((post) => ({ ...post, item: post.item ?? null, itemQuantity: post.itemQuantity ?? null })),
     upgrades,
     metrics: [
       { label: 'Gold', value: state.agency.gold.toLocaleString(), detail: 'Agency funds', icon: 'G' },
@@ -155,7 +241,7 @@ function mapAgencyState(state) {
 }
 
 const fallbackGameState = {
-  agency: { name: 'Dawnwatch Agency', leaderName: 'Tiago', levels: { agency: 4 } },
+  agency: { id: 'dawnwatch-agency', name: 'Dawnwatch Agency', leaderId: 'tiago', leaderName: 'Tiago', levels: { agency: 4 } },
   heroes: fallbackHeroes,
   activeParty: fallbackParty,
   activeParties: [fallbackParty],
@@ -164,7 +250,12 @@ const fallbackGameState = {
   availableQuests: fallbackAvailableQuests,
   agencyHeroes: fallbackAgencyHeroes,
   runeInventory: initialRunes.map((rune) => ({ ...rune })),
+  itemInventory: fallbackItemInventory,
   equippedRunes: initialEquippedRunes,
+  feedPosts: [
+    { id: 'dawnwatch-update', authorType: 'AGENCY', authorId: 'dawnwatch-agency', authorName: 'Dawnwatch Agency', content: 'The party has reached Broken Pass. The road will be open again soon.', publishedAt: '2026-01-01T12:00:00Z' },
+    { id: 'moonweaver-update', authorType: 'HERO', authorId: 'moonweaver', authorName: 'Elara Moonweaver', content: 'Rested, prepared, and ready for whatever waits beyond the pass.', item: fallbackItemInventory[0], itemQuantity: 1, publishedAt: '2026-01-01T11:00:00Z' },
+  ],
   upgrades: fallbackUpgrades,
   metrics: fallbackMetrics,
 }
@@ -340,13 +431,13 @@ function HeroCards({ roster, runes, onSelectRuneSlot, onChangeActivity, isUpdati
       {roster.map((hero) => (
         <article className="panel hero-card" key={hero.alias}>
           <div className="hero-card__topline"><HeroAvatar hero={hero} size="large" /><span className={`status ${hero.status === 'quest' ? 'status--progress' : ''}`}>{hero.status === 'quest' ? 'On quest' : hero.activity}</span></div>
-          <div><p className="eyebrow">{hero.role}</p><h2>{hero.alias}</h2><p className="hero-card__name">{hero.name} · Level {hero.level}</p>{hero.magicLevel && <p className="hero-card__magic-level">Magic Level {hero.magicLevel}</p>}<p className="hero-card__recovery">Recovery: +{hero.healthRecovery} health/s · +{hero.manaRecovery} mana/s</p></div>
+          <div><p className="eyebrow">{hero.role}</p><h2>{hero.alias}</h2><p className="hero-card__name">{hero.name} · Level {hero.level}</p>{hero.magicLevel && <p className="hero-card__magic-level">Magic Level {hero.magicLevel}</p>}<p className="hero-card__resources">Health {hero.currentHealth} / {hero.maxHealth} · Mana {hero.currentMana} / {hero.maxMana}</p><p className="hero-card__recovery">Recovery: +{hero.healthRecovery} health/s · +{hero.manaRecovery} mana/s</p></div>
           {hero.status === 'quest' ? (
             <>
               <div className="hero-card__details"><span>Experience</span><strong>{experienceGain(hero.stamina)}% XP gain from creatures</strong></div>
               <StaminaBar value={hero.stamina} />
             </>
-          ) : <div className="hero-card__agency-activity"><span>At the agency</span><strong>{hero.activity}</strong><p>{hero.activity === 'Training' ? 'Improving for the next quest without a recovery bonus.' : 'Recovering stamina, health, and mana at 2× speed.'}</p><div className="hero-card__activity-actions" role="group" aria-label={`${hero.alias} agency activity`}><button className={`activity-button ${hero.activity === 'Training' ? 'activity-button--active' : ''}`} type="button" disabled={isUpdatingActivity || hero.activity === 'Training'} onClick={() => onChangeActivity(hero, 'TRAINING')}>Training</button><button className={`activity-button ${hero.activity === 'Resting' ? 'activity-button--active' : ''}`} type="button" disabled={isUpdatingActivity || hero.activity === 'Resting'} onClick={() => onChangeActivity(hero, 'RESTING')}>Resting</button></div>{partyId ? <button className="text-button hero-card__party-action" type="button" disabled={isUpdatingParty} onClick={() => onRemoveFromParty(hero, partyId)}>Remove from party</button> : preparedParties?.length > 0 && <label className="hero-card__party-select"><span>Assign to party</span><select defaultValue="" disabled={isUpdatingParty} onChange={(event) => { const selectedPartyId = event.target.value; event.target.value = ''; if (selectedPartyId) { onAddToParty(hero, selectedPartyId) } }}><option value="" disabled>Select a party</option>{preparedParties.map((party) => <option value={party.id} key={party.id}>{party.name}</option>)}</select></label>}</div>}
+          ) : <div className="hero-card__agency-activity"><span>At the agency</span><strong>{hero.activity}</strong><p>{hero.activity === 'Training' ? 'Recovering health and mana at the base class rate.' : 'Recovering health and mana at 2× the base class rate. Stamina recovery is not implemented yet.'}</p><div className="hero-card__activity-actions" role="group" aria-label={`${hero.alias} agency activity`}><button className={`activity-button ${hero.activity === 'Training' ? 'activity-button--active' : ''}`} type="button" disabled={isUpdatingActivity || hero.activity === 'Training'} onClick={() => onChangeActivity(hero, 'TRAINING')}>Training</button><button className={`activity-button ${hero.activity === 'Resting' ? 'activity-button--active' : ''}`} type="button" disabled={isUpdatingActivity || hero.activity === 'Resting'} onClick={() => onChangeActivity(hero, 'RESTING')}>Resting</button></div>{partyId ? <button className="text-button hero-card__party-action" type="button" disabled={isUpdatingParty} onClick={() => onRemoveFromParty(hero, partyId)}>Remove from party</button> : preparedParties?.length > 0 && <label className="hero-card__party-select"><span>Assign to party</span><select defaultValue="" disabled={isUpdatingParty} onChange={(event) => { const selectedPartyId = event.target.value; event.target.value = ''; if (selectedPartyId) { onAddToParty(hero, selectedPartyId) } }}><option value="" disabled>Select a party</option>{preparedParties.map((party) => <option value={party.id} key={party.id}>{party.name}</option>)}</select></label>}</div>}
           <HeroLoadoutSlots hero={hero} runes={runes} onSelectRuneSlot={onSelectRuneSlot} />
         </article>
       ))}
@@ -395,9 +486,12 @@ function AvailableQuestCard({ quest, preparedParties, isStartingQuest, onStartQu
   )
 }
 
-function Quests({ activeParty, activeParties, availableQuests, preparedParties, battle, combatLog, isCombatExpanded, isStartingQuest, questError, onBattleChange, onCombatEvent, onResetBattle, onStartQuest, onToggleCombat }) {
+function Quests({ activeParty, activeParties, availableQuests, preparedParties, battle, isCombatExpanded, isSynchronizingCombat, isStartingQuest, questError, onStartQuest, onToggleCombat }) {
   const quest = activeParty.questState
-  const defeatedCreatures = battle.status === 'victory' ? quest.creaturesRequired : quest.creaturesDefeated
+  const defeatedCreatures = battle
+    ? battle.creatures.filter((creature) => !creature.alive).length
+    : quest.creaturesDefeated
+  const combatStatus = battle?.status ?? 'in-progress'
 
   function handleQuestCardKeyDown(event) {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -413,22 +507,16 @@ function Quests({ activeParty, activeParties, availableQuests, preparedParties, 
       <section className="quest-list">
         <article className={`panel quest-card quest-card--active ${isCombatExpanded ? 'quest-card--expanded' : ''}`}>
           <div className="quest-card__trigger" role="button" tabIndex="0" aria-expanded={isCombatExpanded} onClick={onToggleCombat} onKeyDown={handleQuestCardKeyDown}>
-            <div><span className="status status--progress">{battle.status === 'in-progress' ? 'In progress' : battle.status}</span><h2>{quest.title}</h2><p>Defeat {quest.creaturesRequired} {quest.creatureName.toLowerCase()} to complete this quest.</p></div>
+            <div><span className="status status--progress">{combatStatus === 'in-progress' ? 'In progress' : combatStatus}</span><h2>{quest.title}</h2><p>Defeat {quest.creaturesRequired} {quest.creatureName.toLowerCase()} to complete this quest.</p></div>
             <div className="quest-card__facts"><span className="quest-card__fact"><b>{defeatedCreatures} / {quest.creaturesRequired}</b><small>defeated</small></span><span className="quest-card__fact"><b>{activeParty.heroIds?.length ?? 0}</b><small>heroes</small></span><span className="quest-card__fact"><b>Active</b><small>quest</small></span><span className="quest-card__expand-icon" aria-hidden="true">{isCombatExpanded ? '−' : '+'}</span></div>
           </div>
           {isCombatExpanded && (
             <div className="combat-panel">
               <div className="combat-panel__header">
                 <div><p className="eyebrow">Current encounter</p></div>
-                {battle.status === 'in-progress' ? <span className="combat-panel__hint">Each combatant attacks on its own timer.</span> : <button className="text-button" type="button" onClick={onResetBattle}>Reset encounter</button>}
+                {battle ? <span className="combat-panel__hint">{isSynchronizingCombat ? 'Synchronizing…' : 'Server-synchronized every 2 seconds.'}</span> : null}
               </div>
-              <Suspense fallback={<div className="combat-scene combat-scene--loading">Preparing the battlefield…</div>}>
-                <CombatScene battle={battle} onBattleChange={onBattleChange} onCombatEvent={onCombatEvent} />
-              </Suspense>
-              <div className="combat-log" aria-live="polite">
-                <strong>Combat log</strong>
-                <ul>{combatLog.map((event, index) => <li key={`${event}-${index}`}>{event}</li>)}</ul>
-              </div>
+              {battle ? <Suspense fallback={<div className="combat-scene combat-scene--loading">Preparing the battlefield…</div>}><CombatScene battle={battle} /></Suspense> : <p className="combat-panel__hint">Combat data is not available for this quest yet.</p>}
             </div>
           )}
         </article>
@@ -439,7 +527,10 @@ function Quests({ activeParty, activeParties, availableQuests, preparedParties, 
   )
 }
 
-function Agency({ agency, upgrades, runeInventory }) {
+function Agency({ agency, upgrades, runeInventory, itemInventory }) {
+  const itemQuantity = itemInventory.reduce((total, item) => total + item.quantity, 0)
+  const runeQuantity = runeInventory.reduce((total, rune) => total + rune.quantity, 0)
+
   return (
     <>
       <PageHeading eyebrow={agency.name} title="Agency upgrades" description="Agency level caps each specialized upgrade. You choose which areas to prioritize." action={<button className="button button--primary" type="button">Upgrade agency</button>} />
@@ -453,7 +544,18 @@ function Agency({ agency, upgrades, runeInventory }) {
         ))}
       </section>
       <section className="panel agency-inventory">
-        <div className="panel__header"><div><p className="eyebrow">Agency storage</p><h2>Rune inventory</h2></div><span className="status">{runeInventory.reduce((total, rune) => total + rune.quantity, 0)} runes</span></div>
+        <div className="panel__header"><div><p className="eyebrow">Agency storage</p><h2>Agency inventory</h2></div><span className="status">{itemQuantity} items · {runeQuantity} runes</span></div>
+        <h3 className="agency-inventory__heading">Items</h3>
+        <div className="agency-inventory__items">
+          {itemInventory.map((item) => (
+            <article className="agency-inventory__item" key={item.id}>
+              <span className="agency-inventory__symbol" aria-hidden="true">{item.symbol}</span>
+              <div><strong>{item.name}</strong><span>Material</span><small>{item.description}</small></div>
+              <b>×{item.quantity}</b>
+            </article>
+          ))}
+        </div>
+        <h3 className="agency-inventory__heading">Runes</h3>
         <div className="agency-inventory__items">
           {runeInventory.map((rune) => (
             <article className="agency-inventory__item" key={rune.id}>
@@ -488,25 +590,75 @@ function Market() {
   )
 }
 
-function Feed({ agency, heroes }) {
-  const moonweaver = heroes.find((hero) => hero.alias === 'Moonweaver') ?? heroes[0]
+function Feed({ agency, heroes, feedPosts, itemInventory, isPostingFeed, feedError, onCreatePost }) {
+  const [isComposerOpen, setIsComposerOpen] = useState(false)
+  const [content, setContent] = useState('')
+  const [authorKey, setAuthorKey] = useState(`AGENCY:${agency.id}`)
+  const [itemId, setItemId] = useState('')
+  const [itemQuantity, setItemQuantity] = useState(1)
+  const authors = [
+    { type: 'AGENCY', id: agency.id, name: agency.name, label: `${agency.name} · Agency` },
+    { type: 'MANAGER', id: agency.leaderId, name: agency.leaderName, label: `${agency.leaderName} · Manager` },
+    ...heroes.filter((hero) => hero.id).map((hero) => ({ type: 'HERO', id: hero.id, name: hero.name, label: `${hero.name} · Hero` })),
+  ]
+  const selectedAuthor = authors.find((author) => `${author.type}:${author.id}` === authorKey) ?? authors[0]
+  const selectedItem = itemInventory.find((item) => item.id === itemId)
+
+  async function submitPost(event) {
+    event.preventDefault()
+    if (!content.trim()) {
+      return
+    }
+
+    const wasCreated = await onCreatePost({
+      authorType: selectedAuthor.type,
+      authorId: selectedAuthor.id,
+      content,
+      itemId: selectedItem?.id,
+      itemQuantity: selectedItem ? itemQuantity : undefined,
+    })
+    if (wasCreated) {
+      setContent('')
+      setItemId('')
+      setItemQuantity(1)
+      setIsComposerOpen(false)
+    }
+  }
 
   return (
     <>
-      <PageHeading eyebrow="Community" title="Feed" description="Updates from agencies, managers, and the heroes who make their names known." action={<button className="button button--primary" type="button">Write post</button>} />
+      <PageHeading eyebrow="Community" title="Feed" description="Updates from agencies, managers, and the heroes who make their names known." action={<button className="button button--primary" type="button" onClick={() => setIsComposerOpen(true)}>Write post</button>} />
+      {isComposerOpen && <form className="panel feed-composer" onSubmit={submitPost}>
+        <label><span>Posting as</span><select value={authorKey} disabled={isPostingFeed} onChange={(event) => setAuthorKey(event.target.value)}>{authors.map((author) => <option key={`${author.type}:${author.id}`} value={`${author.type}:${author.id}`}>{author.label}</option>)}</select></label>
+        <label><span>Message</span><textarea value={content} maxLength="500" autoFocus disabled={isPostingFeed} onChange={(event) => setContent(event.target.value)} placeholder="Share an update with the agency." /></label>
+        <div className="feed-composer__attachment"><label><span>Attach item (optional)</span><select value={itemId} disabled={isPostingFeed} onChange={(event) => { setItemId(event.target.value); setItemQuantity(1) }}><option value="">No item</option>{itemInventory.filter((item) => item.quantity > 0).map((item) => <option key={item.id} value={item.id}>{item.name} · {item.quantity} available</option>)}</select></label>{selectedItem && <label><span>Quantity</span><input type="number" min="1" max={selectedItem.quantity} value={itemQuantity} disabled={isPostingFeed} onChange={(event) => setItemQuantity(Math.min(selectedItem.quantity, Math.max(1, Number(event.target.value) || 1)))} /></label>}</div>
+        <div className="feed-composer__actions"><small>{content.length} / 500</small><button className="button button--primary" type="submit" disabled={isPostingFeed || !content.trim()}>{isPostingFeed ? 'Posting…' : 'Publish'}</button><button className="text-button" type="button" disabled={isPostingFeed} onClick={() => setIsComposerOpen(false)}>Cancel</button></div>
+      </form>}
+      {feedError && <p className="inline-error" role="alert">{feedError}</p>}
       <section className="feed-list">
-        <article className="panel feed-post">
-          <div className="feed-post__author"><span className="feed-post__mark">D</span><div><strong>{agency.name}</strong><small>12 minutes ago</small></div></div>
-          <p>The party has reached Broken Pass. The road will be open again soon.</p>
-          <div className="feed-post__item">Quest in progress · Trolls at Broken Pass</div>
-        </article>
-        <article className="panel feed-post">
-          <div className="feed-post__author"><HeroAvatar hero={moonweaver} size="small" /><div><strong>{moonweaver.name}</strong><small>1 hour ago</small></div></div>
-          <p>Rested, prepared, and ready for whatever waits beyond the pass.</p>
-        </article>
+        {feedPosts.map((post) => {
+          const hero = post.authorType === 'HERO' ? heroes.find((candidate) => candidate.id === post.authorId) : null
+          return <article className="panel feed-post" key={post.id}>
+            <div className="feed-post__author">{hero ? <HeroAvatar hero={hero} size="small" /> : <span className="feed-post__mark">{post.authorName.slice(0, 1)}</span>}<div><strong>{post.authorName}</strong><small>{relativePostTime(post.publishedAt)}</small></div></div>
+            <p>{post.content}</p>
+            {post.item && <div className="feed-post__item"><span aria-hidden="true">{post.item.symbol}</span>{post.item.name} ×{post.itemQuantity}</div>}
+          </article>
+        })}
       </section>
     </>
   )
+}
+
+function relativePostTime(publishedAt) {
+  const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(publishedAt)) / 60_000))
+  if (minutes < 1) {
+    return 'Just now'
+  }
+  if (minutes < 60) {
+    return `${minutes} minute${minutes === 1 ? '' : 's'} ago`
+  }
+  const hours = Math.floor(minutes / 60)
+  return `${hours} hour${hours === 1 ? '' : 's'} ago`
 }
 
 function App() {
@@ -515,9 +667,8 @@ function App() {
   const [apiStatus, setApiStatus] = useState('loading')
   const [runeInventory, setRuneInventory] = useState(() => initialRunes.map((rune) => ({ ...rune })))
   const [equippedRunes, setEquippedRunes] = useState(() => Object.fromEntries(Object.entries(initialEquippedRunes).map(([hero, runes]) => [hero, [...runes]])))
-  const [battle, setBattle] = useState(() => createBattle(1, initialEquippedRunes))
-  const [combatLog, setCombatLog] = useState([])
   const [isCombatExpanded, setIsCombatExpanded] = useState(false)
+  const [isSynchronizingCombat, setIsSynchronizingCombat] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState(null)
   const [isUpdatingLoadout, setIsUpdatingLoadout] = useState(false)
   const [loadoutError, setLoadoutError] = useState(null)
@@ -529,11 +680,22 @@ function App() {
   const [partyName, setPartyName] = useState('')
   const [isStartingQuest, setIsStartingQuest] = useState(false)
   const [questError, setQuestError] = useState(null)
+  const [isPostingFeed, setIsPostingFeed] = useState(false)
+  const [feedError, setFeedError] = useState(null)
+  const combatSyncInFlight = useRef(false)
+  const stateRefreshInFlight = useRef(false)
+  const activeQuestId = gameState.activeParty?.questState?.id
+  const activeCombatStatus = gameState.activeParty?.questState?.combat?.status
 
   useEffect(() => {
     let cancelled = false
 
-    async function loadAgencyState() {
+    async function refreshAgencyState() {
+      if (document.visibilityState !== 'visible' || stateRefreshInFlight.current) {
+        return
+      }
+
+      stateRefreshInFlight.current = true
       try {
         const state = mapAgencyState(await fetchAgencyState())
         if (cancelled) {
@@ -543,30 +705,32 @@ function App() {
         setGameState(state)
         setRuneInventory(state.runeInventory)
         setEquippedRunes(state.equippedRunes)
-        setBattle((currentBattle) => createBattle(currentBattle.encounterId + 1, state.equippedRunes))
         setApiStatus('ready')
       } catch {
         if (!cancelled) {
           setApiStatus('unavailable')
         }
+      } finally {
+        stateRefreshInFlight.current = false
       }
     }
 
-    loadAgencyState()
+    function refreshWhenVisible() {
+      if (document.visibilityState === 'visible') {
+        refreshAgencyState()
+      }
+    }
+
+    refreshAgencyState()
+    const intervalId = window.setInterval(refreshAgencyState, 5_000)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
 
     return () => {
       cancelled = true
+      window.clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
   }, [])
-
-  function addCombatEvent(message) {
-    setCombatLog((events) => [message, ...events].slice(0, 4))
-  }
-
-  function resetBattle() {
-    setBattle((currentBattle) => createBattle(currentBattle.encounterId + 1, equippedRunes))
-    setCombatLog([])
-  }
 
   function applyRemoteAgencyState(rawState) {
     const state = mapAgencyState(rawState)
@@ -574,6 +738,43 @@ function App() {
     setRuneInventory(state.runeInventory)
     setEquippedRunes(state.equippedRunes)
   }
+
+  useEffect(() => {
+    if (activePage !== 'quests' || !isCombatExpanded || apiStatus !== 'ready' || !activeQuestId || activeCombatStatus !== 'in-progress') {
+      return undefined
+    }
+
+    let cancelled = false
+    async function synchronizeCombat() {
+      if (combatSyncInFlight.current) {
+        return
+      }
+      combatSyncInFlight.current = true
+      setIsSynchronizingCombat(true)
+      try {
+        const state = await synchronizeQuestCombat({ agencyId: gameState.agency.id, questId: activeQuestId })
+        if (!cancelled) {
+          applyRemoteAgencyState(state)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setQuestError(error.message)
+        }
+      } finally {
+        combatSyncInFlight.current = false
+        if (!cancelled) {
+          setIsSynchronizingCombat(false)
+        }
+      }
+    }
+
+    synchronizeCombat()
+    const intervalId = window.setInterval(synchronizeCombat, 2_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+    }
+  }, [activeCombatStatus, activePage, activeQuestId, apiStatus, gameState.agency.id, isCombatExpanded])
 
   function equipRuneLocally(rune) {
     if (!selectedSlot || rune.quantity === 0) {
@@ -815,13 +1016,43 @@ function App() {
     }
   }
 
+  async function handleCreateFeedPost(post) {
+    setFeedError(null)
+    if (apiStatus !== 'ready') {
+      const authorName = post.authorType === 'AGENCY'
+        ? gameState.agency.name
+        : post.authorType === 'MANAGER'
+          ? gameState.agency.leaderName
+          : gameState.heroes.find((hero) => hero.id === post.authorId)?.name
+      const item = post.itemId ? gameState.itemInventory.find((candidate) => candidate.id === post.itemId) : null
+      setGameState((state) => ({
+        ...state,
+        feedPosts: [{ ...post, item, id: `local-post-${Date.now()}`, authorName, publishedAt: new Date().toISOString() }, ...state.feedPosts],
+      }))
+      return true
+    }
+
+    setIsPostingFeed(true)
+    try {
+      const state = await createFeedPost({ agencyId: gameState.agency.id, ...post })
+      applyRemoteAgencyState(state)
+      return true
+    } catch (error) {
+      setFeedError(error.message)
+      return false
+    } finally {
+      setIsPostingFeed(false)
+    }
+  }
+
+  const battle = gameState.activeParty?.questState?.combat
   const pages = {
     overview: <Overview agency={gameState.agency} metrics={gameState.metrics} activeParty={gameState.activeParty} questHeroes={gameState.questHeroes} onNavigate={setActivePage} />,
     heroes: <Heroes agency={gameState.agency} heroes={gameState.heroes} activeParties={gameState.activeParties} agencyHeroes={gameState.agencyHeroes} preparedParties={gameState.preparedParties} runes={equippedRunes} isUpdatingActivity={isUpdatingActivity} activityError={activityError} isUpdatingParty={isUpdatingParty} partyError={partyError} isCreatingParty={isCreatingParty} partyName={partyName} onPartyNameChange={setPartyName} onCreateParty={handleCreateParty} onCancelCreateParty={cancelCreatingParty} onStartCreateParty={startCreatingParty} onSelectRuneSlot={(hero, slotIndex) => { setLoadoutError(null); setSelectedSlot({ hero, slotIndex }) }} onChangeActivity={updateHeroActivity} onAddToParty={assignHeroToParty} onRemoveFromParty={removeHeroFromPreparedParty} />,
-    quests: <Quests activeParty={gameState.activeParty} activeParties={gameState.activeParties} availableQuests={gameState.availableQuests} preparedParties={gameState.preparedParties} battle={battle} combatLog={combatLog} isCombatExpanded={isCombatExpanded} isStartingQuest={isStartingQuest} questError={questError} onBattleChange={setBattle} onCombatEvent={addCombatEvent} onResetBattle={resetBattle} onStartQuest={handleStartQuest} onToggleCombat={() => setIsCombatExpanded((expanded) => !expanded)} />,
-    agency: <Agency agency={gameState.agency} upgrades={gameState.upgrades} runeInventory={runeInventory} />,
+    quests: <Quests activeParty={gameState.activeParty} activeParties={gameState.activeParties} availableQuests={gameState.availableQuests} preparedParties={gameState.preparedParties} battle={battle} isCombatExpanded={isCombatExpanded} isSynchronizingCombat={isSynchronizingCombat} isStartingQuest={isStartingQuest} questError={questError} onStartQuest={handleStartQuest} onToggleCombat={() => setIsCombatExpanded((expanded) => !expanded)} />,
+    agency: <Agency agency={gameState.agency} upgrades={gameState.upgrades} runeInventory={runeInventory} itemInventory={gameState.itemInventory} />,
     market: <Market />,
-    feed: <Feed agency={gameState.agency} heroes={gameState.heroes} />,
+    feed: <Feed agency={gameState.agency} heroes={gameState.heroes} feedPosts={gameState.feedPosts} itemInventory={gameState.itemInventory} isPostingFeed={isPostingFeed} feedError={feedError} onCreatePost={handleCreateFeedPost} />,
   }
 
   return (

@@ -137,6 +137,49 @@ public final class Combatant {
         return spells.contains(spell) && magicLevel >= spell.getRequiredMagicLevel();
     }
 
+    CombatantSnapshot snapshot() {
+        return new CombatantSnapshot(
+                id,
+                name,
+                team,
+                maxHealth,
+                maxMana,
+                currentHealth,
+                currentMana,
+                attackDamage,
+                attackIntervalMilliseconds,
+                healthRecoveryPerSecond,
+                manaRecoveryPerSecond,
+                magicLevel,
+                criticalChance,
+                criticalDamageMultiplier,
+                spells,
+                nextBasicAttackAt,
+                nextSpellCastAt);
+    }
+
+    static Combatant restore(CombatantSnapshot snapshot) {
+        Combatant combatant = new Combatant(
+                snapshot.id(),
+                snapshot.name(),
+                snapshot.team(),
+                snapshot.maxHealth(),
+                snapshot.maxMana(),
+                snapshot.currentHealth(),
+                snapshot.currentMana(),
+                snapshot.attackDamage(),
+                snapshot.attackIntervalMilliseconds(),
+                snapshot.healthRecoveryPerSecond(),
+                snapshot.manaRecoveryPerSecond(),
+                snapshot.magicLevel(),
+                snapshot.criticalChance(),
+                snapshot.criticalDamageMultiplier(),
+                snapshot.spells());
+        combatant.scheduleBasicAttackAt(snapshot.nextBasicAttackAt());
+        snapshot.nextSpellCastAt().forEach(combatant::scheduleSpellCastAt);
+        return combatant;
+    }
+
     long getNextBasicAttackAt() {
         return nextBasicAttackAt;
     }

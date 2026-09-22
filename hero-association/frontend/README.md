@@ -1,8 +1,10 @@
 # Hero Association frontend
 
 The Hero Association frontend is a React application built with Vite. At
-startup, it loads the seeded agency state from the Quarkus API. Combat and
-rune-loadout changes remain local prototypes until their write APIs exist.
+startup, it loads the seeded agency state from the Quarkus API and refreshes it
+every five seconds while the tab is visible. Rune loadouts, agency activity,
+party preparation, quest starts, and the seeded combat encounter use backend
+APIs.
 
 ## Requirements
 
@@ -12,11 +14,14 @@ rune-loadout changes remain local prototypes until their write APIs exist.
 ## Run locally
 
 ```bash
-# Terminal 1: start PostgreSQL and the Quarkus API
+# Terminal 1: start the local PostgreSQL database
 cd ../backend
+docker compose up --detach postgres
+
+# Terminal 2: run Quarkus on the host
 ./mvnw quarkus:dev
 
-# Terminal 2: start the frontend
+# Terminal 3: start the frontend
 cd ../frontend
 npm install
 npm run dev
@@ -28,9 +33,8 @@ default. Set `VITE_API_PROXY_TARGET` in a local `.env` file to use a different
 API address; [`.env.example`](.env.example) documents the variable.
 
 If the API cannot be reached, the frontend shows a visible notice and uses a
-local fixture so that the combat prototype remains explorable. A production
-deployment needs an `/api` reverse proxy or gateway serving the Quarkus API on
-the same origin.
+static local fixture. A production deployment needs an `/api` reverse proxy or
+gateway serving the Quarkus API on the same origin.
 
 ## Verify a production build
 
@@ -41,9 +45,10 @@ npm run build
 ## Current prototype
 
 - Side navigation for Overview, Heroes, Quests, Agency, Market, and Feed
-- Backend-loaded agency summary, roster, quest progress, upgrade levels, rune
-  inventory, and hero rune slots
-- Local prototype market offers and social feed
+- Backend-loaded agency summary, roster, quest progress, upgrade levels, item
+  and rune inventory, hero rune slots, and agency feed posts; the state
+  refreshes every five seconds while the tab is visible
+- Local prototype market offers
 - Hero roster grouped into an active quest party, prepared parties, and
   unassigned heroes at the agency
 - Prepared parties can be named and have available heroes added or removed
@@ -61,26 +66,28 @@ npm run build
   Elara Moonweaver
 - Five read-only rune slots beneath each hero in combat, populated from the
   party's API-loaded equipped loadouts
-- API-loaded agency rune inventory and a persisted rune-slot drawer;
-  compatibility rules are intentionally not implemented yet
-- Resting activity explains the future 2× stamina, health, and mana recovery
-- Phaser-backed automatic combat inside the expanded active quest card
-- The Phaser encounter remains a local prototype for the seeded active quest;
-  newly started quests are persisted but do not yet advance or resolve combat
+- API-loaded agency stackable materials and rune inventory. Runes have a
+  persisted rune-slot drawer; item stacks are currently read-only
+- API-loaded agency feed with a text composer. The prototype can publish as
+  the agency, its leader, or any of its heroes, with one optional agency-item
+  reference that does not consume the displayed stack
+- Agency hero cards show current health and mana. Training recovers both at
+  the base class rate, while Resting uses 2× that rate; stamina recovery is
+  still pending.
+- Phaser-backed battlefield renderer inside the expanded active quest card
+- The seeded active quest uses the backend combat snapshot. While expanded, it
+  synchronizes the encounter every two seconds through the combat-sync API;
+  Phaser does not calculate combat outcomes and replays only new server events
+  as visual effects. A backend worker also advances active combat every five
+  seconds when the view is closed
+- Newly started quests are persisted but do not yet create a combat snapshot
 - Health and mana bars for Level 1 heroes and placeholder creatures
-- Class-based health and mana recovery every second in combat: Warrior 10/2,
-  Mage 2/10, and Archer 6/6
-- Three-lane floating damage indicators: gold for basic damage and purple for
-  magic damage
-- Critical runes: Critical Chance Rune (+1% chance) and Critical Damage Rune
-  (+10 percentage points to the critical multiplier); local combat applies
-  them when a new encounter starts and triggers the target shake and
-  highlighted popup
+- Server-calculated class recovery, mage spell mana costs and cooldowns, and
+  critical-hit values reflected in the synchronized snapshot
 - The initial party equips a Critical Chance Rune on every hero; placeholder
   trolls have a 10% critical chance
-- Automatic mage spells in combat: Fire Ball against one target and Lightning
-  Rail against all living targets, with mana costs, cooldowns, and radial
-  right-to-left cooldown sweeps on each spell icon
+- Mage spell icons show server-provided cooldown state with radial
+  right-to-left cooldown sweeps
 - Responsive layout for desktop and mobile screens
 
 The game rules and the intended gameplay model live in

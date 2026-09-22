@@ -57,8 +57,8 @@ VALUES (
     4,
     60,
     120,
-    '2026-09-22T00:00:00Z',
-    '2026-09-22T01:00:00Z',
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP + INTERVAL '60 minutes',
     '019c4c00-0001-7000-8000-000000000001',
     '019c4c00-0002-7000-8000-000000000001'),
     (
@@ -89,6 +89,7 @@ INSERT INTO hero (
     current_mana,
     stamina,
     activity,
+    last_resource_synchronized_at,
     agency_id,
     party_id)
 VALUES
@@ -103,6 +104,7 @@ VALUES
         50,
         58,
         'ON_QUEST',
+        CURRENT_TIMESTAMP,
         '019c4c00-0001-7000-8000-000000000001',
         '019c4c00-0002-7000-8000-000000000001'),
     (
@@ -116,6 +118,7 @@ VALUES
         500,
         24,
         'ON_QUEST',
+        CURRENT_TIMESTAMP,
         '019c4c00-0001-7000-8000-000000000001',
         '019c4c00-0002-7000-8000-000000000001'),
     (
@@ -129,6 +132,7 @@ VALUES
         200,
         91,
         'ON_QUEST',
+        CURRENT_TIMESTAMP,
         '019c4c00-0001-7000-8000-000000000001',
         '019c4c00-0002-7000-8000-000000000001'),
     (
@@ -142,6 +146,7 @@ VALUES
         50,
         100,
         'TRAINING',
+        CURRENT_TIMESTAMP,
         '019c4c00-0001-7000-8000-000000000001',
         NULL),
     (
@@ -155,6 +160,7 @@ VALUES
         500,
         100,
         'RESTING',
+        CURRENT_TIMESTAMP,
         '019c4c00-0001-7000-8000-000000000001',
         NULL),
     (
@@ -168,14 +174,26 @@ VALUES
         200,
         100,
         'TRAINING',
+        CURRENT_TIMESTAMP,
         '019c4c00-0001-7000-8000-000000000001',
         NULL);
 
-INSERT INTO quest_combat (id, quest_id, status, current_time_milliseconds) VALUES
+INSERT INTO quest_combat (
+    id,
+    quest_id,
+    status,
+    current_time_milliseconds,
+    next_recovery_at,
+    last_synchronized_at,
+    next_event_sequence)
+VALUES
     (
         '019c4c00-0050-7000-8000-000000000001',
         '019c4c00-0003-7000-8000-000000000001',
         'IN_PROGRESS',
+        0,
+        1000,
+        CURRENT_TIMESTAMP,
         0);
 
 INSERT INTO quest_combatant (
@@ -343,6 +361,14 @@ INSERT INTO rune (id, code, name, symbol, stats, description, effect, effect_val
     ('019c4c00-0020-7000-8000-000000000006', 'critical-chance-rune', 'Critical Chance Rune', '✧', '+1% critical chance', 'A precise rune that gives its bearer a chance to critically strike.', 'CRITICAL_CHANCE', 0.01),
     ('019c4c00-0020-7000-8000-000000000007', 'critical-damage-rune', 'Critical Damage Rune', '✹', '+10% critical damage', 'A forceful rune that increases the damage dealt by critical hits.', 'CRITICAL_DAMAGE', 0.1);
 
+INSERT INTO item (id, code, name, symbol, description) VALUES
+    ('019c4c00-0070-7000-8000-000000000001', 'magic-crystal', 'Magic Crystal', '◇', 'A concentrated shard of arcane energy used in trade and crafting.'),
+    ('019c4c00-0070-7000-8000-000000000002', 'iron-ingot', 'Iron Ingot', '▰', 'Refined iron ready for weapons, armor, or trade.');
+
+INSERT INTO agency_item (id, agency_id, item_id, quantity) VALUES
+    ('019c4c00-0080-7000-8000-000000000001', '019c4c00-0001-7000-8000-000000000001', '019c4c00-0070-7000-8000-000000000001', 3),
+    ('019c4c00-0080-7000-8000-000000000002', '019c4c00-0001-7000-8000-000000000001', '019c4c00-0070-7000-8000-000000000002', 24);
+
 INSERT INTO agency_rune (id, agency_id, rune_id, quantity) VALUES
     ('019c4c00-0030-7000-8000-000000000001', '019c4c00-0001-7000-8000-000000000001', '019c4c00-0020-7000-8000-000000000001', 1),
     ('019c4c00-0030-7000-8000-000000000002', '019c4c00-0001-7000-8000-000000000001', '019c4c00-0020-7000-8000-000000000002', 0),
@@ -362,3 +388,29 @@ INSERT INTO hero_rune (id, hero_id, rune_id, slot_index) VALUES
     ('019c4c00-0040-7000-8000-000000000007', '019c4c00-0010-7000-8000-000000000003', '019c4c00-0020-7000-8000-000000000003', 0),
     ('019c4c00-0040-7000-8000-000000000008', '019c4c00-0010-7000-8000-000000000003', '019c4c00-0020-7000-8000-000000000004', 1),
     ('019c4c00-0040-7000-8000-000000000009', '019c4c00-0010-7000-8000-000000000003', '019c4c00-0020-7000-8000-000000000006', 2);
+
+INSERT INTO feed_post (
+    id,
+    agency_id,
+    author_type,
+    author_id,
+    author_name,
+    content,
+    published_at)
+VALUES
+    (
+        '019c4c00-0060-7000-8000-000000000001',
+        '019c4c00-0001-7000-8000-000000000001',
+        'AGENCY',
+        '019c4c00-0001-7000-8000-000000000001',
+        'Dawnwatch Agency',
+        'The party has reached Broken Pass. The road will be open again soon.',
+        CURRENT_TIMESTAMP - INTERVAL '12 minutes'),
+    (
+        '019c4c00-0060-7000-8000-000000000002',
+        '019c4c00-0001-7000-8000-000000000001',
+        'HERO',
+        '019c4c00-0010-7000-8000-000000000002',
+        'Elara Moonweaver',
+        'Rested, prepared, and ready for whatever waits beyond the pass.',
+        CURRENT_TIMESTAMP - INTERVAL '1 hour');

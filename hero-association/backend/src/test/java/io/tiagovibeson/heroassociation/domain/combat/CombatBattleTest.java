@@ -79,6 +79,24 @@ class CombatBattleTest {
         assertThat(battle.getStatus(), is(CombatStatus.HERO_VICTORY));
     }
 
+    @Test
+    void shouldContinueFromAPersistedCombatSnapshot() {
+        Combatant warrior = combatant(
+                "warrior", CombatTeam.HEROES, 300, 50, 300, 50, 22, 1_300, 10, 2, 0, 0, 2, List.of());
+        Combatant troll = combatant(
+                "troll", CombatTeam.CREATURES, 1_000, 100, 1_000, 100, 1, 1_850, 0, 0, 0, 0, 2, List.of());
+        CombatBattle originalBattle = CombatBattle.start(List.of(warrior), List.of(troll));
+        originalBattle.advanceTo(900, () -> 0.99);
+
+        CombatBattle restoredBattle = CombatBattle.restore(originalBattle.snapshot());
+
+        List<CombatEvent> originalEvents = originalBattle.advanceTo(3_000, () -> 0.99);
+        List<CombatEvent> restoredEvents = restoredBattle.advanceTo(3_000, () -> 0.99);
+
+        assertThat(restoredEvents, is(originalEvents));
+        assertThat(restoredBattle.snapshot(), is(originalBattle.snapshot()));
+    }
+
     private Combatant combatant(
             String id,
             CombatTeam team,

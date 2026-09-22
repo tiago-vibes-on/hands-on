@@ -38,6 +38,9 @@ a hero in combat.
 - Unequipped runes are stored in the agency rune inventory. During the initial
   prototype, any available agency rune can be equipped in any hero rune slot;
   compatibility rules will be added later.
+- Agency inventory also stores stackable materials. The initial Magic Crystal
+  and Iron Ingot stacks are visible but cannot yet be equipped, spent, looted,
+  or traded.
 - The initial hero classes are:
   - Warrior
   - Mage
@@ -84,10 +87,11 @@ clears from right to left across its combat spell icon.
 
 Managers are responsible for managing their heroes' stamina.
 
-- Quests consume hero stamina.
-- At the agency, a hero can train or rest. A resting hero recovers stamina,
-  health, and mana at twice the normal recovery rate. A training hero does not
-  receive this recovery bonus.
+- Quests will consume hero stamina.
+- At the agency, a hero can train or rest. Both recover health and mana based
+  on the hero's class: training uses the base rate, while resting uses twice
+  the base rate. A background worker applies elapsed recovery every five
+  seconds. Stamina recovery is not implemented yet.
 - Lower stamina reduces a hero's effectiveness on quests.
 - Stamina also changes experience earned from creatures:
 
@@ -111,8 +115,8 @@ The Agency Level sets the maximum available level for each specialized upgrade.
 Managers do not need to upgrade every specialized level before advancing the
 Agency Level.
 
-The Rest Level improves the agency's ability to restore hero stamina, health,
-and mana.
+The Rest Level represents the agency's recovery facilities. Its concrete
+mechanical effect will be defined later.
 
 The Size Level determines how much room the agency has for heroes and its
 facilities.
@@ -202,10 +206,16 @@ meaningful without becoming excessively grindy.
   retries one second later. Fire Ball targets the first living creature and
   Lightning Rail targets every living creature.
 - The initial Troll encounter has a persisted server snapshot containing every
-  combatant's state and next action times. The engine does not advance that
-  snapshot yet. Armor, attack speed, attack, health, and mana rune formulas
-  still need a game-design decision; only the established critical values are
+  combatant's state and next action times. An explicit combat-sync command
+  advances it by elapsed real time, without mutating the normal state-read
+  endpoint. The encounter retains its latest 100 server-generated events so a
+  client can render recent attacks, spells, recovery, critical hits, and
+  defeats. Armor, attack speed, attack, health, and mana rune formulas still
+  need a game-design decision; only the established critical values are
   represented in the engine inputs.
+- Each combat synchronization persists the current health and mana of heroes
+  in the encounter. Stamina costs, rewards, and permanent death resolution
+  remain to be implemented.
 
 ### Initial hero combat attributes
 
@@ -217,21 +227,21 @@ Heroes begin at Level 1. The initial health and mana values are:
 | Mage | 100 | 500 | 32 | 1.7 seconds | 2 | 10 |
 | Archer | 200 | 200 | 26 | 1.1 seconds | 6 | 6 |
 
-### First frontend combat prototype
+### Current combat view
 
 - In the Quests screen, clicking an in-progress quest card expands the card to
   show the current encounter.
 - The battlefield is rendered inline with Phaser, while React continues to
   own the surrounding application screens and quest interface.
 - The first encounter uses three heroes against three low-damage placeholder
-  trolls. It shows the Level 1 heroes' health and mana, damage events, and
-  independent attack timers.
+  trolls. It shows the Level 1 heroes' health and mana from the server combat
+  snapshot.
 - Elara Moonweaver is Magic Level 15 and automatically casts Fire Ball at one
   target and Lightning Rail at every living target when their cooldowns are
   ready and she has enough mana. Her displayed spell slots show those spells.
-- Hero health and mana recover once per second in this combat prototype using
-  their class recovery values. Agency Rest is intended to recover both at 2×
-  the base rate; timed agency recovery is still not implemented.
+- The server engine recovers hero health and mana once per second using their
+  class recovery values. At the agency, training recovers both at the base
+  rate and resting at 2× the base rate; stamina recovery is still pending.
 - Each hero shows five read-only rune slots in combat so the party's equipped
   runes are visible. The initial quest party equips one Critical Chance Rune
   per hero, while Elara also equips a Critical Damage Rune. Creatures do not
@@ -239,9 +249,11 @@ Heroes begin at Level 1. The initial health and mana values are:
 - Each initial troll has a 10% critical-hit chance.
 - Creatures also show a mana bar. The initial placeholder trolls each start
   with 100 mana, though no creature ability consumes mana yet.
-- The prototype still uses local mock state. Closing the expanded quest pauses
-  its battle state; a later integration will persist the backend combat state
-  and allow it to continue while the player is away.
+- The Phaser view renders server state rather than simulating combat locally.
+  It replays new server events as damage, spell, recovery, critical, and defeat
+  effects while the encounter is expanded. It synchronizes every two seconds.
+  A backend worker also advances all active combat snapshots every five seconds,
+  so quests continue while the player is away.
 
 ## Market
 
@@ -257,7 +269,10 @@ Heroes begin at Level 1. The initial health and mana values are:
   Association community.
 - Heroes, as NPCs, can publish posts.
 - Agencies and agency managers can publish posts.
-- The initial feed supports text posts and in-game items.
+- The current prototype supports agency-scoped text posts with one optional
+  item-stack attachment. The attachment is a non-consuming reference to an
+  item currently held by the agency. Community visibility and moderation will
+  follow the authentication work.
 
 ## Initial gameplay loop
 

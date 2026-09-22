@@ -1,6 +1,10 @@
 package io.tiagovibeson.heroassociation.domain;
 
+import java.time.Instant;
+
 import io.tiagovibeson.heroassociation.domain.combat.CombatTeam;
+import io.tiagovibeson.heroassociation.domain.combat.CombatSpell;
+import io.tiagovibeson.heroassociation.domain.combat.CombatantSnapshot;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -155,5 +159,16 @@ public class QuestCombatant extends UuidEntity {
 
     public Long getLightningRailNextCastAt() {
         return lightningRailNextCastAt;
+    }
+
+    void apply(CombatantSnapshot snapshot, Instant synchronizedAt) {
+        currentHealth = snapshot.currentHealth();
+        currentMana = snapshot.currentMana();
+        nextBasicAttackAt = snapshot.nextBasicAttackAt();
+        fireBallNextCastAt = snapshot.nextSpellCastAt().get(CombatSpell.FIRE_BALL);
+        lightningRailNextCastAt = snapshot.nextSpellCastAt().get(CombatSpell.LIGHTNING_RAIL);
+        if (hero != null) {
+            hero.synchronizeCombatResources(currentHealth, currentMana, synchronizedAt);
+        }
     }
 }

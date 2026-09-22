@@ -8,13 +8,18 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import io.tiagovibeson.heroassociation.domain.Agency;
+import io.tiagovibeson.heroassociation.domain.AgencyItem;
 import io.tiagovibeson.heroassociation.domain.AgencyRune;
+import io.tiagovibeson.heroassociation.domain.FeedPost;
 import io.tiagovibeson.heroassociation.domain.Hero;
 import io.tiagovibeson.heroassociation.domain.HeroRune;
+import io.tiagovibeson.heroassociation.domain.Item;
 import io.tiagovibeson.heroassociation.domain.Party;
 import io.tiagovibeson.heroassociation.domain.Quest;
 import io.tiagovibeson.heroassociation.domain.QuestCombat;
 import io.tiagovibeson.heroassociation.domain.QuestCombatant;
+import io.tiagovibeson.heroassociation.domain.QuestCombatEvent;
+import io.tiagovibeson.heroassociation.domain.QuestCombatHit;
 import io.tiagovibeson.heroassociation.domain.Rune;
 
 public record AgencyStateResponse(
@@ -22,14 +27,18 @@ public record AgencyStateResponse(
         List<PartyResponse> parties,
         List<QuestResponse> quests,
         List<HeroResponse> heroes,
-        List<InventoryRuneResponse> runeInventory) {
+        List<InventoryRuneResponse> runeInventory,
+        List<InventoryItemResponse> itemInventory,
+        List<FeedPostResponse> feedPosts) {
 
     public static AgencyStateResponse from(
             Agency agency,
             List<Hero> heroes,
             List<Party> parties,
             List<Quest> quests,
-            List<AgencyRune> runeInventory) {
+            List<AgencyRune> runeInventory,
+            List<AgencyItem> itemInventory,
+            List<FeedPost> feedPosts) {
         Map<UUID, List<UUID>> heroIdsByParty = heroes.stream()
                 .filter(hero -> hero.getParty() != null)
                 .collect(Collectors.groupingBy(
@@ -41,12 +50,15 @@ public record AgencyStateResponse(
                 parties.stream().map(party -> PartyResponse.from(party, heroIdsByParty.getOrDefault(party.getId(), List.of()))).toList(),
                 quests.stream().map(QuestResponse::from).toList(),
                 heroes.stream().map(HeroResponse::from).toList(),
-                runeInventory.stream().map(InventoryRuneResponse::from).toList());
+                runeInventory.stream().map(InventoryRuneResponse::from).toList(),
+                itemInventory.stream().map(InventoryItemResponse::from).toList(),
+                feedPosts.stream().map(FeedPostResponse::from).toList());
     }
 
     public record AgencyResponse(
             UUID id,
             String name,
+            UUID leaderId,
             String leaderName,
             long gold,
             int reputation,
@@ -56,6 +68,7 @@ public record AgencyStateResponse(
             return new AgencyResponse(
                     agency.getId(),
                     agency.getName(),
+                    agency.getLeader().getId(),
                     agency.getLeader().getDisplayName(),
                     agency.getGold(),
                     agency.getReputation(),
@@ -129,7 +142,10 @@ public record AgencyStateResponse(
     public record QuestCombatResponse(
             String status,
             long currentTimeMilliseconds,
-            List<CombatantResponse> combatants) {
+            long nextRecoveryAt,
+            Instant lastSynchronizedAt,
+            List<CombatantResponse> combatants,
+            List<CombatEventResponse> events) {
 
         private static QuestCombatResponse from(QuestCombat combat) {
             if (combat == null) {
@@ -138,7 +154,50 @@ public record AgencyStateResponse(
             return new QuestCombatResponse(
                     combat.getStatus().name(),
                     combat.getCurrentTimeMilliseconds(),
-                    combat.getCombatants().stream().map(CombatantResponse::from).toList());
+                    combat.getNextRecoveryAt(),
+                    combat.getLastSynchronizedAt(),
+                    combat.getCombatants().stream().map(CombatantResponse::from).toList(),
+                    combat.getEvents().stream().map(CombatEventResponse::from).toList());
+        }
+    }
+
+    public record CombatEventResponse(
+            UUID id,
+            long sequenceNumber,
+            long occurredAtMilliseconds,
+            String action,
+            UUID actorId,
+            int manaSpent,
+            int healthRecovered,
+            int manaRecovered,
+            List<CombatHitResponse> hits) {
+
+        private static CombatEventResponse from(QuestCombatEvent event) {
+            return new CombatEventResponse(
+                    event.getId(),
+                    event.getSequenceNumber(),
+                    event.getOccurredAtMilliseconds(),
+                    event.getAction().name(),
+                    event.getActor().getId(),
+                    event.getManaSpent(),
+                    event.getHealthRecovered(),
+                    event.getManaRecovered(),
+                    event.getHits().stream().map(CombatHitResponse::from).toList());
+        }
+    }
+
+    public record CombatHitResponse(
+            UUID targetId,
+            int damage,
+            boolean critical,
+            boolean defeated) {
+
+        private static CombatHitResponse from(QuestCombatHit hit) {
+            return new CombatHitResponse(
+                    hit.getTarget().getId(),
+                    hit.getDamage(),
+                    hit.isCritical(),
+                    hit.isDefeated());
         }
     }
 
@@ -246,6 +305,36 @@ public record AgencyStateResponse(
         }
     }
 
+    public record InventoryItemResponse(ItemResponse item, int quantity) {
+
+        private static InventoryItemResponse from(AgencyItem agencyItem) {
+            return new InventoryItemResponse(ItemResponse.from(agencyItem.getItem()), agencyItem.getQuantity());
+        }
+    }
+
+    public record FeedPostResponse(
+            UUID id,
+            String authorType,
+            UUID authorId,
+            String authorName,
+            String content,
+            ItemResponse item,
+            Integer itemQuantity,
+            Instant publishedAt) {
+
+        private static FeedPostResponse from(FeedPost feedPost) {
+            return new FeedPostResponse(
+                    feedPost.getId(),
+                    feedPost.getAuthorType().name(),
+                    feedPost.getAuthorId(),
+                    feedPost.getAuthorName(),
+                    feedPost.getContent(),
+                    feedPost.getItem() == null ? null : ItemResponse.from(feedPost.getItem()),
+                    feedPost.getItemQuantity(),
+                    feedPost.getPublishedAt());
+        }
+    }
+
     public record RuneResponse(
             UUID id,
             String code,
@@ -266,6 +355,23 @@ public record AgencyStateResponse(
                     rune.getDescription(),
                     rune.getEffect().name(),
                     rune.getEffectValue());
+        }
+    }
+
+    public record ItemResponse(
+            UUID id,
+            String code,
+            String name,
+            String symbol,
+            String description) {
+
+        private static ItemResponse from(Item item) {
+            return new ItemResponse(
+                    item.getId(),
+                    item.getCode(),
+                    item.getName(),
+                    item.getSymbol(),
+                    item.getDescription());
         }
     }
 }
