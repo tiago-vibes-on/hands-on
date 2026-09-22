@@ -17,7 +17,7 @@ const navigation = [
 ]
 
 const fallbackHeroes = [
-  { name: 'Brom Ironwall', alias: 'Ironwall', role: 'Warrior', level: 1, healthRecovery: 10, manaRecovery: 2, stamina: 79, color: 'gold', partyId: 'broken-pass-party', status: 'quest' },
+  { name: 'Brom Ironwall', alias: 'Ironwall', role: 'Warrior', level: 1, healthRecovery: 10, manaRecovery: 2, stamina: 58, color: 'gold', partyId: 'broken-pass-party', status: 'quest' },
   { name: 'Elara Moonweaver', alias: 'Moonweaver', role: 'Mage', level: 1, magicLevel: 15, healthRecovery: 2, manaRecovery: 10, spells: mageSpells, stamina: 24, color: 'violet', partyId: 'broken-pass-party', status: 'quest' },
   { name: 'Kael Swiftarrow', alias: 'Swiftarrow', role: 'Archer', level: 1, healthRecovery: 6, manaRecovery: 6, stamina: 91, color: 'teal', partyId: 'broken-pass-party', status: 'quest' },
   { name: 'Dorian Oakshield', alias: 'Oakshield', role: 'Warrior', level: 1, healthRecovery: 10, manaRecovery: 2, color: 'gold', activity: 'Training', status: 'agency' },
