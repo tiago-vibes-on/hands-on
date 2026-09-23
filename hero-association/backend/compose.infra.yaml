@@ -1,0 +1,28 @@
+name: hero-association
+
+# Local-development dependencies for the host-run Quarkus services.
+services:
+  postgres-keycloak:
+    extends:
+      file: compose.yaml
+      service: postgres-keycloak
+
+  keycloak:
+    extends:
+      file: compose.yaml
+      service: keycloak
+
+  postgres-core:
+    extends:
+      file: compose.yaml
+      service: postgres-core
+
+  postgres-bff:
+    extends:
+      file: compose.yaml
+      service: postgres-bff
+
+volumes:
+  postgres_keycloak_data:
+  postgres_core_data:
+  postgres_bff_data:

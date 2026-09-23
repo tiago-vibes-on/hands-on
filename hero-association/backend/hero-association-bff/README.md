@@ -9,6 +9,8 @@ receives only `HttpOnly`, `SameSite` cookies.
 
 ## Run locally
 
+docker compose up --detach postgres-keycloak keycloak
+
 From `backend/`, copy `.env.example` to the ignored `.env` file and replace all
 placeholders. Start Keycloak, BFF PostgreSQL, and Game Core as described in the
 parent README. Then load the environment and run the BFF on port `8080`:

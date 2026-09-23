@@ -33,12 +33,12 @@ file. The three BFF security values must each be at least 32 characters.
 cp .env.example .env
 ```
 
-Run Keycloak and all three PostgreSQL databases in Docker, then run the Quarkus
-services with hot reload:
+Start the local infrastructure (Keycloak and all three PostgreSQL databases),
+then run the Quarkus services with hot reload:
 
 ```bash
 # Terminal 1, from backend/
-docker compose up --detach postgres-core postgres-keycloak postgres-bff keycloak
+docker compose -f compose.infra.yaml up --detach
 
 # Terminal 2
 cd hero-association-core
@@ -52,11 +52,23 @@ set +a
 ./mvnw quarkus:dev
 ```
 
+Stop those dependencies with:
+
+```bash
+docker compose -f compose.infra.yaml down
+```
+
 The frontend calls the BFF at `http://localhost:8080`. Core connects to the
 Compose PostgreSQL database at `localhost:5432`; BFF session storage is at
 `localhost:5433`. Keycloak is available at `http://localhost:8180`, including
 its admin console at
 `http://localhost:8180/admin/`.
+
+To start only Keycloak and its database, run this from `backend/`:
+
+```bash
+docker compose up --detach postgres-keycloak keycloak
+```
 
 If port `5433` is already used, set
 `HERO_ASSOCIATION_BFF_DATABASE_HOST_PORT` before the Compose command and set
