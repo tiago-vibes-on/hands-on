@@ -1,7 +1,40 @@
-const AGENCY_ID = '019c4c00-0001-7000-8000-000000000001'
+let csrfToken = null
 
-export async function fetchAgencyState() {
-  return request(`/api/v1/agencies/${AGENCY_ID}/state`)
+export class ApiRequestError extends Error {
+  constructor(message, status) {
+    super(message)
+    this.status = status
+  }
+}
+
+export async function fetchSession() {
+  const session = await request('/api/v1/session')
+  csrfToken = session.csrfToken
+  return session
+}
+
+export async function fetchAccount() {
+  return request('/api/v1/account')
+}
+
+export async function createManager(displayName) {
+  return request('/api/v1/account/manager', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ displayName }),
+  })
+}
+
+export function beginLogin() {
+  window.location.assign('/auth/login')
+}
+
+export function logout() {
+  window.location.assign('/auth/logout')
+}
+
+export async function fetchAgencyState(agencyId) {
+  return request(`/api/v1/agencies/${agencyId}/state`)
 }
 
 export async function equipHeroRune({ agencyId, heroId, slotIndex, runeId }) {
@@ -68,13 +101,40 @@ export async function createFeedPost({ agencyId, authorType, authorId, content, 
   })
 }
 
-async function request(path, options) {
-  const response = await fetch(path, options)
+export async function fetchMarketOrders() {
+  return request('/api/v1/market/orders')
+}
+
+export async function createMarketOrder({ agencyId, side, itemId, quantity, priceGoldPerItem }) {
+  return request(`/api/v1/agencies/${agencyId}/market-orders`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ side, itemId, quantity, priceGoldPerItem }),
+  })
+}
+
+export async function cancelMarketOrder({ agencyId, orderId }) {
+  return request(`/api/v1/agencies/${agencyId}/market-orders/${orderId}`, {
+    method: 'DELETE',
+  })
+}
+
+async function request(path, options = {}, expectJson = true) {
+  const headers = new Headers(options.headers)
+  headers.set('X-Requested-With', 'JavaScript')
+
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes((options.method ?? 'GET').toUpperCase())) {
+    if (csrfToken) {
+      headers.set('X-CSRF-TOKEN', csrfToken)
+    }
+  }
+
+  const response = await fetch(path, { ...options, headers })
 
   if (!response.ok) {
     const error = await response.json().catch(() => null)
-    throw new Error(error?.message ?? `Unable to complete the request (${response.status}).`)
+    throw new ApiRequestError(error?.message ?? `Unable to complete the request (${response.status}).`, response.status)
   }
 
-  return response.json()
+  return expectJson ? response.json() : undefined
 }

@@ -1,0 +1,19 @@
+{
+  "name": "hero-association-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node run-playwright.js",
+    "test:auth": "node run-playwright.js tests/authentication.spec.js",
+    "test:host": "playwright test",
+    "test:ui": "playwright test --ui",
+    "install:browsers": "playwright install --with-deps chromium"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  }
+}

@@ -260,8 +260,15 @@ Heroes begin at Level 1. The initial health and mana values are:
 - The market uses buy and sell offers, similar to a real-world stock market.
 - A player can create a sell offer, such as one Magic Crystal for 100 gold, or
   a buy offer, such as 100 gold for one Magic Crystal.
-- When compatible offers match, the market exchanges the currency and item.
-- The market charges a 10% transaction fee.
+- A buy offer reserves its maximum gold value and a sell offer reserves its
+  items until it is filled or cancelled.
+- Compatible offers match by price and creation time at the resting offer's
+  price. The buyer receives the item, and the seller receives the gold.
+- The market charges a 10% transaction fee. The seller receives 90% of the
+  matched value and the fee is removed from the game economy for now.
+- Cancelling an open order returns its remaining reserved gold or items.
+- The initial implementation trades Magic Crystals and Iron Ingots. More item
+  categories and market history will be added later.
 
 ## Social feed
 
@@ -293,6 +300,5 @@ The following details are intentionally not defined yet:
   class.
 - Quest duration, progression, difficulty, and failure consequences.
 - Combat damage, targeting, attack-speed, and creature-ability rules.
-- Which item categories can be exchanged through the market.
-- How the 10% market fee is collected and used.
+- Which additional item categories can be exchanged through the market.
 - Feed moderation, visibility, and item-posting rules.

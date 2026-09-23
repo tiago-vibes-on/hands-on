@@ -1,0 +1,29 @@
+services:
+  postgres-core:
+    ports: !override
+      - "15432:5432"
+
+  postgres-bff:
+    ports: !override
+      - "15434:5432"
+
+  keycloak:
+    environment:
+      KC_HOSTNAME: http://host.docker.internal:18180
+    ports: !override
+      - "18180:8080"
+
+  core:
+    environment:
+      HERO_ASSOCIATION_OIDC_ISSUER: http://host.docker.internal:18180/realms/hero-association
+    ports:
+      - "18081:8081"
+
+  bff:
+    environment:
+      HERO_ASSOCIATION_FRONTEND_URL: http://host.docker.internal:15173
+      HERO_ASSOCIATION_OIDC_AUTHORIZATION_PATH: http://host.docker.internal:18180/realms/hero-association/protocol/openid-connect/auth
+      QUARKUS_OIDC_END_SESSION_PATH: http://host.docker.internal:18180/realms/hero-association/protocol/openid-connect/logout
+      QUARKUS_OIDC_TOKEN_ISSUER: http://host.docker.internal:18180/realms/hero-association
+    ports: !override
+      - "18080:8080"

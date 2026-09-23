@@ -1,0 +1,121 @@
+:root {
+  color-scheme: dark;
+}
+
+body#keycloak-bg {
+  min-height: 100vh;
+  color: #eceaf1;
+  background:
+    radial-gradient(circle at 50% 8%, rgba(215, 173, 82, 0.15), transparent 28rem),
+    radial-gradient(circle at 100% 100%, rgba(63, 49, 96, 0.2), transparent 32rem),
+    #101626;
+}
+
+body#keycloak-bg::before {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  content: '';
+  pointer-events: none;
+  background-image: linear-gradient(rgba(210, 183, 119, 0.024) 1px, transparent 1px), linear-gradient(90deg, rgba(210, 183, 119, 0.024) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: linear-gradient(to bottom, black, transparent 72%);
+}
+
+.pf-v5-c-login {
+  position: relative;
+  z-index: 1;
+}
+
+#kc-header-wrapper {
+  color: #f6f0e0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.4);
+}
+
+.pf-v5-c-login__main {
+  overflow: hidden;
+  background: #172238;
+  border: 1px solid #3b4965;
+  border-radius: 14px;
+  box-shadow: 0 24px 65px rgba(0, 0, 0, 0.38), inset 0 1px rgba(255, 255, 255, 0.025);
+}
+
+.pf-v5-c-login__main-header {
+  border-top: 4px solid #d8a74c;
+}
+
+#kc-page-title {
+  color: #f2eee5;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.pf-v5-c-form__label-text,
+.pf-v5-c-check__label,
+.pf-v5-c-form__helper-text {
+  color: #aeb8d6;
+}
+
+.pf-v5-c-form-control > input,
+.pf-v5-c-input-group .pf-v5-c-form-control > input {
+  color: #f2f4fb;
+  background: #101827;
+  border-color: #485875;
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.pf-v5-c-form-control > input:focus,
+.pf-v5-c-input-group .pf-v5-c-form-control > input:focus {
+  border-color: #d8a74c;
+  outline: 2px solid rgba(216, 167, 76, 0.32);
+  outline-offset: 1px;
+}
+
+.pf-v5-c-input-group .pf-v5-c-button.pf-m-control {
+  color: #c7d0e3;
+  background: #202b43;
+  border-color: #485875;
+}
+
+.pf-v5-c-button.pf-m-primary,
+#kc-login {
+  color: #201807;
+  font-weight: 700;
+  background: linear-gradient(180deg, #f0ca76, #d8a74c);
+  border-color: #f5d286;
+  border-radius: 7px;
+  box-shadow: 0 5px 16px rgba(178, 128, 36, 0.18);
+}
+
+.pf-v5-c-button.pf-m-primary:hover,
+#kc-login:hover {
+  background: linear-gradient(180deg, #f9d682, #e1af51);
+}
+
+.pf-v5-c-login a,
+.pf-v5-c-form__helper-text a {
+  color: #e5bc63;
+  font-weight: 600;
+}
+
+.pf-v5-c-login a:hover,
+.pf-v5-c-form__helper-text a:hover {
+  color: #f6d583;
+}
+
+#kc-info,
+.pf-v5-c-login__main-footer,
+.pf-v5-c-login__main-footer-band {
+  color: #aeb8d6;
+  background: transparent;
+  border: 0;
+}
+
+.pf-v5-c-check__input {
+  accent-color: #d8a74c;
+}

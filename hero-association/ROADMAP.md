@@ -15,11 +15,13 @@ resulting state.
 - Add or update the frontend integration for every new player-facing endpoint.
 - Update `SPEC.md`, `GAME.md`, and the backend README when a task changes
   supported behavior or local workflows.
+- Follow [`AUTHENTICATION.md`](AUTHENTICATION.md) for account, Keycloak, BFF,
+  and Game Core boundary work.
 
 ## Milestone 1 — Authoritative agency management
 
-- [ ] Define the initial manager identity model and agency membership roles.
-  Start with a single leader if authentication is intentionally deferred.
+- [x] Define the Account, Manager, and AgencyMember identity model. See
+  [`AUTHENTICATION.md`](AUTHENTICATION.md).
 - [ ] Add agency creation and retrieval endpoints.
 - [ ] Add hero recruiting and hero detail endpoints.
 - [x] Add a hero activity command for `TRAINING` and `RESTING`. Prevent a hero
@@ -30,8 +32,9 @@ resulting state.
 
 ## Milestone 2 — Inventory and rune loadouts
 
-- [x] Model agency storage for gold, runes, and read-only stackable item
-  materials. Quest loot and item transfers remain to be added.
+- [x] Model agency storage for gold, runes, and stackable item materials.
+  Market reservations and transfers are implemented; quest loot remains to be
+  added.
 - [x] Add commands to equip and unequip a rune, atomically moving it between
   agency inventory and a hero's five rune slots.
 - [x] Validate that a rune belongs to the agency and that a target slot exists.
@@ -101,12 +104,13 @@ resulting state.
 
 ## Milestone 7 — Market
 
-- [ ] Define tradable inventory item categories and a safe reservation model
-  for items and gold placed in market orders.
-- [ ] Add buy and sell order creation, cancellation, listing, and matching.
-- [ ] Apply the 10% market fee atomically when an order matches.
-- [ ] Add market history and update the frontend market screen to use live
-  orders rather than prototype offers.
+- [x] Define the initial tradable category (stackable materials) and reserve
+  items or gold while market orders remain open.
+- [x] Add buy and sell order creation, cancellation, listing, and price-time
+  matching.
+- [x] Apply the 10% market fee atomically when an order matches.
+- [x] Update the frontend market screen to use the live order book.
+- [ ] Add market history.
 
 ## Milestone 8 — Social feed and multiplayer
 
@@ -119,12 +123,36 @@ resulting state.
 
 ## Milestone 9 — Authentication and real-time updates
 
-- [ ] Add authentication and authorization before exposing player-owned data
-  outside local development.
-- [ ] Enforce agency membership and leader permissions on every write command.
-- [x] Use five-second browser polling for initial agency, quest, and feed
-  refreshes while the tab is visible. Revisit real-time transport when market
-  matching or higher-frequency updates need it.
+- [x] Define the Keycloak and Identity BFF architecture, including its private
+  Game Core boundary. See [`AUTHENTICATION.md`](AUTHENTICATION.md).
+- [x] Rename the current backend as `hero-association-core` and create an
+  independently buildable `hero-association-bff` Quarkus service. Update
+  Docker, Compose, documentation, and local development commands so the
+  frontend calls the BFF rather than Game Core.
+- [x] Add local Keycloak Compose support, the versioned Hero Association realm,
+  and non-secret configuration templates.
+- [x] Add BFF session, login, logout, callback, server-side token storage, and
+  CSRF protection. The frontend calls only the BFF and game proxy routes now
+  require a BFF session.
+- [x] Forward the BFF-held Keycloak access token to Game Core and require a
+  valid `hero-association-core` bearer-token audience for all Core API routes.
+- [x] Add Account provisioning and Manager onboarding from the Keycloak
+  subject; do not use email as the account key.
+- [x] Add `AgencyMember` roles and enforce membership and leader permissions
+  on agency reads and commands. Market-order creation and cancellation require
+  `LEADER`.
+- [ ] Add Google sign-in through Keycloak after native Keycloak login works.
+- [x] Use five-second browser polling for initial agency, quest, feed, and
+  market refreshes while the tab is visible. Revisit real-time transport when
+  higher-frequency updates need it.
+- [ ] Add browser end-to-end coverage with Playwright.
+  - [x] Provide an isolated Compose stack with separate ports, databases, and
+    project name, so E2E runs never affect local development services.
+  - [x] Validate native Keycloak login, BFF session creation, RP-initiated
+    logout, the state-validated post-logout return, and that the next login
+    requires credentials again.
+  - [ ] Add browser coverage for onboarding, no-agency access, and membership
+    permissions as those flows expand.
 - [ ] Add WebSocket or server-sent event updates only for features that need
   near-real-time changes, such as combat progress, matched market orders, and
   new feed posts.
@@ -137,5 +165,5 @@ resulting state.
   attributes.
 - [ ] Define agency revenue sharing between participating managers and the
   agency.
-- [ ] Define which item categories can be traded, and the fee destination.
+- [ ] Define additional tradable item categories.
 - [ ] Define agency invitation, ownership transfer, and permission rules.

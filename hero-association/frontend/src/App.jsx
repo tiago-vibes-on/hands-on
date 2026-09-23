@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { addHeroToParty, changeHeroActivity, createFeedPost, createParty, equipHeroRune, fetchAgencyState, removeHeroFromParty, startQuest, synchronizeQuestCombat, unequipHeroRune } from './api/agency'
+import { addHeroToParty, ApiRequestError, beginLogin, cancelMarketOrder, changeHeroActivity, createFeedPost, createManager, createMarketOrder, createParty, equipHeroRune, fetchAccount, fetchAgencyState, fetchMarketOrders, fetchSession, logout, removeHeroFromParty, startQuest, synchronizeQuestCombat, unequipHeroRune } from './api/agency'
 import { initialEquippedRunes, initialRunes } from './data/inventory'
 import { mageSpells } from './data/spells'
 import './App.css'
@@ -91,6 +91,11 @@ const fallbackUpgrades = [
 const fallbackItemInventory = [
   { id: 'magic-crystal', code: 'magic-crystal', name: 'Magic Crystal', symbol: '◇', description: 'A concentrated shard of arcane energy used in trade and crafting.', quantity: 3 },
   { id: 'iron-ingot', code: 'iron-ingot', name: 'Iron Ingot', symbol: '▰', description: 'Refined iron ready for weapons, armor, or trade.', quantity: 24 },
+]
+
+const fallbackMarketOrders = [
+  { id: 'ironridge-buy-magic', agencyId: 'ironridge-exchange', agencyName: 'Ironridge Exchange', itemId: 'magic-crystal', itemCode: 'magic-crystal', itemName: 'Magic Crystal', itemSymbol: '◇', side: 'BUY', quantityRemaining: 2, priceGoldPerItem: 100, createdAt: '2026-01-01T11:50:00Z' },
+  { id: 'ironridge-sell-iron', agencyId: 'ironridge-exchange', agencyName: 'Ironridge Exchange', itemId: 'iron-ingot', itemCode: 'iron-ingot', itemName: 'Iron Ingot', itemSymbol: '▰', side: 'SELL', quantityRemaining: 12, priceGoldPerItem: 16, createdAt: '2026-01-01T11:55:00Z' },
 ]
 
 const heroColors = {
@@ -570,20 +575,50 @@ function Agency({ agency, upgrades, runeInventory, itemInventory }) {
   )
 }
 
-function Market() {
+function Market({ agency, itemInventory, marketOrders, isSubmittingOrder, marketError, onCreateOrder, onCancelOrder }) {
+  const [side, setSide] = useState('BUY')
+  const [itemId, setItemId] = useState(itemInventory[0]?.id ?? '')
+  const [quantity, setQuantity] = useState(1)
+  const [priceGoldPerItem, setPriceGoldPerItem] = useState(100)
+  const buyOrders = marketOrders.filter((order) => order.side === 'BUY')
+  const sellOrders = marketOrders.filter((order) => order.side === 'SELL')
+
+  async function submitOrder(event) {
+    event.preventDefault()
+    const wasCreated = await onCreateOrder({ side, itemId, quantity, priceGoldPerItem })
+    if (wasCreated) {
+      setQuantity(1)
+      setPriceGoldPerItem(100)
+    }
+  }
+
+  function orderList(orders, emptyMessage) {
+    if (orders.length === 0) {
+      return <p className="offer-panel__empty">{emptyMessage}</p>
+    }
+
+    return orders.map((order) => <div className="offer-row" key={order.id}><span><b>{order.itemSymbol}</b>{order.itemName}<small>{order.agencyName}</small></span><strong>{order.priceGoldPerItem} gold</strong><small>{order.quantityRemaining} available</small>{order.agencyId === agency.id && <button className="text-button" type="button" disabled={isSubmittingOrder} onClick={() => onCancelOrder(order.id)}>Cancel</button>}</div>)
+  }
+
   return (
     <>
-      <PageHeading eyebrow="Community exchange" title="Market" description="Place buy and sell offers. A 10% fee applies when offers match." action={<button className="button button--primary" type="button">Create offer</button>} />
+      <PageHeading eyebrow="Community exchange" title="Market" description="Place buy and sell offers. When an offer matches, the seller pays a 10% fee." />
+      <form className="panel market-form" onSubmit={submitOrder}>
+        <label><span>Order type</span><select value={side} disabled={isSubmittingOrder} onChange={(event) => setSide(event.target.value)}><option value="BUY">Buy</option><option value="SELL">Sell</option></select></label>
+        <label><span>Item</span><select value={itemId} disabled={isSubmittingOrder} onChange={(event) => setItemId(event.target.value)}>{itemInventory.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.quantity} available</option>)}</select></label>
+        <label><span>Quantity</span><input type="number" min="1" value={quantity} disabled={isSubmittingOrder} onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))} /></label>
+        <label><span>Gold per item</span><input type="number" min="1" value={priceGoldPerItem} disabled={isSubmittingOrder} onChange={(event) => setPriceGoldPerItem(Math.max(1, Number(event.target.value) || 1))} /></label>
+        <button className="button button--primary" type="submit" disabled={isSubmittingOrder || !itemId}>{isSubmittingOrder ? 'Placing…' : 'Place order'}</button>
+      </form>
+      {marketError && <p className="inline-error" role="alert">{marketError}</p>}
       <section className="market-grid">
         <article className="panel offer-panel">
-          <div className="panel__header"><h2>Buy offers</h2><span className="status">4 offers</span></div>
-          <div className="offer-row"><span>Magic Crystal</span><strong>98 gold</strong><small>12 available</small></div>
-          <div className="offer-row"><span>Iron Ingot</span><strong>16 gold</strong><small>48 available</small></div>
+          <div className="panel__header"><h2>Buy offers</h2><span className="status">{buyOrders.length} open</span></div>
+          {orderList(buyOrders, 'No buy offers are open.')}
         </article>
         <article className="panel offer-panel">
-          <div className="panel__header"><h2>Sell offers</h2><span className="status">6 offers</span></div>
-          <div className="offer-row"><span>Magic Crystal</span><strong>105 gold</strong><small>8 available</small></div>
-          <div className="offer-row"><span>Iron Ingot</span><strong>21 gold</strong><small>31 available</small></div>
+          <div className="panel__header"><h2>Sell offers</h2><span className="status">{sellOrders.length} open</span></div>
+          {orderList(sellOrders, 'No sell offers are open.')}
         </article>
       </section>
     </>
@@ -665,6 +700,13 @@ function App() {
   const [activePage, setActivePage] = useState('overview')
   const [gameState, setGameState] = useState(fallbackGameState)
   const [apiStatus, setApiStatus] = useState('loading')
+  const [session, setSession] = useState(null)
+  const [sessionStatus, setSessionStatus] = useState('loading')
+  const [account, setAccount] = useState(null)
+  const [managerName, setManagerName] = useState('')
+  const [managerError, setManagerError] = useState(null)
+  const [isCreatingManager, setIsCreatingManager] = useState(false)
+  const [accountRefresh, setAccountRefresh] = useState(0)
   const [runeInventory, setRuneInventory] = useState(() => initialRunes.map((rune) => ({ ...rune })))
   const [equippedRunes, setEquippedRunes] = useState(() => Object.fromEntries(Object.entries(initialEquippedRunes).map(([hero, runes]) => [hero, [...runes]])))
   const [isCombatExpanded, setIsCombatExpanded] = useState(false)
@@ -682,6 +724,9 @@ function App() {
   const [questError, setQuestError] = useState(null)
   const [isPostingFeed, setIsPostingFeed] = useState(false)
   const [feedError, setFeedError] = useState(null)
+  const [marketOrders, setMarketOrders] = useState(fallbackMarketOrders)
+  const [isSubmittingMarketOrder, setIsSubmittingMarketOrder] = useState(false)
+  const [marketError, setMarketError] = useState(null)
   const combatSyncInFlight = useRef(false)
   const stateRefreshInFlight = useRef(false)
   const activeQuestId = gameState.activeParty?.questState?.id
@@ -689,6 +734,8 @@ function App() {
 
   useEffect(() => {
     let cancelled = false
+    let intervalId
+    let activeAgencyId
 
     async function refreshAgencyState() {
       if (document.visibilityState !== 'visible' || stateRefreshInFlight.current) {
@@ -697,7 +744,12 @@ function App() {
 
       stateRefreshInFlight.current = true
       try {
-        const state = mapAgencyState(await fetchAgencyState())
+        if (!activeAgencyId) {
+          return
+        }
+
+        const [rawState, orders] = await Promise.all([fetchAgencyState(activeAgencyId), fetchMarketOrders()])
+        const state = mapAgencyState(rawState)
         if (cancelled) {
           return
         }
@@ -705,10 +757,19 @@ function App() {
         setGameState(state)
         setRuneInventory(state.runeInventory)
         setEquippedRunes(state.equippedRunes)
+        setMarketOrders(orders)
         setApiStatus('ready')
-      } catch {
+      } catch (error) {
         if (!cancelled) {
-          setApiStatus('unavailable')
+          if (error instanceof ApiRequestError && error.status === 499) {
+            setSession(null)
+            setSessionStatus('anonymous')
+            setApiStatus('unauthenticated')
+          } else if (error instanceof ApiRequestError && error.status === 403) {
+            setSessionStatus('no-agency')
+          } else {
+            setApiStatus('unavailable')
+          }
         }
       } finally {
         stateRefreshInFlight.current = false
@@ -721,16 +782,63 @@ function App() {
       }
     }
 
-    refreshAgencyState()
-    const intervalId = window.setInterval(refreshAgencyState, 5_000)
-    document.addEventListener('visibilitychange', refreshWhenVisible)
+    async function initializeSession() {
+      try {
+        const currentSession = await fetchSession()
+        if (cancelled) {
+          return
+        }
+
+        setSession(currentSession)
+        if (!currentSession.authenticated) {
+          setSessionStatus('anonymous')
+          setApiStatus('unauthenticated')
+          return
+        }
+
+        const currentAccount = await fetchAccount()
+        if (cancelled) {
+          return
+        }
+
+        setAccount(currentAccount)
+        if (!currentAccount.manager) {
+          setSessionStatus('onboarding')
+          return
+        }
+
+        activeAgencyId = currentAccount.agencyMemberships[0]?.agencyId
+        if (!activeAgencyId) {
+          setSessionStatus('no-agency')
+          return
+        }
+
+        setSessionStatus('authenticated')
+        await refreshAgencyState()
+        if (cancelled) {
+          return
+        }
+
+        intervalId = window.setInterval(refreshAgencyState, 5_000)
+        document.addEventListener('visibilitychange', refreshWhenVisible)
+      } catch {
+        if (!cancelled) {
+          setSessionStatus('unavailable')
+          setApiStatus('unavailable')
+        }
+      }
+    }
+
+    initializeSession()
 
     return () => {
       cancelled = true
-      window.clearInterval(intervalId)
+      if (intervalId) {
+        window.clearInterval(intervalId)
+      }
       document.removeEventListener('visibilitychange', refreshWhenVisible)
     }
-  }, [])
+  }, [accountRefresh])
 
   function applyRemoteAgencyState(rawState) {
     const state = mapAgencyState(rawState)
@@ -1045,13 +1153,117 @@ function App() {
     }
   }
 
+  async function refreshMarketOrders() {
+    setMarketOrders(await fetchMarketOrders())
+  }
+
+  async function handleCreateMarketOrder(order) {
+    if (apiStatus !== 'ready') {
+      setMarketError('Market orders require the backend connection.')
+      return false
+    }
+
+    setIsSubmittingMarketOrder(true)
+    setMarketError(null)
+    try {
+      const state = await createMarketOrder({ agencyId: gameState.agency.id, ...order })
+      applyRemoteAgencyState(state)
+      await refreshMarketOrders()
+      return true
+    } catch (error) {
+      setMarketError(error.message)
+      return false
+    } finally {
+      setIsSubmittingMarketOrder(false)
+    }
+  }
+
+  async function handleCancelMarketOrder(orderId) {
+    if (apiStatus !== 'ready') {
+      return
+    }
+
+    setIsSubmittingMarketOrder(true)
+    setMarketError(null)
+    try {
+      const state = await cancelMarketOrder({ agencyId: gameState.agency.id, orderId })
+      applyRemoteAgencyState(state)
+      await refreshMarketOrders()
+    } catch (error) {
+      setMarketError(error.message)
+    } finally {
+      setIsSubmittingMarketOrder(false)
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await logout()
+      setSession(null)
+      setAccount(null)
+      setManagerName('')
+      setManagerError(null)
+      setSessionStatus('anonymous')
+      setApiStatus('unauthenticated')
+    } catch (error) {
+      setMarketError(error.message)
+    }
+  }
+
+  async function handleCreateManager(event) {
+    event.preventDefault()
+    const displayName = managerName.trim()
+    if (!displayName) {
+      setManagerError('Enter a manager name.')
+      return
+    }
+
+    setIsCreatingManager(true)
+    setManagerError(null)
+    try {
+      const updatedAccount = await createManager(displayName)
+      setAccount(updatedAccount)
+      setManagerName('')
+      setSessionStatus('loading')
+      setAccountRefresh((current) => current + 1)
+    } catch (error) {
+      setManagerError(error.message)
+    } finally {
+      setIsCreatingManager(false)
+    }
+  }
+
+  if (sessionStatus === 'loading') {
+    return <AuthenticationGate title="Checking your session" description="Connecting to Hero Association…" />
+  }
+
+  if (sessionStatus === 'anonymous') {
+    return <AuthenticationGate title="Welcome to Hero Association" description="Sign in to manage your agency." onLogin={beginLogin} />
+  }
+
+  if (sessionStatus === 'onboarding') {
+    return <ManagerOnboarding
+      identity={session?.identity}
+      managerName={managerName}
+      error={managerError}
+      isSubmitting={isCreatingManager}
+      onManagerNameChange={setManagerName}
+      onSubmit={handleCreateManager}
+      onSignOut={handleLogout}
+    />
+  }
+
+  if (sessionStatus === 'no-agency') {
+    return <AgencyAccessGate managerName={account?.manager?.displayName} onSignOut={handleLogout} />
+  }
+
   const battle = gameState.activeParty?.questState?.combat
   const pages = {
     overview: <Overview agency={gameState.agency} metrics={gameState.metrics} activeParty={gameState.activeParty} questHeroes={gameState.questHeroes} onNavigate={setActivePage} />,
     heroes: <Heroes agency={gameState.agency} heroes={gameState.heroes} activeParties={gameState.activeParties} agencyHeroes={gameState.agencyHeroes} preparedParties={gameState.preparedParties} runes={equippedRunes} isUpdatingActivity={isUpdatingActivity} activityError={activityError} isUpdatingParty={isUpdatingParty} partyError={partyError} isCreatingParty={isCreatingParty} partyName={partyName} onPartyNameChange={setPartyName} onCreateParty={handleCreateParty} onCancelCreateParty={cancelCreatingParty} onStartCreateParty={startCreatingParty} onSelectRuneSlot={(hero, slotIndex) => { setLoadoutError(null); setSelectedSlot({ hero, slotIndex }) }} onChangeActivity={updateHeroActivity} onAddToParty={assignHeroToParty} onRemoveFromParty={removeHeroFromPreparedParty} />,
     quests: <Quests activeParty={gameState.activeParty} activeParties={gameState.activeParties} availableQuests={gameState.availableQuests} preparedParties={gameState.preparedParties} battle={battle} isCombatExpanded={isCombatExpanded} isSynchronizingCombat={isSynchronizingCombat} isStartingQuest={isStartingQuest} questError={questError} onStartQuest={handleStartQuest} onToggleCombat={() => setIsCombatExpanded((expanded) => !expanded)} />,
     agency: <Agency agency={gameState.agency} upgrades={gameState.upgrades} runeInventory={runeInventory} itemInventory={gameState.itemInventory} />,
-    market: <Market />,
+    market: <Market agency={gameState.agency} itemInventory={gameState.itemInventory} marketOrders={marketOrders} isSubmittingOrder={isSubmittingMarketOrder} marketError={marketError} onCreateOrder={handleCreateMarketOrder} onCancelOrder={handleCancelMarketOrder} />,
     feed: <Feed agency={gameState.agency} heroes={gameState.heroes} feedPosts={gameState.feedPosts} itemInventory={gameState.itemInventory} isPostingFeed={isPostingFeed} feedError={feedError} onCreatePost={handleCreateFeedPost} />,
   }
 
@@ -1066,11 +1278,58 @@ function App() {
             </button>
           ))}
         </nav>
-        <div className="sidebar__bottom"><div className="player-card"><span className="player-card__avatar">T</span><span><strong>{gameState.agency.leaderName}</strong><small>Agency leader</small></span></div></div>
+        <div className="sidebar__bottom"><div className="player-card"><span className="player-card__avatar">{account?.manager?.displayName?.slice(0, 1).toUpperCase() ?? session?.identity?.username?.slice(0, 1).toUpperCase() ?? 'T'}</span><span><strong>{account?.manager?.displayName ?? session?.identity?.username ?? gameState.agency.leaderName}</strong><small>{account?.manager ? 'Manager' : 'Signed in'}</small></span><button className="text-button player-card__logout" type="button" onClick={handleLogout}>Sign out</button></div></div>
       </aside>
       <main className="main-content"><div className="main-content__inner">{apiStatus !== 'ready' && <p className={`api-status api-status--${apiStatus}`} role="status">{apiStatus === 'loading' ? 'Loading agency state…' : 'Backend unavailable. Showing the local fixture.'}</p>}{pages[activePage]}</div></main>
       <RuneDrawer selectedSlot={selectedSlot} runes={equippedRunes} runeInventory={runeInventory} isUpdating={isUpdatingLoadout} error={loadoutError} onClose={() => { setLoadoutError(null); setSelectedSlot(null) }} onEquipRune={equipRune} onUnequipRune={unequipRune} />
     </div>
+  )
+}
+
+function AuthenticationGate({ title, description, onLogin }) {
+  return (
+    <main className="authentication-gate">
+      <section className="authentication-gate__panel">
+        <span className="brand__mark" aria-hidden="true">H</span>
+        <p className="eyebrow">Hero Association</p>
+        <h1>{title}</h1>
+        <p>{description}</p>
+        {onLogin && <button className="button button--primary" type="button" onClick={onLogin}>Sign in</button>}
+      </section>
+    </main>
+  )
+}
+
+function ManagerOnboarding({ identity, managerName, error, isSubmitting, onManagerNameChange, onSubmit, onSignOut }) {
+  return (
+    <main className="authentication-gate">
+      <section className="authentication-gate__panel manager-onboarding">
+        <span className="brand__mark" aria-hidden="true">H</span>
+        <p className="eyebrow">Welcome{identity?.username ? `, ${identity.username}` : ''}</p>
+        <h1>Choose your manager name</h1>
+        <p>Your manager name is public and unique. You can use 3 to 100 characters.</p>
+        <form onSubmit={onSubmit}>
+          <label className="manager-onboarding__field"><span>Manager name</span><input value={managerName} minLength="3" maxLength="100" autoComplete="nickname" autoFocus disabled={isSubmitting} onChange={(event) => onManagerNameChange(event.target.value)} placeholder="Wayfinder" /></label>
+          {error && <p className="manager-onboarding__error" role="alert">{error}</p>}
+          <button className="button button--primary" type="submit" disabled={isSubmitting}>{isSubmitting ? 'Creating…' : 'Create manager'}</button>
+        </form>
+        <button className="text-button manager-onboarding__sign-out" type="button" disabled={isSubmitting} onClick={onSignOut}>Sign out</button>
+      </section>
+    </main>
+  )
+}
+
+function AgencyAccessGate({ managerName, onSignOut }) {
+  return (
+    <main className="authentication-gate">
+      <section className="authentication-gate__panel agency-access-gate">
+        <span className="brand__mark" aria-hidden="true">H</span>
+        <p className="eyebrow">Manager {managerName}</p>
+        <h1>No agency yet</h1>
+        <p>You need an agency membership before you can manage heroes, quests, and inventory. Creating an agency and invitations are the next features.</p>
+        <button className="text-button manager-onboarding__sign-out" type="button" onClick={onSignOut}>Sign out</button>
+      </section>
+    </main>
   )
 }
 
