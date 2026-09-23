@@ -14,11 +14,10 @@ APIs.
 ## Run locally
 
 ```bash
-# Terminal 1: configure local Keycloak and start its database, Core's database,
-# BFF's session database, and Keycloak
+# Terminal 1: configure and start local infrastructure
 cd ../backend
 cp .env.example .env
-docker compose up --detach postgres-core postgres-keycloak postgres-bff keycloak
+docker compose -f compose.infra.yaml up --detach
 
 # Terminal 2: run Game Core on the host
 cd hero-association-core

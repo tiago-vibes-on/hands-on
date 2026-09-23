@@ -34,11 +34,11 @@ cd ..
 cp .env.example .env
 ```
 
-Then start the Game Core database and Keycloak:
+Then start the local infrastructure:
 
 ```bash
-# Terminal 1, from backend/: start Core PostgreSQL and Keycloak
-docker compose up --detach postgres-core postgres-keycloak keycloak
+# Terminal 1, from backend/
+docker compose -f compose.infra.yaml up --detach
 
 # Terminal 2: run Game Core on the host
 cd hero-association-core
