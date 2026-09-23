@@ -4,6 +4,8 @@
 .authentication-gate__panel .brand__mark { margin: 0 auto 25px; }
 .authentication-gate__panel h1 { margin: 0; color: var(--text-strong); font-family: var(--display-font); font-size: 32px; letter-spacing: -0.035em; }
 .authentication-gate__panel > p:not(.eyebrow) { margin: 14px auto 25px; color: var(--text-muted); line-height: 1.55; }
+.authentication-gate__actions { display: grid; gap: 10px; }
+.authentication-gate__actions .button { width: 100%; }
 .manager-onboarding form { display: grid; gap: 16px; text-align: left; }
 .manager-onboarding__field { display: grid; gap: 7px; }
 .manager-onboarding__field > span { color: var(--text-muted); font-size: 11px; font-weight: 700; }
@@ -42,6 +44,8 @@
 .button { flex: 0 0 auto; padding: 10px 16px; border: 1px solid transparent; border-radius: 7px; font-size: 13px; font-weight: 700; }
 .button--primary { color: #201807; background: linear-gradient(180deg, #f0ca76, #d8a74c); border-color: #f5d286; box-shadow: 0 5px 16px rgba(178, 128, 36, 0.14); }
 .button--primary:hover { background: linear-gradient(180deg, #f9d682, #e1af51); }
+.button--secondary { color: #e5bc63; background: #1a263d; border-color: #566783; }
+.button--secondary:hover { color: #f6d583; background: #202f49; border-color: #c7a559; }
 .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
 .metric-card, .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--panel-shadow); }
 .metric-card { display: flex; align-items: center; gap: 13px; padding: 19px; }

@@ -13,7 +13,8 @@ The backend is split into independently buildable services:
 
 - `backend/hero-association-bff`: the public API boundary on port `8080`; it
   protects browser requests with a session and CSRF, then forwards its
-  server-held Keycloak access token with the current `/api/...` contract
+  server-held Keycloak access token with the current `/api/...` contract. In
+  the containerized edge topology, Caddy is its only public ingress.
 - `backend/hero-association-core`: the private game-state service on port
   `8081`; it validates the access token's issuer, signature, expiry, subject,
   and `hero-association-core` audience, owns PostgreSQL, and separates
@@ -165,6 +166,12 @@ IDs must not be added for entities or exposed through the API.
   database and imports the versioned `hero-association` realm. Compose requires
   an ignored `backend/.env` created from `backend/.env.example`; it contains
   local bootstrap, client-secret, session-state, and CSRF signing values.
+- `backend/compose.caddy.yaml` is an optional full-container local HTTPS
+  overlay. With `heroassociation.test` and `auth.heroassociation.test` mapped
+  to `127.0.0.1`, Caddy serves the packaged frontend, proxies BFF routes at the
+  first hostname, and proxies Keycloak at the second. It is intentionally not
+  the default development workflow because Vite and Quarkus hot reload run
+  directly on the host.
 - The local Keycloak realm uses the versioned `hero-association` CSS-only login
   theme. It extends Keycloak's `keycloak.v2` theme and matches the frontend's
   dark, gold-accented visual language without replacing Keycloak templates.
@@ -173,6 +180,10 @@ IDs must not be added for entities or exposed through the API.
   browser sessions use an `HttpOnly`, `SameSite` cookie. `/api/v1/session` is
   public, but all proxied game routes require a BFF session and state-changing
   requests require the signed double-submit CSRF token.
+- Signed-out frontend users can select **Sign in** or **Create account**. The
+  latter starts Keycloak's native registration page through the protected BFF
+  OIDC route, with Quarkus forwarding only the standard `prompt=create` hint while retaining
+  state and PKCE ownership.
 - Signing out uses OIDC RP-initiated logout. The BFF clears its local session,
   Keycloak ends the browser SSO session, and the browser returns through the
   registered, state-validated BFF post-logout callback before it is redirected
@@ -192,12 +203,16 @@ IDs must not be added for entities or exposed through the API.
   membership sees no shared game data. Both roles can run gameplay commands,
   while leaders alone can create or cancel market orders.
 - The local Keycloak realm seeds `user1@mail.com` / `user1` and
-  `user2@mail.com` / `user2` with matching Account and Manager records. They
-  must never be used outside local development.
+  `user2@mail.com` / `user2` with matching Account and Manager records. Their
+  seeded manager names are `User 1` and `User 2`, so local sessions and game
+  data are immediately distinguishable. They must never be used outside local
+  development.
 - Docker Compose runs all three PostgreSQL services, Keycloak, Game Core, and
   the BFF using JVM packages by default. Only the BFF publishes port `8080`;
   Core remains on the private Compose network. Keycloak publishes port `8180`
-  for its local login and admin pages.
+  for its local login and admin pages. The optional Caddy overlay instead
+  publishes only ports `80` and `443`; BFF, Keycloak, Core, and PostgreSQL stay
+  private while the local Caddy CA provides HTTPS for the `.test` domains.
 - Each service has an independent Maven fast-jar build. Native compilation is
   currently an opt-in Game Core build with `-Dnative`.
 - Game Core's `Dockerfile.native` provides a `native-runtime` target that

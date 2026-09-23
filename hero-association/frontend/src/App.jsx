@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { addHeroToParty, ApiRequestError, beginLogin, cancelMarketOrder, changeHeroActivity, createFeedPost, createManager, createMarketOrder, createParty, equipHeroRune, fetchAccount, fetchAgencyState, fetchMarketOrders, fetchSession, logout, removeHeroFromParty, startQuest, synchronizeQuestCombat, unequipHeroRune } from './api/agency'
+import { addHeroToParty, ApiRequestError, beginLogin, beginRegistration, cancelMarketOrder, changeHeroActivity, createFeedPost, createManager, createMarketOrder, createParty, equipHeroRune, fetchAccount, fetchAgencyState, fetchMarketOrders, fetchSession, logout, removeHeroFromParty, startQuest, synchronizeQuestCombat, unequipHeroRune } from './api/agency'
 import { initialEquippedRunes, initialRunes } from './data/inventory'
 import { mageSpells } from './data/spells'
 import './App.css'
@@ -246,7 +246,7 @@ function mapAgencyState(state) {
 }
 
 const fallbackGameState = {
-  agency: { id: 'dawnwatch-agency', name: 'Dawnwatch Agency', leaderId: 'tiago', leaderName: 'Tiago', levels: { agency: 4 } },
+  agency: { id: 'dawnwatch-agency', name: 'Dawnwatch Agency', leaderId: 'user1', leaderName: 'User 1', levels: { agency: 4 } },
   heroes: fallbackHeroes,
   activeParty: fallbackParty,
   activeParties: [fallbackParty],
@@ -1238,7 +1238,7 @@ function App() {
   }
 
   if (sessionStatus === 'anonymous') {
-    return <AuthenticationGate title="Welcome to Hero Association" description="Sign in to manage your agency." onLogin={beginLogin} />
+    return <AuthenticationGate title="Welcome to Hero Association" description="Sign in or create an account to manage your agency." onLogin={beginLogin} onRegistration={beginRegistration} />
   }
 
   if (sessionStatus === 'onboarding') {
@@ -1278,7 +1278,7 @@ function App() {
             </button>
           ))}
         </nav>
-        <div className="sidebar__bottom"><div className="player-card"><span className="player-card__avatar">{account?.manager?.displayName?.slice(0, 1).toUpperCase() ?? session?.identity?.username?.slice(0, 1).toUpperCase() ?? 'T'}</span><span><strong>{account?.manager?.displayName ?? session?.identity?.username ?? gameState.agency.leaderName}</strong><small>{account?.manager ? 'Manager' : 'Signed in'}</small></span><button className="text-button player-card__logout" type="button" onClick={handleLogout}>Sign out</button></div></div>
+        <div className="sidebar__bottom"><div className="player-card"><span className="player-card__avatar">{account?.manager?.displayName?.slice(0, 1).toUpperCase() ?? session?.identity?.username?.slice(0, 1).toUpperCase() ?? 'U'}</span><span><strong>{account?.manager?.displayName ?? session?.identity?.username ?? gameState.agency.leaderName}</strong><small>{account?.manager ? 'Manager' : 'Signed in'}</small></span><button className="text-button player-card__logout" type="button" onClick={handleLogout}>Sign out</button></div></div>
       </aside>
       <main className="main-content"><div className="main-content__inner">{apiStatus !== 'ready' && <p className={`api-status api-status--${apiStatus}`} role="status">{apiStatus === 'loading' ? 'Loading agency state…' : 'Backend unavailable. Showing the local fixture.'}</p>}{pages[activePage]}</div></main>
       <RuneDrawer selectedSlot={selectedSlot} runes={equippedRunes} runeInventory={runeInventory} isUpdating={isUpdatingLoadout} error={loadoutError} onClose={() => { setLoadoutError(null); setSelectedSlot(null) }} onEquipRune={equipRune} onUnequipRune={unequipRune} />
@@ -1286,7 +1286,7 @@ function App() {
   )
 }
 
-function AuthenticationGate({ title, description, onLogin }) {
+function AuthenticationGate({ title, description, onLogin, onRegistration }) {
   return (
     <main className="authentication-gate">
       <section className="authentication-gate__panel">
@@ -1294,7 +1294,10 @@ function AuthenticationGate({ title, description, onLogin }) {
         <p className="eyebrow">Hero Association</p>
         <h1>{title}</h1>
         <p>{description}</p>
-        {onLogin && <button className="button button--primary" type="button" onClick={onLogin}>Sign in</button>}
+        {onLogin && <div className="authentication-gate__actions">
+          <button className="button button--primary" type="button" onClick={onLogin}>Sign in</button>
+          {onRegistration && <button className="button button--secondary" type="button" onClick={onRegistration}>Create account</button>}
+        </div>}
       </section>
     </main>
   )

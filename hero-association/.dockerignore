@@ -1,0 +1,8 @@
+.git
+backend/**/target
+e2e/node_modules
+e2e/playwright-report
+e2e/test-results
+frontend/dist
+frontend/node_modules
+caddy/*.crt

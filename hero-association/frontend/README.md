@@ -51,6 +51,12 @@ If the API cannot be reached, the frontend shows a visible notice and uses a
 static local fixture. A production deployment sends `/api` requests to the
 public BFF; the browser never calls Game Core directly.
 
+To test the packaged frontend behind local HTTPS rather than Vite, use the
+optional Caddy workflow in [`../backend/README.md`](../backend/README.md#local-https-gateway).
+It uses `https://heroassociation.test` for the game and
+`https://auth.heroassociation.test` for Keycloak; it is separate from the
+hot-reload workflow described above.
+
 Keycloak is available locally on `http://localhost:8180`. The frontend begins
 at a sign-in screen, uses the BFF's `/auth/login` redirect, and receives no
 Keycloak tokens in browser storage. The first signed-in visit provisions an

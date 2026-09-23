@@ -157,6 +157,13 @@ resulting state.
   near-real-time changes, such as combat progress, matched market orders, and
   new feed posts.
 
+## Milestone 10 — Delivery topology
+
+- [x] Add an optional local Caddy edge stack with HTTPS, a packaged frontend,
+  same-origin BFF routing, and a separate Keycloak hostname.
+- [ ] Add a deployed-environment Caddy configuration with production domains,
+  trusted proxy ranges, and environment-specific Keycloak realm settings.
+
 ## Open decisions that block implementation
 
 - [ ] Define the hero-death fee formula and who receives it.

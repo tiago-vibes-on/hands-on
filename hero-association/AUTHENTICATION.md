@@ -41,18 +41,24 @@ The matching actionable checklist is in [Milestone 9 of the roadmap](ROADMAP.md#
 ## Target topology
 
 ```text
-Browser (React)
-        |
-        | HTTPS session cookie
-        v
-Identity BFF --------------------> Keycloak
-        |
-        +--------------------------> BFF session PostgreSQL
+Browser (React) -> Caddy -----------------> Identity BFF
+        |                    |                    |
+        | HTTPS session      |                    +-> BFF session PostgreSQL
+        | cookie             |
+        |                    +--------------------> Keycloak
+        |                                             |
+        |                                             +-> Keycloak PostgreSQL
         |
         | server-to-server access token
         v
 Game Core -----------------------> PostgreSQL
 ```
+
+Caddy is the edge gateway in the containerized local and deployed topology. It
+serves the React build, proxies `/api` and `/auth` to the BFF, and exposes
+Keycloak on its own authentication hostname. It does not make authentication
+decisions: the BFF owns the browser session and Keycloak owns identity. Game
+Core and all PostgreSQL services remain private.
 
 The BFF owns the browser session, login, logout, callback, and CSRF handling.
 It uses the OpenID Connect Authorization Code flow as a confidential server
@@ -161,6 +167,13 @@ that short-lived state cookie is required for the callback; Quarkus removes the
 BFF session cookie as part of the logout flow. The callback is registered as
 the client's only post-logout redirect URI.
 
+The signed-out frontend offers **Sign in** and **Create account**. Both begin
+at the protected BFF login route; the registration action adds only the
+standard OIDC `prompt=create` hint, which Quarkus forwards to Keycloak's
+authorization request. Quarkus continues to generate and validate the
+authorization-code state and PKCE values, so React never constructs a
+Keycloak registration URL or handles identity-provider credentials.
+
 The repository's Playwright E2E test uses separate local frontend and BFF
 ports, with its own versioned callback URIs. They are limited to the isolated
 test stack; production clients must register only their deployed BFF callback
@@ -199,7 +212,10 @@ agencies, and inventory.
 BFF session database at `localhost:5433` for host-based BFF development.
 Before starting either Compose stack, copy `backend/.env.example` to
 `backend/.env` and replace every placeholder. The `.env` file is ignored by
-Git.
+Git. The optional `backend/compose.caddy.yaml` overlay instead runs the full
+containerized stack through `https://heroassociation.test`, with Keycloak at
+`https://auth.heroassociation.test`. Its exact hosts-file, certificate-trust,
+and startup instructions are in [`backend/README.md`](backend/README.md#local-https-gateway).
 
 `backend/keycloak/realm/hero-association-realm.json` is a versioned startup
 import. It creates the `hero-association` realm, enables local email/password
@@ -208,8 +224,10 @@ the `hero-association-core` resource-server audience. The BFF client mapper
 adds that audience only to access tokens. Its client secret is resolved from
 `HERO_ASSOCIATION_BFF_OIDC_CLIENT_SECRET` during the first import; it is never
 committed to the repository. Local email verification is disabled because SMTP
-is not configured. Production must not reuse this development configuration or
-its example credentials.
+is not configured. It registers callbacks for direct host development, the
+isolated browser test, and the local Caddy gateway. Production must use a
+separate realm configuration with only its deployed callback URLs and no
+development credentials.
 
 The realm selects the versioned `hero-association` CSS-only login theme in
 `backend/keycloak/theme`. It extends Keycloak's `keycloak.v2` theme without
@@ -223,8 +241,8 @@ from `backend/`, then start it again. Google is intentionally not configured
 until its social-login task is implemented.
 
 The versioned realm includes two development-only test users:
-`user1@mail.com` / `user1` corresponds to the seeded Tiago Manager and leads
-Dawnwatch Agency; `user2@mail.com` / `user2` corresponds to the seeded Mara
+`user1@mail.com` / `user1` corresponds to the seeded User 1 Manager and leads
+Dawnwatch Agency; `user2@mail.com` / `user2` corresponds to the seeded User 2
 Manager and leads Ironridge Exchange. These credentials must never be used
 outside local development.
 
@@ -239,14 +257,17 @@ deployment must provide a durable BFF-owned database and secret storage.
 
 - Run Keycloak and its dedicated PostgreSQL database in Docker Compose for
   local development. It must not share Game Core's game-state database.
+- Keep Vite plus Quarkus dev mode as the default local editing workflow. Use
+  the Caddy Compose overlay when validating the packaged, same-origin HTTPS
+  and OIDC flow.
 - Configure realm, clients, redirect URIs, and theme through versioned,
   non-secret configuration where possible.
 - Store client secrets, Google credentials, and production signing material in
   environment-specific secret storage. Do not add them to `.env` files tracked
   by Git.
-- Expose only the BFF and Keycloak login endpoints publicly. Game Core has no
-  browser CORS configuration and no public ingress, and still validates the
-  BFF-forwarded bearer token as defense in depth.
+- Caddy exposes the React application, BFF routes, and Keycloak login endpoint
+  publicly. Game Core has no browser CORS configuration and no public ingress,
+  and still validates the BFF-forwarded bearer token as defense in depth.
 
 ## Delivery sequence
 

@@ -66,11 +66,11 @@ class AccountControllerTest {
     void shouldRejectAnExistingManagerDisplayNameWithoutCaseSensitivity() {
         given()
                 .contentType(ContentType.JSON)
-                .body("{\"displayName\":\"tiago\"}")
+                .body("{\"displayName\":\"user 1\"}")
                 .when().post("/api/v1/account/manager")
                 .then()
                 .statusCode(409)
-                .body("message", is("The manager display name tiago is already in use."));
+                .body("message", is("The manager display name user 1 is already in use."));
     }
 
     @Test

@@ -35,7 +35,7 @@ class AgencyStateControllerTest {
                 .statusCode(200)
                 .body("agency.id", is(DAWNWATCH_AGENCY_ID))
                 .body("agency.name", is("Dawnwatch Agency"))
-                .body("agency.leaderName", is("Tiago"))
+                .body("agency.leaderName", is("User 1"))
                 .body("agency.levels.rest", is(3))
                 .body("agency.levels.intelligence", is(3))
                 .body("agency.levels", not(hasKey("medical")))

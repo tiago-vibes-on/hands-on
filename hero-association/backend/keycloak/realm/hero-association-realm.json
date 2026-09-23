@@ -16,8 +16,8 @@
       "id": "019c4c00-0100-7000-8000-000000000001",
       "username": "user1@mail.com",
       "email": "user1@mail.com",
-      "firstName": "Tiago",
-      "lastName": "Vibeson",
+      "firstName": "User",
+      "lastName": "1",
       "emailVerified": true,
       "enabled": true,
       "credentials": [
@@ -32,8 +32,8 @@
       "id": "019c4c00-0100-7000-8000-000000000002",
       "username": "user2@mail.com",
       "email": "user2@mail.com",
-      "firstName": "Mara",
-      "lastName": "Stoneforge",
+      "firstName": "User",
+      "lastName": "2",
       "emailVerified": true,
       "enabled": true,
       "credentials": [
@@ -75,12 +75,15 @@
         "http://localhost:18080/auth/callback",
         "http://localhost:18080/auth/post-logout",
         "http://host.docker.internal:15173/auth/callback",
-        "http://host.docker.internal:15173/auth/post-logout"
+        "http://host.docker.internal:15173/auth/post-logout",
+        "https://heroassociation.test/auth/callback",
+        "https://heroassociation.test/auth/post-logout"
       ],
       "webOrigins": [
         "http://localhost:8080",
         "http://localhost:18080",
-        "http://host.docker.internal:15173"
+        "http://host.docker.internal:15173",
+        "https://heroassociation.test"
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",

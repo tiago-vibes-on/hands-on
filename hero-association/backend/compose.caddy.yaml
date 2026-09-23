@@ -1,0 +1,52 @@
+# Optional local HTTPS gateway. Combine this file with compose.yaml; do not use
+# it for the normal Vite and Quarkus hot-reload workflow.
+services:
+  postgres-core:
+    ports: !override []
+
+  postgres-bff:
+    ports: !override []
+
+  keycloak:
+    environment:
+      KC_HOSTNAME: https://auth.heroassociation.test
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+    ports: !override []
+
+  core:
+    environment:
+      HERO_ASSOCIATION_OIDC_ISSUER: https://auth.heroassociation.test/realms/hero-association
+
+  bff:
+    environment:
+      HERO_ASSOCIATION_FRONTEND_URL: https://heroassociation.test
+      HERO_ASSOCIATION_OIDC_AUTHORIZATION_PATH: https://auth.heroassociation.test/realms/hero-association/protocol/openid-connect/auth
+      QUARKUS_OIDC_TOKEN_ISSUER: https://auth.heroassociation.test/realms/hero-association
+      QUARKUS_OIDC_END_SESSION_PATH: https://auth.heroassociation.test/realms/hero-association/protocol/openid-connect/logout
+      HERO_ASSOCIATION_BFF_COOKIE_FORCE_SECURE: "true"
+      QUARKUS_HTTP_PROXY_PROXY_ADDRESS_FORWARDING: "true"
+      QUARKUS_HTTP_PROXY_ALLOW_X_FORWARDED: "true"
+      QUARKUS_HTTP_PROXY_ENABLE_FORWARDED_HOST: "true"
+    ports: !override []
+
+  caddy:
+    build:
+      context: ..
+      dockerfile: caddy/Dockerfile
+    depends_on:
+      bff:
+        condition: service_started
+      keycloak:
+        condition: service_started
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

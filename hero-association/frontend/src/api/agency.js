@@ -29,6 +29,10 @@ export function beginLogin() {
   window.location.assign('/auth/login')
 }
 
+export function beginRegistration() {
+  window.location.assign('/auth/login?prompt=create')
+}
+
 export function logout() {
   window.location.assign('/auth/logout')
 }

@@ -35,13 +35,13 @@ VALUES
 INSERT INTO manager (id, display_name, display_name_normalized, account_id) VALUES
     (
         '019c4c00-0000-7000-8000-000000000001',
-        'Tiago',
-        'tiago',
+        'User 1',
+        'user 1',
         '019c4c00-0000-7000-8000-000000000010'),
     (
         '019c4c00-0000-7000-8000-000000000002',
-        'Mara',
-        'mara',
+        'User 2',
+        'user 2',
         '019c4c00-0000-7000-8000-000000000020'),
     (
         '019c4c00-0000-7000-8000-000000000003',

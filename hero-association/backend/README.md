@@ -67,9 +67,10 @@ The imported `hero-association` realm enables native registration and contains
 the confidential `hero-association-bff` OpenID Connect client. Its access-token
 mapper adds the `hero-association-core` audience required by Game Core. Email
 verification is disabled locally because SMTP is not configured. Navigate to
-the frontend and select **Sign in** to create or use a local account. Google
-login is a later task. The first signed-in visit provisions an Account and asks
-for a unique Manager name. Access to the seeded prototype requires an
+the frontend and select **Sign in** for an existing account or **Create
+account** to open Keycloak's native registration form. Google login is a later
+task. The first signed-in visit provisions an Account and asks for a unique
+Manager name. Access to the seeded prototype requires an
 `AgencyMember` record; creating an agency and invitations are later tasks.
 The local Keycloak login page uses the versioned Hero Association theme in
 `keycloak/theme/hero-association`. It preserves Keycloak's standard login
@@ -78,8 +79,8 @@ The development realm includes these test accounts:
 
 | Email | Password | Seeded Manager | Agency role |
 | --- | --- | --- |
-| `user1@mail.com` | `user1` | Tiago | Dawnwatch Agency leader |
-| `user2@mail.com` | `user2` | Mara | Ironridge Exchange leader |
+| `user1@mail.com` | `user1` | User 1 | Dawnwatch Agency leader |
+| `user2@mail.com` | `user2` | User 2 | Ironridge Exchange leader |
 
 These credentials exist only for local development and must never be used in
 production.
@@ -87,6 +88,95 @@ production.
 Keycloak imports the versioned realm only when it does not already exist. To
 recreate it during local development, stop the stack with `docker compose down
 --volumes` and start it again.
+
+## Local HTTPS gateway
+
+The default development workflow above deliberately keeps Vite and both
+Quarkus services on the host for hot reload. The optional Caddy workflow runs
+the complete application in containers instead: Caddy serves the built React
+application, proxies same-origin `/api` and `/auth` requests to the BFF, and
+proxies Keycloak through a separate local hostname. It is useful for checking
+the real HTTPS and OIDC deployment topology, not for day-to-day frontend or
+backend editing.
+
+Before starting it, add these hostname-only entries to your operating system's
+hosts file. Do not include `https://` in that file; the scheme belongs only in
+the browser URL.
+
+```text
+127.0.0.1 heroassociation.test
+127.0.0.1 auth.heroassociation.test
+```
+
+On Linux and macOS, the hosts file is `/etc/hosts`. On Windows, it is normally
+`C:\Windows\System32\drivers\etc\hosts` and requires an Administrator editor.
+The local gateway requires host ports `80` and `443` to be available.
+
+Start the isolated Caddy Compose project from `backend/`:
+
+```bash
+docker compose -p hero-association-caddy -f compose.yaml -f compose.caddy.yaml up --build --detach
+```
+
+Caddy creates a local development certificate authority for the `.test`
+domains. Export and trust its root certificate once so the browser accepts the
+local HTTPS certificates:
+
+```bash
+docker compose -p hero-association-caddy -f compose.yaml -f compose.caddy.yaml cp caddy:/data/caddy/pki/authorities/local/root.crt ../caddy/hero-association-local-root.crt
+
+# Linux systems that use update-ca-certificates
+sudo cp ../caddy/hero-association-local-root.crt /usr/local/share/ca-certificates/
+sudo update-ca-certificates
+```
+
+The exported certificate is ignored by Git. Use your operating system's trust
+store tools for macOS or Windows. When the services run in WSL but Chrome or
+Edge runs on Windows, trust the certificate in the Windows current-user store;
+the Windows browser and its Windows hosts file are the relevant client-side
+environment. From this `backend/` directory, no Administrator permission is
+required:
+
+```bash
+WINDOWS_CERTIFICATE_PATH="$(wslpath -w ../caddy/hero-association-local-root.crt)"
+certutil.exe -user -addstore -f Root "$WINDOWS_CERTIFICATE_PATH"
+```
+
+Chromium-based browsers on Linux commonly use an NSS certificate database in
+addition to the system certificate bundle.
+If Chrome or Chromium still displays a privacy warning after the system import,
+install the NSS tools and import the same root for the current user:
+
+```bash
+sudo apt-get install --yes libnss3-tools
+mkdir -p "$HOME/.pki/nssdb"
+[ -f "$HOME/.pki/nssdb/cert9.db" ] || certutil -d sql:"$HOME/.pki/nssdb" -N --empty-password
+certutil -d sql:"$HOME/.pki/nssdb" -A -t "C,," \
+  -n "Hero Association Caddy Local CA" \
+  -i ../caddy/hero-association-local-root.crt
+```
+
+Fully quit and reopen the browser after either trust-store change. This was
+verified with Chromium: it accepts both local Caddy HTTPS endpoints without
+certificate-error bypasses after the NSS import. Then open
+`https://heroassociation.test`; the Keycloak login and admin console are at
+`https://auth.heroassociation.test`. Caddy is the only public service in this
+workflow: BFF, Game Core, and every PostgreSQL database stay on the private
+Compose network.
+
+The Keycloak realm import contains the Caddy callback and post-logout URLs. If
+the local Keycloak realm already exists, reset this isolated project before
+starting it so Keycloak imports the updated realm:
+
+```bash
+docker compose -p hero-association-caddy -f compose.yaml -f compose.caddy.yaml down --volumes
+```
+
+This removes only the `hero-association-caddy` project's local containers and
+volumes. It also creates a new local Caddy certificate authority on the next
+start, so export and trust the new root certificate again. Do not use
+`--volumes` if you want to retain the current local data and trusted Caddy
+certificate authority.
 
 ## Browser end-to-end tests
 
