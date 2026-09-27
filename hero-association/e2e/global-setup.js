@@ -1,5 +1,4 @@
-import { execFile, spawn } from 'node:child_process'
-import { once } from 'node:events'
+import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -8,7 +7,6 @@ const executeFile = promisify(execFile)
 const e2eDirectory = path.dirname(fileURLToPath(import.meta.url))
 const projectDirectory = path.resolve(e2eDirectory, '..')
 const backendDirectory = path.join(projectDirectory, 'backend')
-const frontendDirectory = path.join(projectDirectory, 'frontend')
 const composeFiles = [
   path.join(backendDirectory, 'compose.yaml'),
   path.join(e2eDirectory, 'compose.e2e.yaml'),
@@ -22,10 +20,10 @@ const e2eEnvironment = {
   HERO_ASSOCIATION_BFF_OIDC_CLIENT_SECRET: 'hero-association-e2e-client-secret-please-do-not-use-in-production',
   HERO_ASSOCIATION_BFF_OIDC_STATE_SECRET: 'hero-association-e2e-state-secret-please-do-not-use-in-production',
   HERO_ASSOCIATION_BFF_CSRF_TOKEN_SIGNATURE_KEY: 'hero-association-e2e-csrf-signing-key-please-do-not-use-in-production',
-  HERO_ASSOCIATION_BFF_DATABASE_PASSWORD: 'hero-association-e2e-bff-database-password',
 }
 
-let frontendProcess
+const keycloakUrl = 'http://localhost:18180'
+const e2eTokenLifespanSeconds = 8
 
 function composeArguments(...argumentsAfterCompose) {
   return [
@@ -67,61 +65,66 @@ async function waitForService(url, description) {
   throw new Error(`Timed out waiting for ${description}: ${lastError?.message ?? 'unknown error'}`)
 }
 
-async function startFrontend() {
-  const viteEntryPoint = path.join(frontendDirectory, 'node_modules', 'vite', 'bin', 'vite.js')
-
-  frontendProcess = spawn(process.execPath, [viteEntryPoint, '--host', '127.0.0.1', '--port', '15173'], {
-    cwd: frontendDirectory,
-    env: {
-      ...process.env,
-      VITE_API_PROXY_TARGET: 'http://localhost:18080',
-      VITE_API_PROXY_CHANGE_ORIGIN: 'false',
-      VITE_ALLOWED_HOSTS: 'host.docker.internal',
-    },
-    stdio: 'ignore',
+async function configureShortLivedE2ETokens() {
+  const parameters = new URLSearchParams({
+    grant_type: 'password',
+    client_id: 'admin-cli',
+    username: e2eEnvironment.KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME,
+    password: e2eEnvironment.KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD,
+  })
+  const tokenResponse = await fetch(`${keycloakUrl}/realms/master/protocol/openid-connect/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: parameters,
   })
 
-  await waitForService('http://127.0.0.1:15173', 'frontend')
-}
-
-async function stopFrontend() {
-  if (!frontendProcess || frontendProcess.exitCode !== null) {
-    return
+  if (!tokenResponse.ok) {
+    throw new Error(`Unable to authenticate the E2E Keycloak administrator: HTTP ${tokenResponse.status}`)
   }
 
-  const stopped = once(frontendProcess, 'exit')
-  frontendProcess.kill('SIGTERM')
+  const { access_token: accessToken } = await tokenResponse.json()
+  const realmResponse = await fetch(`${keycloakUrl}/admin/realms/hero-association`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
 
-  const exited = await Promise.race([
-    stopped.then(() => true),
-    new Promise((resolve) => setTimeout(() => resolve(false), 5_000)),
-  ])
+  if (!realmResponse.ok) {
+    throw new Error(`Unable to read the E2E Keycloak realm: HTTP ${realmResponse.status}`)
+  }
 
-  if (!exited && frontendProcess.exitCode === null) {
-    frontendProcess.kill('SIGKILL')
-    await stopped
+  const realm = await realmResponse.json()
+  realm.accessTokenLifespan = e2eTokenLifespanSeconds
+
+  const updateResponse = await fetch(`${keycloakUrl}/admin/realms/hero-association`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(realm),
+  })
+
+  if (!updateResponse.ok) {
+    throw new Error(`Unable to set the E2E token lifespan: HTTP ${updateResponse.status}`)
   }
 }
-
 export default async function globalSetup() {
+  await executeFile(path.join(projectDirectory, 'traefik', 'generate-local-certs.sh'))
   await compose('down', '--volumes')
 
   try {
     await compose('up', '--build', '--detach')
+    await waitForService('http://localhost:18180/realms/hero-association/.well-known/openid-configuration', 'Keycloak')
+    await configureShortLivedE2ETokens()
     await Promise.all([
-      waitForService('http://localhost:18180/realms/hero-association/.well-known/openid-configuration', 'Keycloak'),
       waitForService('http://localhost:18081/api/v1/account', 'Game Core'),
       waitForService('http://localhost:18080/api/v1/session', 'BFF'),
     ])
-    await startFrontend()
   } catch (error) {
-    await stopFrontend().catch(() => undefined)
     await compose('down', '--volumes').catch(() => undefined)
     throw error
   }
 
   return async () => {
-    await stopFrontend()
     await compose('down', '--volumes')
   }
 }

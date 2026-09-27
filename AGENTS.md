@@ -13,7 +13,9 @@
 - Name database tables after the singular form of their entities (for example,
   `hero`, not `heroes`).
 - Until Flyway is introduced, local and pre-production schema changes do not
-  require backwards-compatible data migrations. Once Flyway is used, preserve
-  existing data with explicit migrations.
+  require backwards-compatible data migrations. This product is in an early
+  stage: change the schema and deterministic seed data directly, then reset
+  and recreate local or pre-production data when that is the clearest option.
+  Once Flyway is used, preserve existing data with explicit migrations.
 - Ask for clarification when a requirement is materially ambiguous, and call
   out requests that are unsafe or conflict with sound engineering practice.

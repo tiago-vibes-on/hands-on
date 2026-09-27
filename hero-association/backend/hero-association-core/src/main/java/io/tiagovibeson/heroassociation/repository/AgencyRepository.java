@@ -11,6 +11,10 @@ import jakarta.persistence.LockModeType;
 @ApplicationScoped
 public class AgencyRepository implements PanacheRepositoryBase<Agency, UUID> {
 
+    public boolean existsWithNormalizedName(String nameNormalized) {
+        return count("nameNormalized", nameNormalized) > 0;
+    }
+
     public Optional<Agency> findForUpdate(UUID agencyId) {
         return find("id", agencyId)
                 .withLock(LockModeType.PESSIMISTIC_WRITE)

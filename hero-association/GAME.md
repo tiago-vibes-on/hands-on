@@ -15,6 +15,9 @@ a hero in combat.
 ## Agencies and social play
 
 - A player can create an agency.
+- The initial implementation lets an onboarded Manager with no agency
+  membership create one empty Level 1 agency as its leader. Invitations,
+  leaving, and ownership transfer remain separate features.
 - An agency belongs to its leader.
 - An agency can be managed by its leader alone or together with invited
   managers.
@@ -32,7 +35,12 @@ a hero in combat.
 ## Heroes
 
 - Heroes are recruitable non-player characters (NPCs).
+- The initial global recruitment board offers Alden Steelward (Warrior), Seris
+  Dawnflame (Mage), and Tarin Windmark (Archer). They are free Level 1 NPCs;
+  each can join only one agency. A recruited hero starts in `TRAINING` with
+  full class health and mana and 100% stamina.
 - Heroes can equip runes.
+- A hero's rune loadout is locked while that hero is on a quest.
 - Each hero has five rune slots. A hero who has learned spells also displays
   spell slots.
 - Unequipped runes are stored in the agency rune inventory. During the initial
@@ -145,11 +153,19 @@ meaningful without becoming excessively grindy.
   old forest. It requires one to two heroes, has an estimated duration of 30
   minutes, and offers 85 gold. Starting it moves every selected party member
   from their agency activity to the quest. The game records the start and
-  expected completion time; it does not yet advance or resolve the quest.
+  expected completion time and creates a combat snapshot with the party's
+  current resources and one creature for every required objective.
 - All heroes assigned to a quest belong to that quest's party and are
   unavailable at the agency until the quest is complete. Other heroes remain
   at the agency, where they are either training or resting before they can join
   another party.
+- In the seeded Troll encounter, defeating every creature completes the quest;
+  defeating every hero fails it. Either outcome records a completion time,
+  releases the party, and returns its heroes to Training. Quest rewards,
+  stamina costs, permanent death, and the agency death fee are not yet applied.
+- Until per-creature difficulty is designed, newly created creatures use a
+  shared provisional profile: 120 health, 10 damage, a 1.6-second attack
+  interval, 100 mana, no recovery, and no critical chance.
 - Quest outcomes depend on the heroes' abilities and stamina.
 - A poorly matched or exhausted hero can fail a quest.
 - Quests take time to complete and can require objectives such as killing a
@@ -175,8 +191,9 @@ meaningful without becoming excessively grindy.
 - A combat encounter can contain one to four creatures.
 - Every hero and creature has its own attack timer.
 - When a combatant's timer is ready, that combatant performs its next attack.
-- Attack-speed rune bonuses are intended to shorten a hero's attack timer.
-  Rune stat effects are not implemented in the initial prototype yet.
+- Critical Chance and Critical Damage Rune effects are applied when a new combat
+  snapshot is created. Attack-speed, attack, armor, health, and mana rune
+  formulas still need game-design decisions.
 - Damage popups cycle through three lanes above each target and drift outward,
   so closely timed hits remain readable. Basic damage is gold and magic damage
   is purple.
@@ -209,13 +226,17 @@ meaningful without becoming excessively grindy.
   combatant's state and next action times. An explicit combat-sync command
   advances it by elapsed real time, without mutating the normal state-read
   endpoint. The encounter retains its latest 100 server-generated events so a
-  client can render recent attacks, spells, recovery, critical hits, and
-  defeats. Armor, attack speed, attack, health, and mana rune formulas still
-  need a game-design decision; only the established critical values are
+  defeats. When a new snapshot is created, each hero's equipped Critical Chance
+  Runes are summed (up to 100%) and Critical Damage Rune values are added to
+  the base 2× multiplier. Armor, attack speed, attack, health, and mana rune
+  formulas still need a game-design decision.
   represented in the engine inputs.
 - Each combat synchronization persists the current health and mana of heroes
-  in the encounter. Stamina costs, rewards, and permanent death resolution
-  remain to be implemented.
+  in the encounter. When combat reaches a terminal result, Hero Victory changes
+  the quest to `COMPLETED` and Creature Victory changes it to `FAILED`; both
+  record `finishedAt`, release the party, and return its heroes to Training.
+  Stamina costs, rewards, and permanent death resolution remain to be
+  implemented.
 
 ### Initial hero combat attributes
 

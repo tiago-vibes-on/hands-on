@@ -26,6 +26,10 @@ public class Party extends UuidEntity {
     protected Party() {
     }
 
+    public void clearQuest() {
+        quest = null;
+    }
+
     public Party(Agency agency, String name) {
         this.agency = agency;
         this.name = name;

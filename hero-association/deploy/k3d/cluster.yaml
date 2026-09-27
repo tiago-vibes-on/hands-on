@@ -1,0 +1,28 @@
+apiVersion: k3d.io/v1alpha5
+kind: Simple
+metadata:
+  name: hero-association
+servers: 1
+agents: 2
+kubeAPI:
+  host: 127.0.0.1
+  hostIP: 127.0.0.1
+  hostPort: "16550"
+# Kubernetes 1.35 refuses cgroup v1, which this Docker Desktop engine uses.
+image: rancher/k3s:v1.34.7-k3s1
+ports:
+  - port: "127.0.0.1:19080:80"
+    nodeFilters:
+      - loadbalancer
+  - port: "127.0.0.1:19443:443"
+    nodeFilters:
+      - loadbalancer
+options:
+  k3s:
+    extraArgs:
+      - arg: --disable=traefik
+        nodeFilters:
+          - server:*
+  kubeconfig:
+    updateDefaultKubeconfig: false
+    switchCurrentContext: false

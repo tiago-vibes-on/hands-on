@@ -10,7 +10,15 @@ import java.util.Map;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
+import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.context.Scope;
+
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -23,6 +31,9 @@ public class GameCoreClient {
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(REQUEST_TIMEOUT)
             .build();
+
+    @Inject
+    OpenTelemetry openTelemetry;
 
     @ConfigProperty(name = "hero-association.core.base-url")
     String coreBaseUrl;
@@ -50,10 +61,23 @@ public class GameCoreClient {
                         ? HttpRequest.BodyPublishers.noBody()
                         : HttpRequest.BodyPublishers.ofByteArray(requestBody));
 
+        Span span = openTelemetry.getTracer(GameCoreClient.class.getName())
+                .spanBuilder("game-core.request")
+                .setSpanKind(SpanKind.CLIENT)
+                .setAttribute("http.request.method", method)
+                .setAttribute("server.address", "core")
+                .startSpan();
+        Scope scope = span.makeCurrent();
         try {
+            openTelemetry.getPropagators().getTextMapPropagator()
+                    .inject(Context.current(), request, (carrier, key, value) -> carrier.header(key, value));
             HttpResponse<byte[]> coreResponse = httpClient.send(
                     request.build(),
                     HttpResponse.BodyHandlers.ofByteArray());
+            span.setAttribute("http.response.status_code", coreResponse.statusCode());
+            if (coreResponse.statusCode() >= 500) {
+                span.setStatus(StatusCode.ERROR);
+            }
             Response.ResponseBuilder response = Response.status(coreResponse.statusCode())
                     .entity(coreResponse.body());
             coreResponse.headers().firstValue(HttpHeaders.CONTENT_TYPE)
@@ -61,9 +85,14 @@ public class GameCoreClient {
             return response.build();
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
+            span.setStatus(StatusCode.ERROR, "Game Core request interrupted");
             return unavailableResponse();
         } catch (IOException exception) {
+            span.setStatus(StatusCode.ERROR, "Game Core unavailable");
             return unavailableResponse();
+        } finally {
+            scope.close();
+            span.end();
         }
     }
 

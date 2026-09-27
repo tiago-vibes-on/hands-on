@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: hero-association
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.7.4
+          args: [start-dev, --import-realm]
+          env:
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL
+              value: jdbc:postgresql://postgres-keycloak:5432/keycloak
+            - name: KC_DB_USERNAME
+              value: keycloak
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hero-association-k3d-credentials
+                  key: KEYCLOAK_DATABASE_PASSWORD
+            - name: KC_HOSTNAME
+              value: https://auth.k3d.heroassociation.test:19443
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_PROXY_HEADERS
+              value: xforwarded
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              value: hero-association-admin
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hero-association-k3d-credentials
+                  key: KEYCLOAK_ADMIN_PASSWORD
+            - name: HERO_ASSOCIATION_BFF_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: hero-association-k3d-credentials
+                  key: HERO_ASSOCIATION_BFF_OIDC_CLIENT_SECRET
+          ports:
+            - name: http
+              containerPort: 8080
+          startupProbe:
+            httpGet:
+              path: /realms/hero-association
+              port: http
+            periodSeconds: 10
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /realms/hero-association
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+          volumeMounts:
+            - name: realm
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+            - name: theme
+              mountPath: /opt/keycloak/themes/hero-association
+              readOnly: true
+      volumes:
+        - name: realm
+          configMap:
+            name: hero-association-k3d-realm
+        - name: theme
+          configMap:
+            name: hero-association-k3d-theme
+            items:
+              - key: theme.properties
+                path: login/theme.properties
+              - key: hero-association.css
+                path: login/resources/css/hero-association.css
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: hero-association
+spec:
+  type: ClusterIP
+  selector:
+    app: keycloak
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

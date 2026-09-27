@@ -4,33 +4,35 @@ The Backend for Frontend (BFF) is the only browser-facing backend service. It
 uses Keycloak's confidential authorization-code flow with PKCE and proxies
 authenticated `/api/...` calls to Game Core without changing their API
 contract. It forwards its server-held Keycloak access token to Game Core.
-Keycloak tokens stay in the BFF-owned PostgreSQL session store; the browser
-receives only `HttpOnly`, `SameSite` cookies.
+Keycloak tokens stay in the BFF-owned Redis session store; the browser
+receives only `HttpOnly`, `SameSite` cookies. In production, Redis must be
+private, authenticated, TLS protected, and encrypted at rest.
 
 ## Run locally
 
-docker compose up --detach postgres-keycloak keycloak
-
-From `backend/`, copy `.env.example` to the ignored `.env` file and replace all
-placeholders. Start Keycloak, BFF PostgreSQL, and Game Core as described in the
-parent README. Then load the environment and run the BFF on port `8080`:
+Before the first run, create `backend/.env` from `.env.example` and replace all
+placeholders. Start the shared local infrastructure from `backend/`:
 
 ```bash
-set -a
-source ../.env
-set +a
-./mvnw quarkus:dev
+./scripts/start-infra.sh
 ```
 
-The BFF forwards requests to `http://localhost:8081` by default. Its local
-session database defaults to `localhost:5433`. Set
-`HERO_ASSOCIATION_CORE_BASE_URL`, `HERO_ASSOCIATION_BFF_DATABASE_URL`, or
-`HERO_ASSOCIATION_OIDC_AUTH_SERVER_URL` to use other addresses.
+Then, from `backend/`, run the BFF on port `17080`:
+
+```bash
+./scripts/run-bff-dev.sh
+```
+
+The BFF forwards requests to `http://localhost:17081` by default. Its local
+session Redis defaults to `localhost:16379`. Set
+`HERO_ASSOCIATION_BFF_REDIS_HOST_PORT` in `backend/.env` to use another
+address.
 
 `GET /api/v1/session` is public and returns the signed-in Keycloak identity
 summary plus a CSRF token. `GET /auth/login` redirects to Keycloak, and
 `GET /auth/logout` logs out of both the BFF and Keycloak, then returns the
-browser to the frontend. Proxied game endpoints require an authenticated BFF
+browser to the frontend. An already signed-out visit to `/auth/logout` also
+returns to the frontend. Proxied game endpoints require an authenticated BFF
 session and forward its access token to Core. Core checks the
 token's `hero-association-core` audience. `GET /api/v1/account` and
 `POST /api/v1/account/manager` are forwarded to Core for Account provisioning
@@ -38,11 +40,18 @@ and Manager onboarding. The Account response lists authorized agency
 memberships. Agency creation and invitations are intentionally not part of this
 stage.
 
+In the k3d lab, BFF exports OTLP traces, HTTP/JVM metrics, and structured
+logs. Its Core proxy creates a client span and forwards W3C trace context
+without putting the server-held access token in telemetry. Normal dev mode
+and normal Docker Compose keep telemetry disabled unless explicitly
+enabled; see
+[`../README.md`](../README.md#isolated-k3d-jvm-deployment).
+
 ## Test
 
 ```bash
 ./mvnw test
 ```
 
-Tests start a temporary PostgreSQL Testcontainer for the BFF session store and
-a local Game Core stub. Docker must be available.
+The unit tests disable OIDC and use a local Game Core stub; the isolated
+Playwright authentication suite validates Redis-backed session storage.

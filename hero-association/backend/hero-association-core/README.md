@@ -20,6 +20,11 @@ From this directory, run:
 
 The test suite starts PostgreSQL automatically through Quarkus Dev Services.
 
+The k3d Core exports OTLP traces, HTTP/JVM metrics, and structured logs
+to the isolated collector. Normal host-run development and Docker Compose
+keep telemetry disabled unless explicitly enabled; see
+[`../README.md`](../README.md#isolated-k3d-jvm-deployment).
+
 ## Local development (default)
 
 Run PostgreSQL and Keycloak in Docker Compose, then run Quarkus directly on the
@@ -38,18 +43,18 @@ Then start the local infrastructure:
 
 ```bash
 # Terminal 1, from backend/
-docker compose -f compose.infra.yaml up --detach
+./scripts/start-infra.sh
 
 # Terminal 2: run Game Core on the host
 cd hero-association-core
 ./mvnw quarkus:dev
 ```
 
-The development profile connects to the Compose database at `localhost:5432`
+The development profile connects to the Compose database at `localhost:15431`
 with the seeded `hero_association` credentials and validates bearer tokens
-issued by Keycloak at `http://localhost:8180`. Quarkus Dev Services is disabled
-for this profile. Game Core listens on `http://localhost:8081`. Use the BFF at
-`http://localhost:8080` for browser requests; it forwards the server-held
+issued by Keycloak at `https://auth.heroassociation.test`. Quarkus Dev Services is disabled
+for this profile. Game Core listens on `http://localhost:17081`. Use the BFF at
+`http://localhost:17080` for browser requests; it forwards the server-held
 access token. The test profile continues to start its own temporary PostgreSQL
 container through Dev Services.
 
@@ -58,11 +63,11 @@ container through Dev Services.
 Until Flyway is introduced, every application startup drops and recreates the
 database schema, then loads deterministic game data from
 `src/main/resources/import.sql`. The seed contains Dawnwatch Agency, its
-leader, six heroes, Broken Pass Party, an in-progress troll quest and its
-initial combat snapshot, seven rune definitions, Magic Crystals, Iron Ingots,
-agency rune inventory, the party's equipped runes, two feed posts, Ironridge
-Exchange, and its open market orders. Do not use this configuration with data
-that must be retained.
+leader and six heroes, the three globally available recruitment NPCs, Broken
+Pass Party, an in-progress troll quest and its initial combat snapshot, seven
+rune definitions, Magic Crystals, Iron Ingots, agency rune inventory, the
+party's equipped runes, two feed posts, Ironridge Exchange, and its open market
+orders. Do not use this configuration with data that must be retained.
 
 ### Stop the local database
 
@@ -70,7 +75,7 @@ Stop the standalone database while preserving its data:
 
 ```bash
 cd ..
-docker compose stop postgres-core
+docker compose -f compose.infra.yaml stop postgres-core
 ```
 
 The current development configuration drops and recreates the schema on every
@@ -154,7 +159,7 @@ docker compose -f compose.native.yaml down
 ```
 
 After signing in through the frontend, the BFF forwards the seeded API at
-`http://localhost:8080/api/v1/agencies/019c4c00-0001-7000-8000-000000000001/state`.
+`http://localhost:17080/api/v1/agencies/019c4c00-0001-7000-8000-000000000001/state`.
 
 To stop the containers:
 
@@ -175,13 +180,19 @@ docker compose down --volumes
 Game Core exposes this API on port `8081` for the BFF. Do not configure the
 frontend to call Core directly; use the BFF on port `8080` instead.
 
-The API provisions the authenticated Account and supports agency-state reads
-and persisted rune loadouts. Agency state and all agency-specific commands
-require an `AgencyMember` record for the authenticated Manager. Both roles can
-operate gameplay commands; only `LEADER` can create or cancel market orders:
+The API provisions the authenticated Account and supports agency-state reads,
+recruitment, and persisted rune loadouts. A Manager without an `AgencyMember`
+record can create one empty Level 1 agency as its `LEADER`. `GET /api/v1/recruits`
+requires a Manager; claiming an NPC, agency state, and every other
+agency-specific command require membership. Only `LEADER` can create or cancel
+market orders.
 
 - `GET /api/v1/account`
 - `POST /api/v1/account/manager`
+- `POST /api/v1/agencies`
+- `GET /api/v1/recruits`
+- `POST /api/v1/agencies/{agencyId}/heroes`
+- `GET /api/v1/agencies/{agencyId}/heroes/{heroId}`
 - `GET /api/v1/agencies/{agencyId}/state`
 - `PUT /api/v1/agencies/{agencyId}/heroes/{heroId}/rune-slots/{slotIndex}`
 - `DELETE /api/v1/agencies/{agencyId}/heroes/{heroId}/rune-slots/{slotIndex}`
@@ -196,6 +207,10 @@ operate gameplay commands; only `LEADER` can create or cancel market orders:
 - `POST /api/v1/agencies/{agencyId}/market-orders`
 - `DELETE /api/v1/agencies/{agencyId}/market-orders/{orderId}`
 
+
+The initial global board contains free Level 1 NPCs. A candidate is globally
+unique, so a successful claim removes it from every agency's board. The claimed
+hero starts in `TRAINING` with full class health and mana and 100% stamina.
 It returns the agency and leader, Agency, Training, Rest, Size, Reputation, and
 Intelligence upgrade levels, all heroes and their class recovery values,
 parties with quests and member IDs, agency item and rune inventory, and each
@@ -205,10 +220,10 @@ agency's recovery facilities; there is no Medical
 Level, and its concrete upgrade effect remains to be defined. Quest definitions
 include their description, creature objective,
 party-size range, duration estimate, gold reward, and status. Equipping or
-replacing a rune decrements its
-agency inventory quantity and returns any replaced rune to inventory in the
-same transaction. An unknown agency or hero returns `404 Not Found`; an
-unavailable rune returns `409 Conflict`. Agency heroes can switch between
+replacing a rune decrements its agency inventory quantity and returns any
+replaced rune to inventory in the same transaction. An unknown agency or hero
+returns `404 Not Found`; an unavailable rune or an attempt to change a quest
+hero's loadout returns `409 Conflict`. Agency heroes can switch between
 `TRAINING` and `RESTING`; a hero on a quest cannot change activity and returns
 `409 Conflict`. A manager can create a uniquely named prepared party and add
 or remove available agency heroes. Prepared members keep their activity until
@@ -219,13 +234,20 @@ all of its members to `ON_QUEST`; a party outside the quest's required size
 returns `400 Bad Request`. The resulting quest state includes its persisted
 start and expected-completion timestamps. The backend includes a deterministic,
 unit-tested combat rules engine for independent attack timers, hero recovery,
-mage spells, critical hits, deaths, and battle completion. The seeded Troll
-quest has an API-visible, persisted combat snapshot. Its combat-sync command
-advances that snapshot by elapsed time and atomically stores the result plus
-the latest 100 server-generated combat events; ordinary state reads remain
-read-only. A five-second background worker advances every active snapshot while
-the API is running. New quests do not yet create a snapshot, and quest
-completion, rewards, stamina, and death resolution remain unavailable. Each
+mage spells, critical hits, deaths, and battle completion. Every quest start
+creates an API-visible combat snapshot from its party's current resources,
+class combat values, and equipped Critical Chance and Critical Damage Rune
+effects, plus one creature per required objective. Until
+per-creature difficulty is designed, each new creature uses a shared
+provisional profile: 120 health, 10 damage, a 1.6-second attack interval, 100
+mana, no recovery, and no critical chance. The combat-sync command advances a
+snapshot by elapsed time and atomically stores the result plus its latest 100
+server-generated combat events; ordinary state reads remain read-only. A
+five-second background worker advances every active snapshot while the API is
+running. When combat reaches `HERO_VICTORY`, its quest becomes `COMPLETED`;
+when it reaches `CREATURE_VICTORY`, it becomes `FAILED`. Both outcomes set
+`finishedAt`, release the party, and return its heroes to `TRAINING`. Rewards,
+stamina costs, permanent death, and death fees remain unimplemented. Each
 combat synchronization persists the current health and mana of heroes in that
 encounter. A separate five-second background worker restores agency hero health
 and mana from elapsed time: Training uses the base class rate and Resting uses
@@ -245,10 +267,10 @@ economy. Cancelling an open order returns the remaining reservation. Order
 history is not implemented yet.
 
 After a browser signs in through the BFF, the React frontend opens an agency
-listed in its Account memberships and loads its state through the BFF. It then
-persists rune drawer, agency-activity, prepared-party, feed, and market-order
-changes through that public boundary. Its expanded seeded combat view renders
-the Core snapshot and calls the combat-sync endpoint every two seconds; Phaser
-does not simulate combat and only replays newly received server events. The
-frontend also loads the quest board and starts available quests through the
-BFF. Future endpoints will cover recruiting heroes and quest resolution.
+listed in its Account memberships and loads its state through the BFF. It
+persists recruitment, rune drawer, agency-activity, prepared-party, feed, and
+market-order changes through that public boundary. Its expanded active combat
+view renders the Core snapshot and calls the combat-sync endpoint every two
+seconds; Phaser does not simulate combat and only replays newly received server
+events. Starting an available quest through the BFF creates its combat snapshot
+immediately. Rewards and permanent death remain future work.

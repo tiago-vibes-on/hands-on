@@ -3,6 +3,8 @@ package io.tiagovibeson.heroassociation.domain;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
+import io.tiagovibeson.heroassociation.domain.combat.CombatStatus;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -54,6 +56,9 @@ public class Quest extends UuidEntity {
     @Column(name = "expected_completion_at")
     private Instant expectedCompletionAt;
 
+    @Column(name = "finished_at")
+    private Instant finishedAt;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "agency_id", nullable = false)
     private Agency agency;
@@ -66,6 +71,10 @@ public class Quest extends UuidEntity {
     private QuestCombat combat;
 
     protected Quest() {
+    }
+
+    public Instant getFinishedAt() {
+        return finishedAt;
     }
 
     public String getTitle() {
@@ -124,11 +133,43 @@ public class Quest extends UuidEntity {
         return combat;
     }
 
+    public void assignCombat(QuestCombat newCombat) {
+        combat = newCombat;
+    }
+
     public void startWith(Party newParty) {
         status = QuestStatus.IN_PROGRESS;
         party = newParty;
         startedAt = Instant.now();
         expectedCompletionAt = startedAt.plus(durationMinutes, ChronoUnit.MINUTES);
+        finishedAt = null;
         newParty.assignQuest(this);
+    }
+
+    public boolean resolveFromCombat(CombatStatus combatStatus, Instant resolvedAt) {
+        if (status != QuestStatus.IN_PROGRESS) {
+            return false;
+        }
+
+        QuestStatus resolvedStatus = switch (combatStatus) {
+            case HERO_VICTORY -> QuestStatus.COMPLETED;
+            case CREATURE_VICTORY -> QuestStatus.FAILED;
+            case IN_PROGRESS -> null;
+        };
+        if (resolvedStatus == null) {
+            return false;
+        }
+
+        status = resolvedStatus;
+        finishedAt = resolvedAt;
+        if (resolvedStatus == QuestStatus.COMPLETED) {
+            creaturesDefeated = creaturesRequired;
+        }
+        Party partyAtResolution = party;
+        party = null;
+        if (partyAtResolution != null) {
+            partyAtResolution.clearQuest();
+        }
+        return true;
     }
 }

@@ -40,6 +40,7 @@ public class GameCoreStubResource implements QuarkusTestResourceLifecycleManager
                 + "\",\"query\":\"" + escape(exchange.getRequestURI().getRawQuery())
                 + "\",\"contentType\":\"" + escape(exchange.getRequestHeaders().getFirst("Content-Type"))
                 + "\",\"authorization\":\"" + escape(exchange.getRequestHeaders().getFirst("Authorization"))
+                + "\",\"traceparent\":\"" + escape(exchange.getRequestHeaders().getFirst("traceparent"))
                 + "\",\"body\":\"" + escape(body) + "\"}";
         byte[] responseBytes = response.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "application/json");

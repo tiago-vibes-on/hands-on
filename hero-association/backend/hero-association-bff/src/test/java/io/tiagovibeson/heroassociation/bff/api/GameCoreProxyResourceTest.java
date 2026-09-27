@@ -2,6 +2,7 @@ package io.tiagovibeson.heroassociation.bff.api;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.matchesPattern;
 
 import org.junit.jupiter.api.Test;
 
@@ -25,7 +26,8 @@ class GameCoreProxyResourceTest {
                 .statusCode(200)
                 .body("method", equalTo("GET"))
                 .body("query", equalTo("source=bff"))
-                .body("authorization", equalTo("Bearer test-access-token"));
+                .body("authorization", equalTo("Bearer test-access-token"))
+                .body("traceparent", matchesPattern("00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}"));
     }
 
     @Test

@@ -17,13 +17,18 @@ resulting state.
   supported behavior or local workflows.
 - Follow [`AUTHENTICATION.md`](AUTHENTICATION.md) for account, Keycloak, BFF,
   and Game Core boundary work.
+- Follow [`DEPLOYMENT.md`](DEPLOYMENT.md) for the local Traefik migration,
+  Envoy Gateway and Istio in k3d, and BFF/Core scaling progress.
 
 ## Milestone 1 — Authoritative agency management
 
 - [x] Define the Account, Manager, and AgencyMember identity model. See
   [`AUTHENTICATION.md`](AUTHENTICATION.md).
-- [ ] Add agency creation and retrieval endpoints.
-- [ ] Add hero recruiting and hero detail endpoints.
+- [x] Add agency creation and retrieval endpoints. An onboarded Manager without
+  a membership can create one empty Level 1 agency as its `LEADER`; its name is
+  unique case-insensitively. Invitations, leaving, and ownership transfer are
+  still separate work.
+- [x] Add hero recruiting and hero detail endpoints. The initial global board offers three free Level 1 NPCs; each can be claimed once.
 - [x] Add a hero activity command for `TRAINING` and `RESTING`. Prevent a hero
   on a quest from changing agency activity.
 - [x] Add party creation and membership commands, and include party details in
@@ -37,6 +42,7 @@ resulting state.
   added.
 - [x] Add commands to equip and unequip a rune, atomically moving it between
   agency inventory and a hero's five rune slots.
+- [x] Lock a hero's rune loadout while the hero is on a quest.
 - [x] Validate that a rune belongs to the agency and that a target slot exists.
   Rune-class compatibility is deliberately out of scope for this milestone.
 - [x] Update the agency-state response and frontend rune drawer to use the
@@ -49,12 +55,13 @@ resulting state.
   recommended classes remain to be defined.
 - [x] Add a command to start an available quest with a prepared party. Validate
   party membership, hero availability, and party-size eligibility.
-- [ ] Persist quest status and timestamps. `AVAILABLE` and `IN_PROGRESS`, plus
-  start and expected-completion timestamps, are persisted; completion, failure,
-  cancellation, and completion timestamps remain to be added.
+- [x] Persist quest status and timestamps. The seeded combat terminal states
+  persist `COMPLETED` or `FAILED`, set `finishedAt`, release the party, and
+  return its heroes to Training. Cancellation remains unimplemented.
 - [x] Add a command or scheduled process that advances an in-progress quest.
   The seeded combat snapshot advances through an explicit sync command and a
-  five-second background worker; quest completion still remains to be added.
+  five-second background worker; terminal combat states now resolve the quest.
+- [ ] Define and implement quest cancellation rules and a cancellation command.
 - [x] Replace the frontend's fixed active quest and available quest cards with
   API data and persisted quest starts.
 
@@ -67,11 +74,14 @@ resulting state.
   values so it can be tested reliably.
 - [x] Resolve individual hero and creature timers, health, mana, deaths, and
   the initial mage spells in the server-side rules engine.
-- [ ] Apply rune effects that are already displayed: attack, armor, health,
-  mana, attack speed, critical chance, and critical damage.
+- [x] Apply Critical Chance and Critical Damage Rune effects when a new combat
+  snapshot is created.
+- [ ] Apply the remaining displayed rune effects: attack, armor, health, mana,
+  and attack speed.
 - [x] Persist a compact quest-combat snapshot and bounded event history. The
   initial Troll encounter stores its current snapshot plus the latest 100
-  server-generated events. New quests still need snapshot creation.
+  server-generated events, and every newly started quest creates a snapshot
+  from its party and creature objective.
 - [x] Replace the local Phaser combat simulation with server state. The Phaser
   view renders the synchronized snapshot.
 - [x] Render new server combat events in Phaser, including attacks, spells,
@@ -110,6 +120,9 @@ resulting state.
   matching.
 - [x] Apply the 10% market fee atomically when an order matches.
 - [x] Update the frontend market screen to use the live order book.
+- [ ] Limit buy/sell order placement to 5 requests per second per authenticated
+  user across sessions and replicas. Resolve trusted identity at the edge or
+  use a shared BFF limiter; see [ADR 0001](adr/0001-envoy-gateway-for-k3d-ingress.md).
 - [ ] Add market history.
 
 ## Milestone 8 — Social feed and multiplayer
@@ -134,6 +147,21 @@ resulting state.
 - [x] Add BFF session, login, logout, callback, server-side token storage, and
   CSRF protection. The frontend calls only the BFF and game proxy routes now
   require a BFF session.
+- [x] Move BFF OIDC token state from PostgreSQL to Redis.
+  - [x] Replace Quarkus's database token-state manager with its Redis
+    token-state manager and retain encrypted, server-side Keycloak tokens.
+  - [x] Add Redis to `backend/compose.infra.yaml` so
+    `backend/scripts/start-infra.sh` starts it with the other local
+    infrastructure; configure a dedicated local host port for host-run BFF
+    development.
+  - [x] Add Redis to the JVM, native, and E2E Compose workflows as needed, with
+    isolated test state and no impact on local development data.
+  - [x] Replace BFF PostgreSQL connection configuration, dependencies, tests, and
+    documentation with Redis configuration; then remove `postgres-bff` and its
+    BFF-only environment variables.
+- [x] Add Redis session coverage for token refresh, session expiration, and
+  multiple BFF instances. The isolated browser suite verifies refresh without a
+  browser redirect, expiration fails closed, and a second BFF reads the session.
 - [x] Forward the BFF-held Keycloak access token to Game Core and require a
   valid `hero-association-core` bearer-token audience for all Core API routes.
 - [x] Add Account provisioning and Manager onboarding from the Keycloak
@@ -141,28 +169,44 @@ resulting state.
 - [x] Add `AgencyMember` roles and enforce membership and leader permissions
   on agency reads and commands. Market-order creation and cancellation require
   `LEADER`.
-- [ ] Add Google sign-in through Keycloak after native Keycloak login works.
 - [x] Use five-second browser polling for initial agency, quest, feed, and
   market refreshes while the tab is visible. Revisit real-time transport when
   higher-frequency updates need it.
-- [ ] Add browser end-to-end coverage with Playwright.
+- [x] Add browser end-to-end coverage with Playwright.
   - [x] Provide an isolated Compose stack with separate ports, databases, and
     project name, so E2E runs never affect local development services.
   - [x] Validate native Keycloak login, BFF session creation, RP-initiated
     logout, the state-validated post-logout return, and that the next login
     requires credentials again.
-  - [ ] Add browser coverage for onboarding, no-agency access, and membership
-    permissions as those flows expand.
+  - [x] Register a new user through Keycloak, sign out, sign in again, and
+    confirm both sessions map to the same Core Account and Keycloak subject.
+  - [x] Add browser coverage for onboarding, no-agency access, agency creation,
+    and membership permissions. The isolated suite provisions `user3`, verifies
+    its no-agency gate and first agency, and confirms User 2 cannot read
+    Dawnwatch state.
 - [ ] Add WebSocket or server-sent event updates only for features that need
   near-real-time changes, such as combat progress, matched market orders, and
   new feed posts.
 
 ## Milestone 10 — Delivery topology
 
-- [x] Add an optional local Caddy edge stack with HTTPS, a packaged frontend,
+- [x] Add an initial local Caddy edge stack with HTTPS, a packaged frontend,
   same-origin BFF routing, and a separate Keycloak hostname.
-- [ ] Add a deployed-environment Caddy configuration with production domains,
-  trusted proxy ranges, and environment-specific Keycloak realm settings.
+- [ ] Finish the local Caddy-to-Traefik migration by trusting the development
+  CA in the browser and removing obsolete Caddy files. The isolated E2E suite
+  already passes. See [`DEPLOYMENT.md`](DEPLOYMENT.md).
+- [x] Bootstrap the isolated k3d cluster with Istio and an Envoy Gateway
+  HTTPS edge; application deployment and scaling remain separate tasks.
+- [x] Install a disposable k3d observability stack with OpenTelemetry,
+  Prometheus, Loki, Tempo, and Grafana. App instrumentation and dashboards
+  remain in [`DEPLOYMENT.md`](DEPLOYMENT.md).
+- [ ] Test independent BFF and Game Core autoscaling from 2 to 8 Pods in k3d,
+  after making shared database initialization and Core jobs safe across Pods.
+
+## Post-MVP
+
+- [ ] Add Google sign-in through Keycloak. Keep native email/password sign-in
+  for the MVP and preserve existing account links when social sign-in arrives.
 
 ## Open decisions that block implementation
 

@@ -8,8 +8,11 @@ https://heroassociation.test {
 	tls internal
 	encode zstd gzip
 
-	@bff path /api /api/* /auth /auth/*
-	handle @bff {
+	handle /api* {
+		reverse_proxy bff:8080
+	}
+
+	handle /auth* {
 		reverse_proxy bff:8080
 	}
 

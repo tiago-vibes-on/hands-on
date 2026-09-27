@@ -1,0 +1,9 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: hero-association-istio
+  namespace: istio-system
+spec:
+  profile: minimal
+  meshConfig:
+    accessLogFile: /dev/stdout

@@ -15,9 +15,11 @@ import io.tiagovibeson.heroassociation.domain.HeroActivity;
 import io.tiagovibeson.heroassociation.domain.Party;
 import io.tiagovibeson.heroassociation.domain.Quest;
 import io.tiagovibeson.heroassociation.domain.QuestStatus;
+import io.tiagovibeson.heroassociation.domain.QuestCombat;
 import io.tiagovibeson.heroassociation.repository.HeroRepository;
 import io.tiagovibeson.heroassociation.repository.PartyRepository;
 import io.tiagovibeson.heroassociation.repository.QuestRepository;
+import io.tiagovibeson.heroassociation.repository.QuestCombatRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -33,6 +35,9 @@ public class QuestStartService {
 
     @Inject
     HeroRepository heroRepository;
+
+    @Inject
+    QuestCombatRepository questCombatRepository;
 
     @Inject
     AgencyStateService agencyStateService;
@@ -64,6 +69,7 @@ public class QuestStartService {
                 });
 
         quest.startWith(party);
+        questCombatRepository.persist(QuestCombat.start(quest, heroes));
         heroes.forEach(hero -> hero.changeActivity(HeroActivity.ON_QUEST));
         return agencyStateService.findState(agencyId);
     }

@@ -1,6 +1,6 @@
 name: hero-association
 
-# Local-development dependencies for the host-run Quarkus services.
+# Local-development dependencies and HTTPS gateway for the host-run services.
 services:
   postgres-keycloak:
     extends:
@@ -11,18 +11,37 @@ services:
     extends:
       file: compose.yaml
       service: keycloak
+    environment:
+      KC_HOSTNAME: https://auth.heroassociation.test
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
 
   postgres-core:
     extends:
       file: compose.yaml
       service: postgres-core
 
-  postgres-bff:
+  redis-bff:
     extends:
       file: compose.yaml
-      service: postgres-bff
+      service: redis-bff
+
+  traefik:
+    image: traefik:v3.7.13
+    depends_on:
+      keycloak:
+        condition: service_started
+    # scripts/start-infra.sh resolves this address each time WSL starts.
+    extra_hosts:
+      - "dev-host:${HERO_ASSOCIATION_DEV_HOST_ADDRESS:-host-gateway}"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../traefik/traefik.yaml:/etc/traefik/traefik.yaml:ro
+      - ../traefik/dynamic.dev.yaml:/etc/traefik/dynamic.yaml:ro
+      - ../traefik/certs:/etc/traefik/certs:ro
 
 volumes:
   postgres_keycloak_data:
   postgres_core_data:
-  postgres_bff_data:

@@ -11,6 +11,10 @@ import jakarta.enterprise.context.ApplicationScoped;
 @ApplicationScoped
 public class AgencyMemberRepository implements PanacheRepositoryBase<AgencyMember, UUID> {
 
+    public boolean existsByManagerId(UUID managerId) {
+        return count("manager.id", managerId) > 0;
+    }
+
     public Optional<AgencyMember> findByAgencyAndManagerId(UUID agencyId, UUID managerId) {
         return find("agency.id = ?1 and manager.id = ?2", agencyId, managerId).firstResultOptional();
     }

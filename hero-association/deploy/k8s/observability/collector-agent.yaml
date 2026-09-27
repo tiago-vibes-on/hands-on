@@ -1,0 +1,259 @@
+# A single collector on each k3d node reads only this lab's proxy logs and
+# scrapes local proxy endpoints. This is intentionally not a general cluster agent.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: observability-agent
+  namespace: hero-association-observability
+data:
+  config.yaml: |
+    receivers:
+      prometheus/proxies:
+        config:
+          scrape_configs:
+            - job_name: hero-association-proxies
+              scrape_interval: 15s
+              kubernetes_sd_configs:
+                - role: pod
+                  namespaces:
+                    names: [hero-association, envoy-gateway-system]
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_pod_node_name]
+                  regex: ${env:K8S_NODE_NAME}
+                  action: keep
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                  regex: "true"
+                  action: keep
+                - source_labels: [__meta_kubernetes_pod_container_port_name]
+                  regex: "http-envoy-prom|metrics"
+                  action: keep
+                - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+                  regex: "(.+)"
+                  target_label: __metrics_path__
+                - source_labels: [__meta_kubernetes_pod_ip, __meta_kubernetes_pod_annotation_prometheus_io_port]
+                  separator: ";"
+                  regex: "(.+);([0-9]+)"
+                  replacement: "$1:$2"
+                  target_label: __address__
+                - source_labels: [__meta_kubernetes_namespace]
+                  target_label: namespace
+                - source_labels: [__meta_kubernetes_pod_name]
+                  target_label: pod
+                - source_labels: [__meta_kubernetes_pod_container_name]
+                  target_label: container
+              metric_relabel_configs:
+                - source_labels: [__name__]
+                  regex: "istio_requests_total|istio_request_duration_milliseconds_(bucket|sum|count)|envoy_cluster_external_upstream_rq|envoy_http_downstream_rq_(total|4xx|5xx)|controller_runtime_reconcile_errors_total|resource_apply_total|watchable_subscribe_total"
+                  action: keep
+                - action: labelkeep
+                  regex: "__name__|namespace|pod|container|reporter|source_workload|destination_workload|response_code|connection_security_policy|le|envoy_cluster_name|envoy_response_code|envoy_http_conn_manager_prefix|controller|kind"
+      kubelet_stats:
+        collection_interval: 20s
+        auth_type: serviceAccount
+        endpoint: https://${env:K8S_NODE_IP}:10250
+        insecure_skip_verify: true
+        metric_groups: [pod, container]
+      file_log/istio:
+        include:
+          - /var/log/pods/hero-association_*_*/istio-proxy/*.log
+        include_file_path: true
+        start_at: end
+        operators:
+          - type: container
+      file_log/envoy:
+        include:
+          - /var/log/pods/envoy-gateway-system_envoy-hero-association-*_*/envoy/*.log
+        include_file_path: true
+        start_at: end
+        operators:
+          - type: container
+          - type: json_parser
+            if: 'body matches "^{.*}$"'
+            parse_from: body
+            parse_to: attributes
+            on_error: send
+    processors:
+      batch:
+        timeout: 5s
+      filter/pod_scope:
+        error_mode: ignore
+        metric_conditions:
+          - 'resource.attributes["k8s.namespace.name"] != "hero-association" and resource.attributes["k8s.namespace.name"] != "envoy-gateway-system"'
+      filter/istio_access:
+        error_mode: ignore
+        logs:
+          log_record:
+            - 'IsMatch(body, " HTTP/[0-9]")'
+      filter/envoy_access:
+        error_mode: ignore
+        logs:
+          log_record:
+            - 'log.attributes["response_code"] == nil'
+      transform/envoy_safe:
+        error_mode: ignore
+        log_statements:
+          - context: log
+            statements:
+              - 'set(log.body, "Envoy proxy request")'
+              - 'keep_keys(log.attributes, ["method", "response_code", "response_flags", "route_name", "duration"])'
+      transform/kubelet_labels:
+        error_mode: ignore
+        metric_statements:
+          - context: datapoint
+            statements:
+              - 'set(datapoint.attributes["namespace"], resource.attributes["k8s.namespace.name"]) where resource.attributes["k8s.namespace.name"] != nil'
+              - 'set(datapoint.attributes["pod"], resource.attributes["k8s.pod.name"]) where resource.attributes["k8s.pod.name"] != nil'
+              - 'set(datapoint.attributes["container"], resource.attributes["k8s.container.name"]) where resource.attributes["k8s.container.name"] != nil'
+      resource/istio:
+        attributes:
+          - key: service.name
+            value: istio-sidecar
+            action: upsert
+      resource/envoy:
+        attributes:
+          - key: service.name
+            value: envoy-gateway-proxy
+            action: upsert
+    exporters:
+      otlp_grpc:
+        endpoint: otel-lgtm.hero-association-observability.svc.cluster.local:4317
+        tls:
+          insecure: true
+    service:
+      pipelines:
+        metrics/proxies:
+          receivers: [prometheus/proxies]
+          processors: [batch]
+          exporters: [otlp_grpc]
+        metrics/pods:
+          receivers: [kubelet_stats]
+          processors: [filter/pod_scope, transform/kubelet_labels, batch]
+          exporters: [otlp_grpc]
+        logs/istio:
+          receivers: [file_log/istio]
+          processors: [filter/istio_access, resource/istio, batch]
+          exporters: [otlp_grpc]
+        logs/envoy:
+          receivers: [file_log/envoy]
+          processors: [filter/envoy_access, transform/envoy_safe, resource/envoy, batch]
+          exporters: [otlp_grpc]
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: observability-agent
+  namespace: hero-association-observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hero-association-observability-agent
+rules:
+  - apiGroups: [""]
+    resources: [nodes/stats]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hero-association-observability-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hero-association-observability-agent
+subjects:
+  - kind: ServiceAccount
+    name: observability-agent
+    namespace: hero-association-observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hero-association-observability-pods
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: observability-agent-pods
+  namespace: hero-association
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hero-association-observability-pods
+subjects:
+  - kind: ServiceAccount
+    name: observability-agent
+    namespace: hero-association-observability
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: observability-agent-pods
+  namespace: envoy-gateway-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: hero-association-observability-pods
+subjects:
+  - kind: ServiceAccount
+    name: observability-agent
+    namespace: hero-association-observability
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: observability-agent
+  namespace: hero-association-observability
+spec:
+  selector:
+    matchLabels:
+      app: observability-agent
+  template:
+    metadata:
+      labels:
+        app: observability-agent
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      serviceAccountName: observability-agent
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: collector
+          image: grafana/otel-lgtm:0.34.0@sha256:b966ea107831d526d9eb8fe4d2d86c9e5731392fad9dce8296bcf2072031f07c
+          command: [/otel-lgtm/otelcol-contrib/otelcol-contrib]
+          args: [--config=/etc/otel-agent/config.yaml]
+          env:
+            - name: K8S_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: K8S_NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 384Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/otel-agent
+              readOnly: true
+            - name: pod-logs
+              mountPath: /var/log/pods
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: observability-agent
+        - name: pod-logs
+          hostPath:
+            path: /var/log/pods
+            type: Directory

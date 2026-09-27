@@ -14,7 +14,7 @@ The backend is split into independently buildable services:
 - `backend/hero-association-bff`: the public API boundary on port `8080`; it
   protects browser requests with a session and CSRF, then forwards its
   server-held Keycloak access token with the current `/api/...` contract. In
-  the containerized edge topology, Caddy is its only public ingress.
+  the containerized edge topology, Traefik is its only public ingress.
 - `backend/hero-association-core`: the private game-state service on port
   `8081`; it validates the access token's issuer, signature, expiry, subject,
   and `hero-association-core` audience, owns PostgreSQL, and separates
@@ -38,11 +38,19 @@ status and response body for the browser.
 
 Game Core exposes agency game state and persisted rune loadouts at
 `/api/v1/agencies/{agencyId}`. The BFF forwards the same public paths, so the
-frontend always calls `http://localhost:8080/api/...` rather than Core.
+frontend always calls `http://localhost:17080/api/...` rather than Core.
 
 - `GET /api/v1/account` provisions and returns the Account corresponding to
   the authenticated Keycloak subject. `POST /api/v1/account/manager` creates
   its one Manager with a unique, case-insensitive display name.
+- `POST /api/v1/agencies` lets an onboarded Manager with no membership create
+  an empty Level 1 agency. Its 3-to-100-character name is unique
+  case-insensitively, the creator becomes its `LEADER`, and `201 Created`
+  returns its empty agency state.
+- `GET /api/v1/recruits` lists the globally available initial NPCs for an
+  onboarded Manager. `POST /api/v1/agencies/{agencyId}/heroes` claims the
+  request body's `recruitId` for an agency member and returns its updated state.
+  `GET /api/v1/agencies/{agencyId}/heroes/{heroId}` returns a membership-protected hero detail.
 - `GET /api/v1/agencies/{agencyId}/state` returns an agency, its leader and
   upgrade levels, heroes, parties and quests, rune and item inventory, hero
   rune slots, feed posts, and any persisted quest-combat snapshot.
@@ -77,21 +85,29 @@ frontend always calls `http://localhost:8080/api/...` rather than Core.
   state.
 - An unknown agency returns `404 Not Found` with an error message.
 
+The initial recruitment board contains Alden Steelward (Warrior), Seris
+Dawnflame (Mage), and Tarin Windmark (Archer). Each is a globally unique, free
+Level 1 NPC that can be claimed once by an agency member. Claiming starts the
+hero in `TRAINING` with full class health and mana and 100% stamina. A missing
+candidate returns `404 Not Found`; a previously claimed candidate returns `409
+Conflict`.
+
 The response includes all five rune slots for every hero, including empty
 slots. Hero class values define base health, mana, and per-second health and
 mana recovery. Every five seconds, a background worker restores agency heroes'
 health and mana from their elapsed time: `TRAINING` uses the base class rate
 and `RESTING` uses twice that rate. Stamina recovery is not implemented yet.
-Equipping and replacing runes atomically moves one rune between
-the agency inventory and a hero slot. A rune that is unavailable in inventory
-returns `409 Conflict`; a slot outside 0 through 4 returns `400 Bad Request`.
+Equipping and replacing runes atomically moves one rune between the agency
+inventory and a hero slot. A rune that is unavailable in inventory or a hero
+who is on a quest returns `409 Conflict`; a slot outside 0 through 4 returns
+`400 Bad Request`.
 Agency item inventory contains stackable materials. The seed contains Magic
 Crystals and Iron Ingots; item equipment and quest drops are not implemented
 yet.
 Agency levels are Agency, Training, Rest, Size, Reputation, and Intelligence.
 Rest represents the agency's recovery facilities; there is no Medical Level.
 Its concrete upgrade effect is still to be defined. Quest heroes cannot change
-their agency activity and return `409 Conflict`.
+their agency activity or rune loadout and return `409 Conflict`.
 Prepared-party members remain at the agency and retain their `TRAINING` or
 `RESTING` activity until a quest starts. Party membership cannot change while
 the party is on an in-progress quest, and a quest hero cannot be moved into a
@@ -103,23 +119,23 @@ whose member count is inside that quest's range. It changes the quest to
 `IN_PROGRESS`, links it to the party, and changes every party member to
 `ON_QUEST`. It persists `startedAt` and `expectedCompletionAt`, calculated
 from the quest duration. A quest that is not `AVAILABLE` returns `409
-Conflict`; an ineligible party size returns `400 Bad Request`. Timed
-progression and combat resolution are not exposed or persisted on the backend
-yet. The internal combat engine is deterministic: callers advance a supplied
-combat time and supply its random source. It resolves independent basic-attack
+Conflict`; an ineligible party size returns `400 Bad Request`. In-progress
+combat progresses through its persisted snapshot and the combat-sync command.
+The internal combat engine is deterministic: callers advance a supplied combat
+time and supply its random source. It resolves independent basic-attack
 timers, hero health and mana recovery, mage spell cooldowns and mana costs,
-critical hits, deaths, and battle completion. The seeded Troll quest has a
-persisted, API-visible combat snapshot with every combatant's resources,
-statistics, and next action times. It also retains the latest 100
-server-generated combat events, including actions, recovery, mana costs, hits,
-criticals, and defeats. A combat sync command restores that snapshot into the
-engine, advances it by the time since its previous sync, and persists the
-result and any new events atomically. A background worker uses the same
-operation every five seconds for all active snapshots. `GET /state` is
-read-only and does not advance combat. Newly started quests do not create a
-snapshot yet. Each synchronization also persists the current health and mana
-of heroes in the encounter; stamina, rewards, and death resolution are not
-implemented yet.
+critical hits, deaths, and battle completion. Every quest start creates a
+persisted, API-visible combat snapshot from the party's current resources,
+class combat values, and equipped Critical Chance and Critical Damage Rune
+effects, with one provisional creature per required objective. The snapshot
+retains its latest 100 server-generated combat events, including actions,
+recovery, mana costs, hits, criticals, and defeats. A combat-sync command
+restores a snapshot into the engine, advances it by the time since its
+previous sync, and persists the result and any new events atomically. A
+background worker uses the same operation every five seconds for all active
+snapshots. `GET /state` is read-only and does not advance combat. Each
+synchronization also persists the current health and mana of heroes in the
+encounter; stamina, rewards, and death resolution are not implemented yet.
 Feed posts are limited to 500 characters. An agency can post as itself, its
 single current leader, or one of its heroes; the author must belong to the
 agency. Agency membership authorization is enforced; feed visibility beyond an
@@ -137,6 +153,11 @@ remaining reserved gold or items. Market-order creation and cancellation
 require agency leadership. Order history and expanded item categories are
 deferred.
 
+Agency names, like Manager display names, are unique case-insensitively. The
+initial agency-creation flow is intentionally limited to a Manager with no
+membership; leaving an agency, invitations, and ownership transfer remain
+separate rules.
+
 All persistent entity IDs and API resource IDs use RFC 9562 UUID version 7
 (UUIDv7). PostgreSQL stores them in native `uuid` columns. Sequential numeric
 IDs must not be added for entities or exposed through the API.
@@ -151,39 +172,49 @@ IDs must not be added for entities or exposed through the API.
 - Until Flyway is introduced, application startup drops and recreates the
   schema, then loads deterministic state from `import.sql`. The seed contains
   local Accounts for the Dawnwatch and Ironridge managers, Dawnwatch Agency,
-  its leader, six heroes, Broken Pass Party and its
-  in-progress quest and its initial Troll combat snapshot, the available Lost
-  Courier quest, rune inventory, Magic Crystals, Iron Ingots, equipped runes,
-  two feed posts, Ironridge Exchange, and its open market orders. This
-  development-only workflow does not retain application data.
+  its leader and six heroes, the three globally available recruitment NPCs,
+  Broken Pass Party and its in-progress quest and initial Troll combat snapshot,
+  the available Lost Courier quest, rune inventory, Magic Crystals, Iron
+  Ingots, equipped runes, two feed posts, Ironridge Exchange, and its open
+  market orders. This development-only workflow does not retain application data.
+  The product is in an early stage, so local and pre-production schema and
+  seed-data changes may be applied directly by resetting and recreating data;
+  they do not require backwards compatibility before Flyway is introduced.
 - Local development runs the `postgres-core`, `postgres-keycloak`, and
-  `postgres-bff` Docker Compose services plus Keycloak, Game Core directly on
-  the host at port `8081`, and the BFF directly on the host at port `8080`.
-  The Core dev profile connects to PostgreSQL at `localhost:5432`; the BFF
-  session store connects at `localhost:5433`. Quarkus Dev Services is disabled
-  for Core development but remains available to the test profiles.
-- Keycloak runs locally at `http://localhost:8180` with a dedicated PostgreSQL
-  database and imports the versioned `hero-association` realm. Compose requires
-  an ignored `backend/.env` created from `backend/.env.example`; it contains
-  local bootstrap, client-secret, session-state, and CSRF signing values.
-- `backend/compose.caddy.yaml` is an optional full-container local HTTPS
-  overlay. With `heroassociation.test` and `auth.heroassociation.test` mapped
-  to `127.0.0.1`, Caddy serves the packaged frontend, proxies BFF routes at the
-  first hostname, and proxies Keycloak at the second. It is intentionally not
-  the default development workflow because Vite and Quarkus hot reload run
-  directly on the host.
+  `redis-bff` Docker Compose services plus Keycloak and Traefik through
+  `backend/compose.infra.yaml`. Game Core runs directly on the host at port
+  `17081`, the BFF at `17080`, and Vite at `15172`. The Core dev profile
+  connects to PostgreSQL at `localhost:15431`; the BFF session store connects
+  to Redis at `localhost:16379`. Quarkus Dev Services is disabled for Core
+  development but remains available to the test profiles.
+- Traefik terminates local HTTPS at `heroassociation.test` and
+  `auth.heroassociation.test`, proxying the first hostname to host-run Vite and
+  BFF routes and the second to Keycloak. `backend/scripts/start-infra.sh`
+  resolves WSL's current address before it runs the one-line Compose command,
+  which keeps this secure browser path working after WSL restarts.
+- Keycloak also remains available locally at `http://localhost:17180` with a
+  dedicated PostgreSQL database and imports the versioned `hero-association`
+  realm. Compose requires an ignored `backend/.env` created from
+  `backend/.env.example`; it contains local bootstrap, client-secret,
+  session-state, and CSRF signing values. `backend/compose.traefik.yaml` remains
+  an optional all-container packaged-application HTTPS overlay.
 - The local Keycloak realm uses the versioned `hero-association` CSS-only login
   theme. It extends Keycloak's `keycloak.v2` theme and matches the frontend's
-  dark, gold-accented visual language without replacing Keycloak templates.
+  dark, gold-accented visual language without replacing Keycloak templates. It
+  provides two seeded Manager users plus `user3@mail.com`, initially
+  unprovisioned for onboarding, no-agency, and first-agency creation tests.
+  Native registration does not request first or last name: those optional
+  Keycloak fields are administrator-managed seed data in this early stage.
 - The BFF uses Keycloak's confidential authorization-code flow with PKCE. Its
-  Keycloak token state is stored server-side in the BFF PostgreSQL database;
-  browser sessions use an `HttpOnly`, `SameSite` cookie. `/api/v1/session` is
+  Keycloak token state is stored server-side in the BFF Redis instance;
+  browser sessions use an `HttpOnly`, `SameSite` cookie. Production Redis must
+  be private, authenticated, TLS protected, and encrypted at rest. `/api/v1/session` is
   public, but all proxied game routes require a BFF session and state-changing
   requests require the signed double-submit CSRF token.
 - Signed-out frontend users can select **Sign in** or **Create account**. The
   latter starts Keycloak's native registration page through the protected BFF
-  OIDC route, with Quarkus forwarding only the standard `prompt=create` hint while retaining
-  state and PKCE ownership.
+  OIDC route, with Quarkus forwarding only the standard `prompt=create` hint
+  while retaining state and PKCE ownership.
 - Signing out uses OIDC RP-initiated logout. The BFF clears its local session,
   Keycloak ends the browser SSO session, and the browser returns through the
   registered, state-validated BFF post-logout callback before it is redirected
@@ -192,33 +223,36 @@ IDs must not be added for entities or exposed through the API.
   validate the callback. The local Keycloak realm registers distinct callbacks
   for the normal development BFF and the isolated Playwright E2E frontend
   proxy only.
+  An already signed-out visit to `/auth/logout` returns to the frontend
+  without trying provider logout.
 - Game Core requires a valid Keycloak bearer access token for every `/api/...`
   route. The BFF's Keycloak client mapper adds the `hero-association-core`
   audience to its access tokens before the BFF forwards them over the private
   service network.
 - The first authenticated Account request provisions a UUIDv7 `account` row
   from the immutable Keycloak subject. React then requires the player to choose
-  a unique Manager name before displaying the prototype. `agency_member` then
-  controls access to agency state and commands; a Manager without an agency
-  membership sees no shared game data. Both roles can run gameplay commands,
-  while leaders alone can create or cancel market orders.
+  a unique Manager name. A Manager without an agency membership can create one
+  empty Level 1 agency and becomes its leader; `agency_member` controls access
+  to agency state and commands. Both roles can run gameplay commands, while
+  leaders alone can create or cancel market orders.
 - The local Keycloak realm seeds `user1@mail.com` / `user1` and
   `user2@mail.com` / `user2` with matching Account and Manager records. Their
-  seeded manager names are `User 1` and `User 2`, so local sessions and game
+  direct Keycloak profile names are `User1 Last1` and `User2 Last2`; their
+  seeded Manager names are `User 1` and `User 2`, so local sessions and game
   data are immediately distinguishable. They must never be used outside local
   development.
-- Docker Compose runs all three PostgreSQL services, Keycloak, Game Core, and
-  the BFF using JVM packages by default. Only the BFF publishes port `8080`;
-  Core remains on the private Compose network. Keycloak publishes port `8180`
-  for its local login and admin pages. The optional Caddy overlay instead
-  publishes only ports `80` and `443`; BFF, Keycloak, Core, and PostgreSQL stay
-  private while the local Caddy CA provides HTTPS for the `.test` domains.
+- Docker Compose runs Core and Keycloak PostgreSQL services, Redis, Game Core, and
+  the BFF using JVM packages by default. Only the BFF publishes port `17080`;
+  Core remains on the private Compose network. Keycloak publishes port `17180`
+  for its local login and admin pages. The optional Traefik overlay instead
+  publishes only ports `80` and `443`; BFF, Keycloak, Core, PostgreSQL, and Redis stay
+  private while the local development CA provides HTTPS for the `.test` domains.
 - Each service has an independent Maven fast-jar build. Native compilation is
   currently an opt-in Game Core build with `-Dnative`.
 - Game Core's `Dockerfile.native` provides a `native-runtime` target that
   packages a prebuilt Linux native executable and a `native-multistage` target
   that compiles it in Docker. The native Docker Compose workflow runs that
-  native Core behind the JVM BFF and PostgreSQL.
+  native Core behind the JVM BFF, Redis, and PostgreSQL.
 
 ## Frontend prototype
 
@@ -226,42 +260,41 @@ IDs must not be added for entities or exposed through the API.
 - The frontend starts by requesting the BFF session. Signed-out users see a
   sign-in screen; signed-in users receive no Keycloak tokens in browser storage.
   The Vite development proxy forwards both `/api` and `/auth` routes to the
-  BFF so the OIDC redirect uses the BFF's `localhost:8080` callback. Its proxy
+  BFF so the OIDC redirect uses the BFF's `localhost:17080` callback. Its proxy
   origin is normally rewritten to the BFF target; the isolated container-browser
   E2E stack preserves the browser-visible host so its callback returns through
   Vite. That stack explicitly allowlists its Docker browser host in Vite;
   normal development keeps Vite's default host protection.
 - After Account and Manager onboarding, it opens the first authorized agency
-  membership through Vite's `/api`
-  development proxy. If the API is unavailable, a visible notice explains that
-  the UI has fallen back to a local fixture.
-- The frontend needs the BFF on `http://localhost:8080` by default;
+  membership through Vite's `/api` development proxy. If the API is unavailable,
+  a visible notice explains that the UI has fallen back to a local fixture.
+- The frontend needs the BFF on `http://localhost:17080` by default;
   `VITE_API_PROXY_TARGET` can override that Vite development proxy target. A
   local `VITE_API_PROXY_CHANGE_ORIGIN=false` setting preserves the original
-  host for controlled OIDC callback workflows. A
-  production deployment routes same-origin `/api` requests to the BFF; the
-  browser never calls Game Core directly.
-- Clicking the seeded in-progress quest expands an inline Phaser combat scene.
-  Phaser renders the server-provided combat snapshot; it does not calculate
-  attacks, recovery, spells, critical hits, or outcomes. It replays only new
-  server-generated events while the scene is open. While expanded, the frontend
-  calls the combat-sync command every two seconds; the backend worker continues
-  combat when the view is closed.
-- The frontend refreshes agency state every five seconds while its browser tab
-  is visible, and immediately when the tab becomes visible again. This keeps
-  agency recovery, feed posts, market orders, and background quest progress
-  current without requiring WebSocket or server-sent event connections.
-- The combat prototype starts the three heroes at Level 1 and displays their
-  current health and mana beside their respective bars. Placeholder trolls
+  host for controlled OIDC callback workflows. A production deployment routes
+  same-origin `/api` requests to the BFF; the browser never calls Game Core
+  directly.
+- The frontend refreshes agency state and the recruitment board every five
+  seconds while its browser tab is visible, and immediately when the tab becomes
+  visible again. This keeps agency recovery, feed posts, market orders, and
+  background quest progress current without requiring WebSocket or server-sent
+  event connections.
+- Clicking the primary in-progress quest expands an inline Phaser combat scene.
+  Phaser renders the server-provided active combat snapshot; it does not
+  calculate attacks, recovery, spells, critical hits, or outcomes. It replays
+  only new server-generated events while the scene is open. While expanded, the
+  frontend calls the combat-sync command every two seconds; the backend worker
+  continues combat when the view is closed.
+- The combat prototype starts the three seeded heroes at Level 1 and displays
+  their current health and mana beside their respective bars. Placeholder trolls
   also display a 100-mana bar.
 - Resource values appear to the left of hero bars and to the right of creature
-  bars.
-- Hero resource bars empty from the right; creature resource bars empty from
-  the left.
+  bars. Hero resource bars empty from the right; creature resource bars empty
+  from the left.
 - There is no base critical-hit chance. A Critical Chance Rune adds 1% critical
   chance, and a Critical Damage Rune adds 10 percentage points to the
-  critical-damage multiplier: 200% damage becomes 210%. These values are in
-  the server combat snapshot and are applied by the server engine.
+  critical-damage multiplier: 200% damage becomes 210%. A new combat snapshot
+  sums its heroes' equipped critical rune effects before the server engine runs.
 - Elara Moonweaver is Magic Level 15 and has two displayed mage spell slots.
   Fire Ball costs 20 mana, deals `10 + 150% of Magic Level` to one creature,
   and has a three-second cooldown. Lightning Rail costs 40 mana, deals
@@ -270,32 +303,41 @@ IDs must not be added for entities or exposed through the API.
   is ready and Elara has sufficient mana. A dark radial overlay clears from
   right to left across a spell icon to visualize the cooldown reported in the
   latest snapshot.
-- The Heroes screen separates the active quest's named party, prepared
-  parties, and unassigned heroes at the agency. Multiple active parties are
-  displayed independently. Agency heroes can persistently switch between
-  Training and Resting, without numeric training stats.
-  Prepared parties can be named, filled, and changed through the backend;
-  their members retain their agency activity until a quest starts.
-- The Quests screen reads available and active quests from the API. A manager
-  can select a prepared party and start an eligible available quest. The Phaser
-  combat view remains attached only to the initially seeded active quest, but
-  it renders and synchronizes its server snapshot. Newly started quests do not
-  yet create combat snapshots.
+- The Heroes screen loads the global recruitment board. It lets an agency member
+  claim a free initial NPC and immediately refreshes the agency roster; a
+  claimed NPC disappears from the board for every agency. The screen also
+  separates active quest parties, prepared parties, and unassigned heroes at
+  the agency. Agency heroes can persistently switch between Training and
+  Resting, without numeric training stats. Prepared parties can be named,
+  filled, and changed through the backend; their members retain their agency
+  activity until a quest starts.
+- The Quests screen reads available, active, and resolved quests from the API.
+  A manager can select a prepared party and start an eligible available quest.
+  Every quest start creates a server combat snapshot using each party member's
+  current resources, class combat values, and equipped Critical Chance and
+  Critical Damage Rune effects, plus one creature for every required objective.
+  Until per-creature difficulty is designed, new creatures use a shared
+  provisional profile: 120 health, 10 damage, a 1.6-second attack
+  interval, 100 mana, no recovery, and no critical chance. Phaser renders any
+  active quest snapshot. `HERO_VICTORY` completes a quest and
+  `CREATURE_VICTORY` fails it. Either result sets `finishedAt`, releases the
+  party, and returns its heroes to Training; rewards, stamina costs, permanent
+  death, and death fees remain unimplemented.
 - A background worker restores agency hero health and mana every five seconds
   from elapsed full seconds. Training uses the base class rate and Resting uses
   twice that rate. Stamina recovery is not implemented yet.
 - The server combat engine recovers hero health and mana once per second. Warrior
   recovery is 10 health and 2 mana; Mage recovery is 2 health and 10 mana;
-  Archer recovery is 6 health and 6 mana.
-- Party members are shown as earning experience from creatures.
+  Archer recovery is 6 health and 6 mana. Party members are shown as earning
+  experience from creatures.
 - The stamina display is green at 80% or more, yellow from 30% through 79%,
   and red below 30%. The matching experience gain is 150%, 100%, and 50%.
 - Every hero card ends with five rune slots loaded from the API. Heroes with
   learned spells also show their spell slots; currently only Elara has the two
   mage spells. Critical Chance and Critical Damage Runes affect server combat;
-  other rune stat effects do not yet change gameplay.
-- Combat displays five read-only rune slots for each hero so their equipped
-  loadout is visible. Creatures do not display rune slots.
+  other rune stat effects do not yet change gameplay. Combat displays five
+  read-only rune slots for each hero so their equipped loadout is visible;
+  creatures do not display rune slots.
 - The initial quest party equips a Critical Chance Rune on every hero, and
   Elara also equips a Critical Damage Rune. Each initial troll has a 10%
   critical-hit chance.
@@ -329,3 +371,57 @@ Run the BFF test suite with:
 cd hero-association/backend/hero-association-bff
 ./mvnw test
 ```
+
+## Isolated k3d backend lab
+
+The k3d environment is independent of normal Compose development and uses
+Envoy Gateway for browser ingress. Its first backend deployment runs JVM BFF
+and Core images, one replica each, with private ClusterIP Services and opt-in
+Istio sidecars. Separate PostgreSQL databases serve Core and Keycloak, and a
+separate Redis instance stores BFF sessions. Generated lab-only credentials
+and a k3d-only Keycloak realm register callbacks and issuer URLs on port
+`19443`; the normal development realm and data are unchanged. Kubernetes
+startup, readiness, and liveness probes use Quarkus SmallRye Health. Core
+uses a `Recreate` rollout because schema drop-and-create and seeding still
+happen on startup. Do not scale Core until schema bootstrap and scheduled
+progression/recovery have been made safe for multiple Pods. The k3d frontend
+is a separate non-meshed Nginx Pod with a private Service; Envoy Gateway routes
+its root path to the frontend while `/api` and `/auth` reach BFF. The normal
+Vite/Compose development environment is unchanged. An isolated Playwright
+suite verifies seeded-user login, logout, login again, account identity, and
+an authorized agency-state API read through k3d HTTPS. It does not reset
+cluster data; Windows browser certificate trust remains a manual setup step.
+
+Core's k3d `PeerAuthentication` is STRICT and workload-scoped; BFF-to-Core
+traffic is reported by Istio as `mutual_tls`, while a plaintext request from
+the non-meshed frontend Pod is rejected. BFF and Core have distinct Kubernetes
+ServiceAccounts. A Core-scoped Istio `AuthorizationPolicy` allows only callers
+presenting the BFF ServiceAccount identity; another meshed identity receives
+403. BFF remains reachable through Envoy Gateway. Core's OIDC checks still
+authorize the end user on protected APIs. Changing Core's ServiceAccount
+restarts its Pod and currently drops and reseeds its disposable database.
+
+A preliminary k3d baseline uses four authenticated clients for 60 seconds
+of read-only agency-state requests through Envoy Gateway, BFF, and Core,
+sharing one local-only account session.
+Resource requests are 300m CPU / 256Mi memory for BFF and 500m / 384Mi for
+Core, based on observed single-Pod CPU and memory under that traffic. This
+does not establish capacity for writes, combat, or 2-to-8-Pod scaling.
+
+In the k3d lab, BFF and Core export OTLP traces, HTTP/JVM metrics, and
+structured logs to the private observability Pod. Packaged containers
+write JSON console logs. BFF creates a client span for its Java HTTP call
+and propagates W3C trace context to Core, producing a single distributed
+trace. Auth routes and raw agency-ID paths are excluded from tracing, and
+Redis client spans are disabled to avoid exporting connection strings.
+No bearer tokens, request bodies, email addresses, or manager names are
+added as custom telemetry attributes. Normal host-run development keeps
+telemetry disabled unless explicitly opted in; the same is true of normal
+Docker Compose. In k3d, a per-node collector exports selected Istio and
+Envoy Gateway metrics, Pod CPU/memory metrics for the application and Gateway
+namespaces, Istio diagnostic logs, and sanitized Envoy proxy access logs.
+Raw request paths and client IPs are removed from collected access logs;
+diagnostic messages can still contain arbitrary text. The lab provisions
+traffic and scaling dashboards, retains Prometheus, Loki, and
+Tempo data for up to 24 hours, and uses ephemeral storage that is cleared
+when the observability Pod is replaced.

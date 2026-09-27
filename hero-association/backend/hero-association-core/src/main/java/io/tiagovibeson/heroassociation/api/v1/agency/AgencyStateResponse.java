@@ -112,6 +112,7 @@ public record AgencyStateResponse(
             long goldReward,
             Instant startedAt,
             Instant expectedCompletionAt,
+            Instant finishedAt,
             UUID partyId,
             QuestCombatResponse combat) {
 
@@ -134,6 +135,7 @@ public record AgencyStateResponse(
                     quest.getGoldReward(),
                     quest.getStartedAt(),
                     quest.getExpectedCompletionAt(),
+                    quest.getFinishedAt(),
                     quest.getParty() == null ? null : quest.getParty().getId(),
                     QuestCombatResponse.from(quest.getCombat()));
         }
@@ -266,7 +268,7 @@ public record AgencyStateResponse(
             UUID partyId,
             List<RuneSlotResponse> runeSlots) {
 
-        private static HeroResponse from(Hero hero) {
+        public static HeroResponse from(Hero hero) {
             Map<Integer, Rune> runeBySlot = hero.getRuneSlots().stream()
                     .collect(Collectors.toMap(HeroRune::getSlotIndex, HeroRune::getRune));
             return new HeroResponse(

@@ -1,0 +1,11 @@
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: core-strict-mtls
+  namespace: hero-association
+spec:
+  selector:
+    matchLabels:
+      app: core
+  mtls:
+    mode: STRICT

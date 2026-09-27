@@ -2,6 +2,7 @@ package io.tiagovibeson.heroassociation.api.v1.agency;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.notNullValue;
 
 import io.quarkus.test.junit.QuarkusTest;
@@ -56,6 +57,12 @@ class QuestControllerTest {
                 .body("quests.find { it.id == '%s' }.partyId".formatted(LOST_COURIER_QUEST_ID), is(courierPartyId))
                 .body("parties.find { it.id == '%s' }.quest.title".formatted(courierPartyId), is("Lost Courier"))
                 .body("quests.find { it.id == '%s' }.startedAt".formatted(LOST_COURIER_QUEST_ID), notNullValue())
+                .body("quests.find { it.id == '%s' }.combat.status".formatted(LOST_COURIER_QUEST_ID), is("IN_PROGRESS"))
+                .body("quests.find { it.id == '%s' }.combat.currentTimeMilliseconds".formatted(LOST_COURIER_QUEST_ID), is(0))
+                .body("quests.find { it.id == '%s' }.combat.combatants".formatted(LOST_COURIER_QUEST_ID), hasSize(5))
+                .body("quests.find { it.id == '%s' }.combat.combatants.find { it.team == 'HEROES' }.heroId".formatted(LOST_COURIER_QUEST_ID), is(OAKSHIELD_ID))
+                .body("quests.find { it.id == '%s' }.combat.combatants.find { it.team == 'CREATURES' }.name".formatted(LOST_COURIER_QUEST_ID), is("Forest Wolf"))
+                .body("quests.find { it.id == '%s' }.combat.combatants.find { it.team == 'CREATURES' }.maxHealth".formatted(LOST_COURIER_QUEST_ID), is(120))
                 .body("quests.find { it.id == '%s' }.expectedCompletionAt".formatted(LOST_COURIER_QUEST_ID), notNullValue())
                 .body("heroes.find { it.id == '%s' }.activity".formatted(OAKSHIELD_ID), is("ON_QUEST"));
 

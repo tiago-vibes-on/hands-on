@@ -1,0 +1,28 @@
+{
+	# These are local-only names. Caddy creates a local development CA rather
+	# than requesting public certificates for them.
+	local_certs
+}
+
+https://heroassociation.test {
+	tls internal
+	encode zstd gzip
+
+	handle /api* {
+		reverse_proxy {$HERO_ASSOCIATION_DEV_HOST_ADDRESS}:17080
+	}
+
+	handle /auth* {
+		reverse_proxy {$HERO_ASSOCIATION_DEV_HOST_ADDRESS}:17080
+	}
+
+	handle {
+		reverse_proxy {$HERO_ASSOCIATION_DEV_HOST_ADDRESS}:15172
+	}
+}
+
+https://auth.heroassociation.test {
+	tls internal
+
+	reverse_proxy keycloak:8080
+}

@@ -27,6 +27,12 @@ public class AuthenticationResource {
     }
 
     @GET
+    @Path("/logout")
+    public Response logoutWithoutSession() {
+        return Response.seeOther(URI.create(frontendUrl)).build();
+    }
+
+    @GET
     @Path("/post-logout")
     public Response postLogout(@QueryParam("state") String state, @CookieParam("q_post_logout") Cookie logoutState) {
         if (state == null || logoutState == null || !state.equals(logoutState.getValue())) {

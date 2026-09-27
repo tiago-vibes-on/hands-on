@@ -1,0 +1,117 @@
+# Grafana's all-in-one OTel/LGTM image is for this disposable local lab only.
+# It bundles OpenTelemetry Collector, Prometheus, Loki, Tempo, and Grafana.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-lgtm
+  namespace: hero-association-observability
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: otel-lgtm
+  template:
+    metadata:
+      labels:
+        app: otel-lgtm
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: otel-lgtm
+          image: grafana/otel-lgtm:0.34.0@sha256:b966ea107831d526d9eb8fe4d2d86c9e5731392fad9dce8296bcf2072031f07c
+          env:
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-admin
+                  key: admin-password
+            - name: PROMETHEUS_EXTRA_ARGS
+              value: --storage.tsdb.retention.time=24h --storage.tsdb.retention.size=2GB
+          ports:
+            - name: grafana
+              containerPort: 3000
+            - name: loki
+              containerPort: 3100
+            - name: tempo
+              containerPort: 3200
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+            - name: prometheus
+              containerPort: 9090
+          startupProbe:
+            exec:
+              command: ["cat", "/tmp/ready"]
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: ["cat", "/tmp/ready"]
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              memory: 4Gi
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: retention
+              mountPath: /otel-lgtm/loki-config.yaml
+              subPath: loki-config.yaml
+              readOnly: true
+            - name: retention
+              mountPath: /otel-lgtm/tempo-config.yaml
+              subPath: tempo-config.yaml
+              readOnly: true
+            - name: dashboards
+              mountPath: /otel-lgtm/hero-association-dashboards
+              readOnly: true
+            - name: dashboards
+              mountPath: /otel-lgtm/grafana/conf/provisioning/dashboards/hero-association.yaml
+              subPath: provider.yaml
+              readOnly: true
+      volumes:
+        - name: data
+          emptyDir:
+            sizeLimit: 4Gi
+        - name: retention
+          configMap:
+            name: observability-retention
+        - name: dashboards
+          configMap:
+            name: observability-dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-lgtm
+  namespace: hero-association-observability
+spec:
+  type: ClusterIP
+  selector:
+    app: otel-lgtm
+  ports:
+    - name: grafana
+      port: 3000
+      targetPort: grafana
+    - name: loki
+      port: 3100
+      targetPort: loki
+    - name: tempo
+      port: 3200
+      targetPort: tempo
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http
+    - name: prometheus
+      port: 9090
+      targetPort: prometheus

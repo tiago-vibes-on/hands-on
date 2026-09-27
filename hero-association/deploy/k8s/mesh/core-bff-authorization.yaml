@@ -1,0 +1,15 @@
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: core-from-bff
+  namespace: hero-association
+spec:
+  selector:
+    matchLabels:
+      app: core
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/hero-association/sa/hero-association-bff

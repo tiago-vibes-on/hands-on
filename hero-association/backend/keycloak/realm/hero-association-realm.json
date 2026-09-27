@@ -16,8 +16,8 @@
       "id": "019c4c00-0100-7000-8000-000000000001",
       "username": "user1@mail.com",
       "email": "user1@mail.com",
-      "firstName": "User",
-      "lastName": "1",
+      "firstName": "User1",
+      "lastName": "Last1",
       "emailVerified": true,
       "enabled": true,
       "credentials": [
@@ -32,8 +32,8 @@
       "id": "019c4c00-0100-7000-8000-000000000002",
       "username": "user2@mail.com",
       "email": "user2@mail.com",
-      "firstName": "User",
-      "lastName": "2",
+      "firstName": "User2",
+      "lastName": "Last2",
       "emailVerified": true,
       "enabled": true,
       "credentials": [
@@ -43,8 +43,37 @@
           "temporary": false
         }
       ]
+    },
+    {
+      "id": "019c4c00-0100-7000-8000-000000000003",
+      "username": "user3@mail.com",
+      "email": "user3@mail.com",
+      "firstName": "User3",
+      "lastName": "Last3",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "user3",
+          "temporary": false
+        }
+      ]
     }
   ],
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "subType": "org.keycloak.userprofile.UserProfileProvider",
+        "config": {
+          "kc.user.profile.config": [
+            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"${username}\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"${email}\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"firstName\",\"displayName\":\"${firstName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"lastName\",\"displayName\":\"${lastName}\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false}],\"groups\":[]}"
+          ]
+        }
+      }
+    ]
+  },
   "clients": [
     {
       "clientId": "hero-association-core",
@@ -70,8 +99,10 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "redirectUris": [
-        "http://localhost:8080/auth/callback",
-        "http://localhost:8080/auth/post-logout",
+        "http://localhost:17080/auth/callback",
+        "http://localhost:17080/auth/post-logout",
+        "http://localhost:19080/auth/callback",
+        "http://localhost:19080/auth/post-logout",
         "http://localhost:18080/auth/callback",
         "http://localhost:18080/auth/post-logout",
         "http://host.docker.internal:15173/auth/callback",
@@ -80,7 +111,8 @@
         "https://heroassociation.test/auth/post-logout"
       ],
       "webOrigins": [
-        "http://localhost:8080",
+        "http://localhost:17080",
+        "http://localhost:19080",
         "http://localhost:18080",
         "http://host.docker.internal:15173",
         "https://heroassociation.test"

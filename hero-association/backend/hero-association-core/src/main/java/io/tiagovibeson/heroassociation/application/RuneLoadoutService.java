@@ -5,11 +5,13 @@ import java.util.UUID;
 import io.tiagovibeson.heroassociation.api.v1.agency.AgencyStateResponse;
 import io.tiagovibeson.heroassociation.application.exception.AgencyNotFoundException;
 import io.tiagovibeson.heroassociation.application.exception.HeroNotFoundException;
+import io.tiagovibeson.heroassociation.application.exception.HeroOnQuestException;
 import io.tiagovibeson.heroassociation.application.exception.InvalidRuneSlotException;
 import io.tiagovibeson.heroassociation.application.exception.RuneNotAvailableException;
 import io.tiagovibeson.heroassociation.domain.Agency;
 import io.tiagovibeson.heroassociation.domain.AgencyRune;
 import io.tiagovibeson.heroassociation.domain.Hero;
+import io.tiagovibeson.heroassociation.domain.HeroActivity;
 import io.tiagovibeson.heroassociation.domain.HeroRune;
 import io.tiagovibeson.heroassociation.domain.Rune;
 import io.tiagovibeson.heroassociation.repository.AgencyRepository;
@@ -48,6 +50,7 @@ public class RuneLoadoutService {
         Agency agency = findAgency(agencyId);
         agencyAccessService.requireMembership(agencyId);
         Hero hero = findHero(agencyId, heroId);
+        validateHeroAvailableForLoadout(hero);
         validateSlot(slotIndex);
         AgencyRune agencyRune = findAvailableRune(agencyId, runeId);
         HeroRune equippedRune = findEquippedRune(heroId, slotIndex);
@@ -68,7 +71,8 @@ public class RuneLoadoutService {
     public AgencyStateResponse unequip(UUID agencyId, UUID heroId, int slotIndex) {
         Agency agency = findAgency(agencyId);
         agencyAccessService.requireMembership(agencyId);
-        findHero(agencyId, heroId);
+        Hero hero = findHero(agencyId, heroId);
+        validateHeroAvailableForLoadout(hero);
         validateSlot(slotIndex);
         HeroRune equippedRune = findEquippedRune(heroId, slotIndex);
 
@@ -89,6 +93,12 @@ public class RuneLoadoutService {
         return heroRepository.find("id = ?1 and agency.id = ?2", heroId, agencyId)
                 .firstResultOptional()
                 .orElseThrow(() -> new HeroNotFoundException(heroId));
+    }
+
+    private void validateHeroAvailableForLoadout(Hero hero) {
+        if (hero.getActivity() == HeroActivity.ON_QUEST) {
+            throw new HeroOnQuestException(hero.getId());
+        }
     }
 
     private void validateSlot(int slotIndex) {

@@ -62,6 +62,26 @@ public class QuestCombat extends UuidEntity {
     protected QuestCombat() {
     }
 
+    public static QuestCombat start(Quest quest, List<Hero> heroes) {
+        QuestCombat combat = new QuestCombat();
+        combat.quest = quest;
+        combat.status = CombatStatus.IN_PROGRESS;
+        combat.currentTimeMilliseconds = 0;
+        combat.nextRecoveryAt = 1_000;
+        combat.lastSynchronizedAt = Instant.now();
+        combat.nextEventSequence = 0;
+        quest.assignCombat(combat);
+
+        for (int formationIndex = 0; formationIndex < heroes.size(); formationIndex++) {
+            Hero hero = heroes.get(formationIndex);
+            combat.combatants.add(QuestCombatant.forHero(combat, hero, formationIndex));
+        }
+        for (int formationIndex = 0; formationIndex < quest.getCreaturesRequired(); formationIndex++) {
+            combat.combatants.add(QuestCombatant.forCreature(combat, quest.getCreatureName(), formationIndex));
+        }
+        return combat;
+    }
+
     public Quest getQuest() {
         return quest;
     }

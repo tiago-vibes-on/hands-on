@@ -14,6 +14,9 @@ public class Agency extends UuidEntity {
     @Column(nullable = false, unique = true, length = 100)
     private String name;
 
+    @Column(name = "name_normalized", nullable = false, unique = true, length = 100)
+    private String nameNormalized;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "leader_id", nullable = false)
     private Manager leader;
@@ -43,6 +46,24 @@ public class Agency extends UuidEntity {
     private int intelligenceLevel;
 
     protected Agency() {
+    }
+
+    public Agency(String name, String nameNormalized, Manager leader) {
+        this.name = name;
+        this.nameNormalized = nameNormalized;
+        this.leader = leader;
+        this.gold = 0;
+        this.reputation = 0;
+        this.agencyLevel = 1;
+        this.trainingLevel = 1;
+        this.restLevel = 1;
+        this.sizeLevel = 1;
+        this.reputationLevel = 1;
+        this.intelligenceLevel = 1;
+    }
+
+    public String getNameNormalized() {
+        return nameNormalized;
     }
 
     public String getName() {

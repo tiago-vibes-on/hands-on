@@ -14,14 +14,17 @@ CSRF protection; Game Core owns Account provisioning and Manager onboarding.
 | Architecture and boundaries | Complete | Keycloak, BFF, Game Core, and the account model are defined in this document. |
 | Local Keycloak environment | Complete | Compose runs Keycloak with its own PostgreSQL database and imports the versioned Hero Association realm. |
 | BFF session flow | Complete | Keycloak login, callback, local logout, server-side sessions, a secure session cookie, and CSRF protection are implemented. |
+| Redis BFF token state | Complete | Quarkus stores Keycloak token state in BFF-owned Redis; the `postgres-bff` service has been removed. |
 | Frontend integration | Complete | React bootstraps the BFF session, offers sign-in and sign-out, and sends CSRF headers for writes. |
 | Game Core token validation | Complete | The BFF forwards its server-held Keycloak access token and Game Core rejects anonymous, invalid, or incorrectly addressed tokens. |
 | Account and manager onboarding | Complete | The first authenticated account request provisions an `Account`; React then requires a unique Manager display name before opening the game. |
-| Agency authorization | Complete | `AgencyMember` binds Managers to agencies; every agency read and command requires membership, and financial market commands require `LEADER`. |
-| Google sign-in | Not started | Configure Google as a Keycloak identity provider after native login works. |
+| Agency authorization | Complete | `AgencyMember` binds Managers to agencies; every agency read and command requires membership, financial market commands require `LEADER`, and a Manager without a membership can create its first agency. |
+| Google sign-in | Deferred (post-MVP) | Keep native email/password sign-in for the MVP; configure Google as a Keycloak identity provider later. |
 | Service split | Complete | `backend/hero-association-core` owns game state and `backend/hero-association-bff` is the public proxy boundary. |
 
-The matching actionable checklist is in [Milestone 9 of the roadmap](ROADMAP.md#milestone-9--authentication-and-real-time-updates). Update this table and that checklist together whenever an authentication stage is completed.
+The actionable checklist is in the [roadmap](ROADMAP.md): Milestone 9 covers
+authentication work in the MVP, and Google sign-in is listed under Post-MVP.
+Update this table and the roadmap together when an authentication stage changes.
 
 ## Decisions
 
@@ -34,41 +37,36 @@ The matching actionable checklist is in [Milestone 9 of the roadmap](ROADMAP.md#
   private service, reachable only by the BFF and other explicitly authorized
   internal services.
 - Keycloak provides a Hero Association-branded account experience, initially
-  with email and password. Google sign-in is added through Keycloak as the
-  first social identity provider.
+  with email and password for the MVP. Google sign-in can be added through
+  Keycloak as the first social identity provider after the MVP.
 - Every persistent account, manager, and membership resource uses UUIDv7.
 
 ## Target topology
 
 ```text
-Browser (React) -> Caddy -----------------> Identity BFF
-        |                    |                    |
-        | HTTPS session      |                    +-> BFF session PostgreSQL
-        | cookie             |
-        |                    +--------------------> Keycloak
-        |                                             |
-        |                                             +-> Keycloak PostgreSQL
-        |
-        | server-to-server access token
-        v
-Game Core -----------------------> PostgreSQL
+Browser --HTTPS--> Traefik --app route--> React
+                       |--/api, /auth--> Identity BFF --bearer token--> Game Core --> Core PostgreSQL
+                       |                    |--session state--> Redis
+                       |                    +--OIDC--> Keycloak
+                       +--auth hostname--------------> Keycloak --> Keycloak PostgreSQL
 ```
 
-Caddy is the edge gateway in the containerized local and deployed topology. It
+Traefik is the edge gateway in local Compose; the k3d lab will use a separate
+Traefik instance in front of Istio-meshed BFF and Game Core services. It
 serves the React build, proxies `/api` and `/auth` to the BFF, and exposes
 Keycloak on its own authentication hostname. It does not make authentication
 decisions: the BFF owns the browser session and Keycloak owns identity. Game
-Core and all PostgreSQL services remain private.
+Core, Keycloak PostgreSQL, and Redis remain private.
 
 The BFF owns the browser session, login, logout, callback, and CSRF handling.
 It uses the OpenID Connect Authorization Code flow as a confidential server
-client with PKCE. Keycloak tokens are stored in the BFF session database; the
-browser only holds a secure, `HttpOnly`, `SameSite` session cookie.
+client with PKCE. Keycloak tokens are kept only in Redis; the browser holds
+only a secure, `HttpOnly`, `SameSite` session cookie.
 
 During login, the browser is redirected to Keycloak's branded login page and
 back to the BFF callback. This is a browser navigation, not a React call to a
-Keycloak administration API. Google login is a second redirect from Keycloak
-to Google and then back to Keycloak.
+Keycloak administration API. Post-MVP Google login would add a second redirect
+from Keycloak to Google and then back to Keycloak.
 
 Game Core validates caller identity and must apply its own authorization. It
 does not trust browser-provided manager or agency identifiers, or unsigned
@@ -79,8 +77,9 @@ Token exchange or a dedicated internal-token issuer can be evaluated only when
 the service boundary needs additional isolation. Game Core binds the
 authenticated subject to an Account. Authorizing agency identifiers through
 membership is now enforced through `AgencyMember`. Managers without a
-membership cannot access agency state or commands; agency creation and
-invitations are the next stage.
+membership cannot access agency state or commands. An onboarded Manager without
+a membership can create one empty agency as its `LEADER`; invitations remain
+the next stage.
 
 ## Account and game identity
 
@@ -131,8 +130,11 @@ An agency has exactly one `LEADER`; invited collaborators use `MANAGER`.
 `Agency.leader` remains a convenient direct reference and agrees with the
 seeded `LEADER` membership. Both roles can access agency state and operate its
 gameplay commands. Market-order creation and cancellation are currently
-financial actions reserved for `LEADER`. Invitations, departure, ownership
-transfer, and agency creation remain separate product rules.
+financial actions reserved for `LEADER`. An onboarded Manager with no
+membership can create one empty Level 1 agency through `POST /api/v1/agencies`
+and becomes its `LEADER`. Agency names are unique case-insensitively; the
+current flow rejects a Manager who already has a membership. Invitations,
+departure, and ownership transfer remain separate product rules.
 
 ## Browser contract
 
@@ -145,6 +147,7 @@ GET  /auth/login
 GET  /auth/logout
 GET  /api/v1/account
 POST /api/v1/account/manager
+POST /api/v1/agencies
 ```
 
 `GET /api/v1/session` is public and returns whether the browser has a BFF
@@ -154,7 +157,8 @@ through the BFF proxy; those endpoints return only Hero Association Account and
 Manager data, never raw identity-provider credentials.
 The Account response includes the Manager's agency memberships so React can
 open an authorized agency. A Manager without memberships sees an explicit
-no-agency screen rather than shared game data.
+no-agency screen rather than shared game data, with a form to create that
+Manager's first empty agency.
 
 `GET /auth/login` begins the authorization-code redirect. After Keycloak
 authenticates the browser and calls `/auth/callback`, the BFF returns the user
@@ -166,6 +170,8 @@ frontend. The logout response does not clear browser cookies globally, because
 that short-lived state cookie is required for the callback; Quarkus removes the
 BFF session cookie as part of the logout flow. The callback is registered as
 the client's only post-logout redirect URI.
+When no BFF session exists, `/auth/logout` redirects straight back to the
+frontend instead of returning a 404.
 
 The signed-out frontend offers **Sign in** and **Create account**. Both begin
 at the protected BFF login route; the registration action adds only the
@@ -174,10 +180,12 @@ authorization request. Quarkus continues to generate and validate the
 authorization-code state and PKCE values, so React never constructs a
 Keycloak registration URL or handles identity-provider credentials.
 
-The repository's Playwright E2E test uses separate local frontend and BFF
-ports, with its own versioned callback URIs. They are limited to the isolated
-test stack; production clients must register only their deployed BFF callback
-URI.
+The repository's Playwright E2E suite uses separate local frontend and BFF
+ports, with its own versioned callback URIs. It completes a new user's native
+Keycloak registration, signs out, signs back in, and verifies that both logins
+resolve to the same Core Account ID and Keycloak subject. Those callback URIs
+are limited to the isolated test stack; production clients must register only
+their deployed BFF callback URI.
 
 Game commands continue under `/api/v1/...`; the BFF requires an authenticated
 session before forwarding them to Game Core. State-changing requests require a
@@ -188,7 +196,7 @@ memory and sends it as `X-CSRF-TOKEN`.
 The BFF must not expose Keycloak administrative endpoints, client secrets,
 refresh tokens, or raw identity-provider credentials to the browser.
 
-## Google sign-in
+## Post-MVP: Google sign-in
 
 Google is configured in Keycloak as an identity provider. The Google OAuth
 client ID and client secret are held only in Keycloak configuration or its
@@ -198,7 +206,7 @@ The Google redirect URI is Keycloak's broker callback, for example in local
 development:
 
 ```text
-http://localhost:8180/realms/hero-association/broker/google/endpoint
+http://localhost:17180/realms/hero-association/broker/google/endpoint
 ```
 
 Linking an existing email/password account to Google must preserve the same
@@ -207,15 +215,21 @@ agencies, and inventory.
 
 ## Current local Keycloak setup
 
-`backend/compose.yaml` and `backend/compose.native.yaml` run Keycloak on
-`http://localhost:8180` with a dedicated PostgreSQL database and expose the
-BFF session database at `localhost:5433` for host-based BFF development.
+`backend/compose.yaml` runs Keycloak on `http://localhost:17180` with its
+dedicated PostgreSQL database. It also exposes BFF session Redis at
+`localhost:16379` for host-based BFF development.
+`backend/compose.native.yaml` uses its separate Keycloak port `19180` and BFF
+Redis port `19679`.
 Before starting either Compose stack, copy `backend/.env.example` to
 `backend/.env` and replace every placeholder. The `.env` file is ignored by
-Git. The optional `backend/compose.caddy.yaml` overlay instead runs the full
-containerized stack through `https://heroassociation.test`, with Keycloak at
-`https://auth.heroassociation.test`. Its exact hosts-file, certificate-trust,
-and startup instructions are in [`backend/README.md`](backend/README.md#local-https-gateway).
+Git. `backend/compose.infra.yaml` adds Traefik to the standard development
+dependencies. It exposes the host-run Vite and BFF services through
+`https://heroassociation.test` and Keycloak through
+`https://auth.heroassociation.test` without giving up host hot reload. The
+optional `backend/compose.traefik.yaml` overlay remains available for an
+all-container packaged-application check. Hosts-file, certificate-trust, and
+startup instructions are in [`backend/README.md`](backend/README.md#local-https-gateway).
+
 
 `backend/keycloak/realm/hero-association-realm.json` is a versioned startup
 import. It creates the `hero-association` realm, enables local email/password
@@ -225,7 +239,7 @@ adds that audience only to access tokens. Its client secret is resolved from
 `HERO_ASSOCIATION_BFF_OIDC_CLIENT_SECRET` during the first import; it is never
 committed to the repository. Local email verification is disabled because SMTP
 is not configured. It registers callbacks for direct host development, the
-isolated browser test, and the local Caddy gateway. Production must use a
+isolated browser test, and the local Traefik gateway. Production must use a
 separate realm configuration with only its deployed callback URLs and no
 development credentials.
 
@@ -235,39 +249,51 @@ copying its templates, and local Compose disables theme caching so CSS edits
 are immediately visible during development. Production should use normal theme
 caching.
 
+Native registration asks for the standard email and password inputs, not first
+or last name. Those optional Keycloak fields are hidden from end users and are
+set directly as deterministic seed data while the product is in its early
+stage.
+
 The realm is imported only when it does not yet exist. To deliberately recreate
-the local Keycloak realm, stop the stack with `docker compose down --volumes`
-from `backend/`, then start it again. Google is intentionally not configured
-until its social-login task is implemented.
+the local Keycloak realm, stop the infrastructure from `backend/` with
+`HERO_ASSOCIATION_DEV_HOST_ADDRESS="$(hostname -I | awk '{print $1}')" docker compose -f compose.infra.yaml down --volumes`,
+then start it again. Google is intentionally not configured until its social-login
+task is implemented.
 
-The versioned realm includes two development-only test users:
-`user1@mail.com` / `user1` corresponds to the seeded User 1 Manager and leads
-Dawnwatch Agency; `user2@mail.com` / `user2` corresponds to the seeded User 2
-Manager and leads Ironridge Exchange. These credentials must never be used
-outside local development.
+The versioned realm includes three development-only test users:
+`user1@mail.com` / `user1` has the direct Keycloak profile name `User1 Last1`
+and corresponds to the seeded User 1 Manager leading Dawnwatch Agency;
+`user2@mail.com` / `user2` has `User2 Last2` and corresponds to the seeded User
+2 Manager leading Ironridge Exchange; `user3@mail.com` / `user3` has `User3
+Last3` and is intentionally unprovisioned so local and E2E testing can cover
+Manager onboarding, no-agency access, and first-agency creation. These
+credentials must never be used outside local development.
 
-The BFF uses Quarkus's database token-state manager. It stores Keycloak's ID,
-access, and refresh tokens in `postgres-bff`, not in the browser and not in
-Keycloak's database. Quarkus creates the internal
-`oidc_db_token_state_manager` table on startup. It is session infrastructure,
-not an Account table, and it is recreated with the local volume. A production
-deployment must provide a durable BFF-owned database and secret storage.
+The BFF uses Quarkus's Redis token-state manager. It stores Keycloak ID,
+access, and refresh tokens in `redis-bff`; the browser receives only an opaque
+session reference. Redis session state is intentionally ephemeral in local
+development: restarting Redis invalidates BFF sessions and requires users to
+sign in again. Production Redis must be BFF-owned, private, authenticated, TLS
+protected, and encrypted at rest; it needs the same secret-management controls
+as the Keycloak client secret.
 
 ## Deployment and local development
 
 - Run Keycloak and its dedicated PostgreSQL database in Docker Compose for
   local development. It must not share Game Core's game-state database.
-- Keep Vite plus Quarkus dev mode as the default local editing workflow. Use
-  the Caddy Compose overlay when validating the packaged, same-origin HTTPS
-  and OIDC flow.
+- Keep Vite plus Quarkus dev mode as the default local editing workflow. The
+  Traefik service in `compose.infra.yaml` provides its same-origin HTTPS and OIDC
+  routes while proxying to those host-run processes, so the browser tests the
+  deployed routing shape without losing hot reload.
 - Configure realm, clients, redirect URIs, and theme through versioned,
   non-secret configuration where possible.
 - Store client secrets, Google credentials, and production signing material in
   environment-specific secret storage. Do not add them to `.env` files tracked
   by Git.
-- Caddy exposes the React application, BFF routes, and Keycloak login endpoint
-  publicly. Game Core has no browser CORS configuration and no public ingress,
-  and still validates the BFF-forwarded bearer token as defense in depth.
+- Traefik exposes the React application, BFF routes, and Keycloak login endpoint
+  publicly. Game Core has no browser CORS configuration and no public ingress;
+  Core and Keycloak PostgreSQL plus Redis remain private, and Game Core still
+  validates the BFF-forwarded bearer token as defense in depth.
 
 ## Delivery sequence
 
@@ -286,10 +312,11 @@ deployment must provide a durable BFF-owned database and secret storage.
    subject, and require Manager onboarding with a unique display name.
 6. Completed: add `agency_member`, bind the seeded agencies to their Managers,
    and enforce membership plus leader-only market permissions on Core routes.
-7. Add agency creation and invitations, then specify membership departure and
-   leadership transfer.
-8. Add a Google OAuth client and configure Keycloak's Google identity provider.
-   transfer before exposing collaborative agency management.
+7. Completed for initial creation: allow a Manager without a membership to
+   create one empty Level 1 agency as its leader. Invitations, membership
+   departure, and leadership transfer remain to be specified.
+8. Post-MVP: add a Google OAuth client and configure Keycloak's Google identity
+   provider while preserving links to existing accounts.
 
 ## Deferred decisions
 

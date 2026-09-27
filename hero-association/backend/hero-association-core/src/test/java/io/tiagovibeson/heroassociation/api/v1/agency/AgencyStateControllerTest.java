@@ -10,6 +10,7 @@ import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.security.TestSecurity;
@@ -71,6 +72,7 @@ class AgencyStateControllerTest {
                 .then()
                 .statusCode(200)
                 .body("quests.find { it.id == '%s' }.combat.status".formatted(TROLL_QUEST_ID), is("IN_PROGRESS"))
+                .body("quests.find { it.id == '%s' }.finishedAt".formatted(TROLL_QUEST_ID), is(nullValue()))
                 .body("quests.find { it.id == '%s' }.combat.currentTimeMilliseconds".formatted(TROLL_QUEST_ID), greaterThanOrEqualTo(0))
                 .body("quests.find { it.id == '%s' }.combat.lastSynchronizedAt".formatted(TROLL_QUEST_ID), notNullValue())
                 .body("quests.find { it.id == '%s' }.combat.combatants".formatted(TROLL_QUEST_ID), hasSize(6))

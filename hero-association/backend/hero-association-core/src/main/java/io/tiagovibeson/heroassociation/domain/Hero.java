@@ -53,8 +53,8 @@ public class Hero extends UuidEntity {
     @Column(nullable = false, length = 20)
     private HeroActivity activity;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "agency_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "agency_id")
     private Agency agency;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -66,6 +66,20 @@ public class Hero extends UuidEntity {
     private List<HeroRune> runeSlots = new ArrayList<>();
 
     protected Hero() {
+    }
+
+    public static Hero createRecruitable(String name, String alias, HeroClass heroClass) {
+        Hero hero = new Hero();
+        hero.name = name;
+        hero.alias = alias;
+        hero.heroClass = heroClass;
+        hero.level = 1;
+        hero.magicLevel = 0;
+        hero.currentHealth = heroClass.getBaseHealth();
+        hero.currentMana = heroClass.getBaseMana();
+        hero.stamina = 100;
+        hero.activity = HeroActivity.TRAINING;
+        return hero;
     }
 
     @PrePersist
@@ -160,6 +174,24 @@ public class Hero extends UuidEntity {
         }
 
         return currentValue + Math.toIntExact(elapsedSeconds * recoveryPerSecond);
+    }
+
+    public boolean isRecruitable() {
+        return agency == null;
+    }
+
+    public void recruitTo(Agency newAgency) {
+        if (!isRecruitable()) {
+            throw new IllegalStateException("A hero who belongs to an agency cannot be recruited again.");
+        }
+
+        agency = newAgency;
+        party = null;
+        activity = HeroActivity.TRAINING;
+        currentHealth = heroClass.getBaseHealth();
+        currentMana = heroClass.getBaseMana();
+        stamina = 100;
+        lastResourceSynchronizedAt = Instant.now();
     }
 
     public Party getParty() {

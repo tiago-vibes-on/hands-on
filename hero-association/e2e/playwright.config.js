@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests',
+  testIgnore: 'k3d-authentication.spec.js',
   fullyParallel: false,
   workers: 1,
   ...(process.env.E2E_EXTERNAL_STACK === 'true' ? {} : { globalSetup: './global-setup.js' }),
@@ -11,7 +12,8 @@ export default defineConfig({
   },
   reporter: process.env.CI === 'true' ? 'github' : 'list',
   use: {
-    baseURL: 'http://host.docker.internal:15173',
+    baseURL: 'https://heroassociation.test',
+    ignoreHTTPSErrors: true,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },

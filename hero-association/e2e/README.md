@@ -1,38 +1,84 @@
 # Hero Association E2E tests
 
-This independent Node.js project runs browser tests across React, the BFF,
-Keycloak, Game Core, and PostgreSQL. It uses Playwright with Chromium.
+The Playwright suite verifies React, Traefik, the BFF, Keycloak, Game Core,
+PostgreSQL, and Redis together through the same HTTPS hostnames used for local
+development.
 
-## Run the authentication flow
+## Run
+
+From this directory, with Docker and Node.js 24 available:
 
 ```bash
-npm --prefix ../frontend install
 npm install
-npm run test:auth
+npm test
 ```
 
-The test starts a temporary Docker Compose project named
-`hero-association-e2e`, builds the Core and BFF containers, and starts Vite at
-`http://127.0.0.1:15173`. It uses separate ports (`15432`, `15434`, `18080`,
-`18081`, and `18180`) and test-only database volumes, so it never shares data
-or ports with normal local development. The test tears its Compose project and
-volumes down when it completes, including after a failed test setup.
+`npm run test:auth` runs only `tests/authentication.spec.js` (currently the
+full suite). The runner uses Playwright's official Chromium Docker image at
+the version pinned in `package-lock.json`, so no host browser installation is
+required. The frontend image runs `npm ci` during its Docker build; frontend
+`node_modules` on the host are not needed.
 
-The default command runs Chromium in Playwright's official Docker image, using
-the same version as the pinned `@playwright/test` package. This avoids relying
-on browser libraries installed on the host. Docker is therefore required for
-both the application stack and the browser. `npm run test:host` is available
-only for machines where `npm run install:browsers` has installed Chromium and
-its system dependencies.
+The setup creates an isolated Compose project named `hero-association-e2e`.
+Traefik serves the frontend and BFF at `https://heroassociation.test` and
+Keycloak at `https://auth.heroassociation.test` inside the browser container's
+Docker network. The browser trusts the test-only local certificate for this
+run; it never routes through the normal development gateway. The second BFF
+instance is reached through the E2E-only same-origin
+`/__e2e-secondary/api/...` route, so the browser sends the same session
+cookie to both instances.
 
-The initial test signs in with the versioned local Keycloak account
-`user1@mail.com` / `user1`, verifies the seeded agency screen, signs out, and
-confirms that the next sign-in displays Keycloak credentials rather than
-reusing the prior SSO session.
+The stack publishes diagnostic host ports `15432` (Core PostgreSQL), `16380`
+(Redis), `18080` and `18082` (BFF instances), `18081` (Core), `18180`
+(Keycloak), and `18443` (Traefik HTTPS). It has its own databases and Redis
+state. Setup and teardown remove only the E2E Compose project and its volumes,
+including after a failed setup. The normal development data is never reset.
 
-The frontend dependencies must be installed before the suite runs because the
-test starts Vite directly. The test setup owns both the temporary Compose
-project and Vite process, and stops them during teardown.
+The suite covers registration, sign-out and sign-in again, token refresh,
+Redis session expiry, session sharing across BFF instances, Manager and
+agency onboarding, recruitment, and cross-agency authorization. It uses the
+versioned local Keycloak users `user1@mail.com` / `user1`,
+`user2@mail.com` / `user2`, and the initially unprovisioned
+`user3@mail.com` / `user3`. Access tokens last eight seconds only in this
+isolated realm.
 
-Browser artifacts are written to ignored `test-results/` and
-`playwright-report/` directories when appropriate.
+Failure screenshots and traces are written to ignored `test-results/` and
+`playwright-report/` directories.
+
+## Verify the running k3d lab
+
+The separate k3d suite reuses an already deployed frontend, BFF, Core,
+Keycloak, PostgreSQL, and Redis. From this directory, run:
+
+```bash
+npm ci
+npm run test:k3d
+```
+
+It uses the seeded local-only `user1@mail.com` / `user1` and
+`user2@mail.com` / `user2` accounts to verify login, logout, login again,
+account identity, and an authorized agency-state API read. Unlike `npm test`,
+this command does not start Compose, flush Redis, or delete database volumes.
+The Playwright container uses Docker host networking and maps both k3d
+hostnames to `127.0.0.1`, reaching the cluster's HTTPS port `19443`. It ignores
+local certificate errors only inside this test browser; configure CA trust
+separately for a normal browser.
+
+## Measure k3d read load
+
+With the lab already deployed, run the read-only baseline from this directory:
+
+```bash
+npm run load:k3d
+```
+
+It signs in as local-only `user1@mail.com` once, then uses four concurrent
+clients for 60 seconds to GET the agency-state API through Envoy Gateway,
+BFF, and Core. It reports HTTP status counts, transport errors, throughput,
+and p50/p95/p99 latency as `K3D_LOAD_RESULT`. It fails on any non-200
+response or transport error. It does not reset databases or change game state.
+To change the load, set `HERO_ASSOCIATION_K3D_LOAD_SECONDS` (1–600) and
+`HERO_ASSOCIATION_K3D_LOAD_CLIENTS` (1–32). While it runs, sample BFF, Core,
+and their Istio sidecars with `kubectl top pods --containers` using the
+isolated k3d kubeconfig. This is a preliminary read workload, not a
+mixed-action capacity test.

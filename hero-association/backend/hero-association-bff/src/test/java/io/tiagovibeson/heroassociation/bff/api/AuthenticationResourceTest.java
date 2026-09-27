@@ -10,6 +10,16 @@ import org.junit.jupiter.api.Test;
 class AuthenticationResourceTest {
 
     @Test
+    void shouldReturnAnAlreadySignedOutVisitorToFrontend() {
+        given()
+                .redirects().follow(false)
+                .when().get("/auth/logout")
+                .then()
+                .statusCode(303)
+                .header("Location", is("https://heroassociation.test"));
+    }
+
+    @Test
     void shouldRedirectToTheFrontendAfterAValidatedProviderLogout() {
         given()
                 .redirects().follow(false)
@@ -18,7 +28,7 @@ class AuthenticationResourceTest {
                 .when().get("/auth/post-logout")
                 .then()
                 .statusCode(303)
-                .header("Location", is("http://localhost:5173"));
+                .header("Location", is("https://heroassociation.test"));
     }
 
     @Test

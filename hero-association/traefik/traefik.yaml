@@ -1,0 +1,21 @@
+entryPoints:
+  web:
+    address: :80
+    http:
+      aliasHeadersStrategy: reject
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: :443
+    http:
+      aliasHeadersStrategy: reject
+
+providers:
+  file:
+    filename: /etc/traefik/dynamic.yaml
+    watch: true
+
+log:
+  level: INFO

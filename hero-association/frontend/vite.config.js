@@ -5,19 +5,20 @@ import { defineConfig, loadEnv } from 'vite'
 export default defineConfig(({ mode }) => {
   const environment = loadEnv(mode, process.cwd(), '')
   const shouldChangeProxyOrigin = environment.VITE_API_PROXY_CHANGE_ORIGIN !== 'false'
-  const allowedHosts = environment.VITE_ALLOWED_HOSTS?.split(',').map((host) => host.trim()).filter(Boolean)
+  const configuredAllowedHosts = environment.VITE_ALLOWED_HOSTS?.split(',').map((host) => host.trim()).filter(Boolean) || []
+  const allowedHosts = [...new Set(['heroassociation.test', ...configuredAllowedHosts])]
 
   return {
     plugins: [react()],
     server: {
-      ...(allowedHosts?.length ? { allowedHosts } : {}),
+      allowedHosts,
       proxy: {
         '/api': {
-          target: environment.VITE_API_PROXY_TARGET || 'http://localhost:8080',
+          target: environment.VITE_API_PROXY_TARGET || 'http://localhost:17080',
           changeOrigin: shouldChangeProxyOrigin,
         },
         '/auth': {
-          target: environment.VITE_API_PROXY_TARGET || 'http://localhost:8080',
+          target: environment.VITE_API_PROXY_TARGET || 'http://localhost:17080',
           changeOrigin: shouldChangeProxyOrigin,
         },
       },

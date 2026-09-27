@@ -1,0 +1,11 @@
+apiVersion: 1
+providers:
+  - name: Hero Association lab
+    orgId: 1
+    folder: Hero Association
+    type: file
+    disableDeletion: true
+    editable: false
+    options:
+      path: /otel-lgtm/hero-association-dashboards
+      foldersFromFilesStructure: false

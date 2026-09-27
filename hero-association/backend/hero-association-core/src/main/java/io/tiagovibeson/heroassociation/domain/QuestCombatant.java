@@ -85,6 +85,65 @@ public class QuestCombatant extends UuidEntity {
     protected QuestCombatant() {
     }
 
+    static QuestCombatant forHero(QuestCombat combat, Hero hero, int formationIndex) {
+        HeroClass heroClass = hero.getHeroClass();
+        QuestCombatant combatant = new QuestCombatant();
+        combatant.combat = combat;
+        combatant.hero = hero;
+        combatant.team = CombatTeam.HEROES;
+        combatant.formationIndex = formationIndex;
+        combatant.name = hero.getAlias();
+        combatant.heroClass = heroClass;
+        combatant.magicLevel = hero.getMagicLevel();
+        combatant.maxHealth = heroClass.getBaseHealth();
+        combatant.currentHealth = hero.getCurrentHealth();
+        combatant.maxMana = heroClass.getBaseMana();
+        combatant.currentMana = hero.getCurrentMana();
+        combatant.attackDamage = heroClass.getBaseAttackDamage();
+        combatant.attackIntervalMilliseconds = heroClass.getAttackIntervalMilliseconds();
+        combatant.healthRecoveryPerSecond = heroClass.getHealthRecoveryPerSecond();
+        combatant.manaRecoveryPerSecond = heroClass.getManaRecoveryPerSecond();
+        combatant.criticalChance = Math.min(1, runeEffectValue(hero, RuneEffect.CRITICAL_CHANCE));
+        combatant.criticalDamageMultiplier = 2 + runeEffectValue(hero, RuneEffect.CRITICAL_DAMAGE);
+        combatant.nextBasicAttackAt = 480 + (formationIndex * 170L);
+        if (heroClass == HeroClass.MAGE && hero.getMagicLevel() >= CombatSpell.FIRE_BALL.getRequiredMagicLevel()) {
+            combatant.fireBallNextCastAt = 900L;
+        }
+        if (heroClass == HeroClass.MAGE && hero.getMagicLevel() >= CombatSpell.LIGHTNING_RAIL.getRequiredMagicLevel()) {
+            combatant.lightningRailNextCastAt = 1_350L;
+        }
+        return combatant;
+    }
+
+    static QuestCombatant forCreature(QuestCombat combat, String name, int formationIndex) {
+        QuestCombatant combatant = new QuestCombatant();
+        combatant.combat = combat;
+        combatant.team = CombatTeam.CREATURES;
+        combatant.formationIndex = formationIndex;
+        combatant.name = name;
+        combatant.magicLevel = 0;
+        combatant.maxHealth = 120;
+        combatant.currentHealth = 120;
+        combatant.maxMana = 100;
+        combatant.currentMana = 100;
+        combatant.attackDamage = 10;
+        combatant.attackIntervalMilliseconds = 1_600;
+        combatant.healthRecoveryPerSecond = 0;
+        combatant.manaRecoveryPerSecond = 0;
+        combatant.criticalChance = 0;
+        combatant.criticalDamageMultiplier = 2;
+        combatant.nextBasicAttackAt = 760 + (formationIndex * 160L);
+        return combatant;
+    }
+
+    private static double runeEffectValue(Hero hero, RuneEffect effect) {
+        return hero.getRuneSlots().stream()
+                .map(HeroRune::getRune)
+                .filter(rune -> rune.getEffect() == effect)
+                .mapToDouble(Rune::getEffectValue)
+                .sum();
+    }
+
     public Hero getHero() {
         return hero;
     }

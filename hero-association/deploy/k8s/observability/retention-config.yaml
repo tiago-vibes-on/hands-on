@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: observability-retention
+  namespace: hero-association-observability
+data:
+  loki-config.yaml: |
+    auth_enabled: false
+    server:
+      http_listen_port: 3100
+    common:
+      instance_addr: 127.0.0.1
+      path_prefix: /data/loki
+      storage:
+        filesystem:
+          chunks_directory: /data/loki/chunks
+          rules_directory: /data/loki/rules
+      replication_factor: 1
+      ring:
+        kvstore:
+          store: inmemory
+    schema_config:
+      configs:
+        - from: 2020-10-24
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: index_
+            period: 24h
+    compactor:
+      working_directory: /data/loki/compactor
+      compaction_interval: 10m
+      retention_enabled: true
+      delete_request_store: filesystem
+    limits_config:
+      retention_period: 24h
+      otlp_config:
+        resource_attributes:
+          ignore_defaults: true
+          attributes_config:
+            - action: index_label
+              attributes: [service.name, k8s.namespace.name, k8s.container.name]
+    ruler:
+      alertmanager_url: http://127.0.0.1:9093
+    pattern_ingester:
+      lifecycler:
+        min_ready_duration: 1s
+    ingester:
+      lifecycler:
+        min_ready_duration: 1s
+    frontend:
+      scheduler_dns_lookup_period: 1s
+      address: 127.0.0.1
+    query_scheduler:
+      use_scheduler_ring: false
+  tempo-config.yaml: |
+    server:
+      http_listen_port: 3200
+      grpc_listen_port: 9096
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: "127.0.0.1:4417"
+            http:
+              endpoint: "127.0.0.1:4418"
+    memberlist:
+      bind_addr: [127.0.0.1]
+      bind_port: 7947
+    querier:
+      frontend_worker:
+        frontend_address: 127.0.0.1:9096
+    storage:
+      trace:
+        backend: local
+        wal:
+          path: /data/tempo/wal
+        local:
+          path: /data/tempo/blocks
+    backend_worker:
+      compaction:
+        block_retention: 24h
+    metrics_generator:
+      processor:
+        span_metrics:
+          dimensions: [service_name, operation, status_code]
+      storage:
+        path: /data/tempo/generator/wal
+        remote_write:
+          - url: http://127.0.0.1:9090/api/v1/write
+            send_exemplars: true
+    overrides:
+      defaults:
+        metrics_generator:
+          processors: [service-graphs, span-metrics]

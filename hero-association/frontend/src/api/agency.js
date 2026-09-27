@@ -25,6 +25,14 @@ export async function createManager(displayName) {
   })
 }
 
+export async function createAgency(name) {
+  return request('/api/v1/agencies', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+}
+
 export function beginLogin() {
   window.location.assign('/auth/login')
 }
@@ -39,6 +47,18 @@ export function logout() {
 
 export async function fetchAgencyState(agencyId) {
   return request(`/api/v1/agencies/${agencyId}/state`)
+}
+
+export async function fetchRecruits() {
+  return request('/api/v1/recruits')
+}
+
+export async function recruitHero({ agencyId, recruitId }) {
+  return request(`/api/v1/agencies/${agencyId}/heroes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ recruitId }),
+  })
 }
 
 export async function equipHeroRune({ agencyId, heroId, slotIndex, runeId }) {

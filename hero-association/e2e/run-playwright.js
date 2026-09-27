@@ -35,6 +35,7 @@ try {
     'run',
     '--rm',
     '--init',
+    '--network', 'hero-association-e2e_default',
     '--add-host', 'host.docker.internal:host-gateway',
     '--ipc', 'host',
     '--user', `${process.getuid()}:${process.getgid()}`,
