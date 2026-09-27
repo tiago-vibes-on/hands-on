@@ -51,12 +51,13 @@ Browser --HTTPS--> Traefik --app route--> React
                        +--auth hostname--------------> Keycloak --> Keycloak PostgreSQL
 ```
 
-Traefik is the edge gateway in local Compose; the k3d lab will use a separate
-Traefik instance in front of Istio-meshed BFF and Game Core services. It
-serves the React build, proxies `/api` and `/auth` to the BFF, and exposes
-Keycloak on its own authentication hostname. It does not make authentication
-decisions: the BFF owns the browser session and Keycloak owns identity. Game
-Core, Keycloak PostgreSQL, and Redis remain private.
+Traefik is the edge gateway in local Compose; Envoy Gateway is the
+browser-facing ingress in the isolated k3d lab. Istio secures BFF-to-Core
+traffic inside k3d. Both gateways serve React, proxy `/api` and `/auth` to
+the BFF, and expose Keycloak on its own authentication hostname. Neither
+gateway makes authentication decisions: the BFF owns the browser session
+and Keycloak owns identity. Game Core, Keycloak PostgreSQL, and Redis remain
+private.
 
 The BFF owns the browser session, login, logout, callback, and CSRF handling.
 It uses the OpenID Connect Authorization Code flow as a confidential server

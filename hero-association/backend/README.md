@@ -154,13 +154,17 @@ import it into the Windows current-user root store from this directory:
 
 ```bash
 WINDOWS_CERTIFICATE_PATH="$(wslpath -w ../traefik/certs/local-ca.crt)"
-certutil.exe -user -addstore -f Root "$WINDOWS_CERTIFICATE_PATH"
+(cd /mnt/c && certutil.exe -user -addstore -f Root "$WINDOWS_CERTIFICATE_PATH")
 ```
 
 Restart the browser after importing. On Linux systems using
 `update-ca-certificates`, copy the CA certificate to
 `/usr/local/share/ca-certificates/hero-association-local-ca.crt` and run
 `sudo update-ca-certificates`. Do not import the private key.
+
+Windows `curl.exe` may report `CRYPT_E_NO_REVOCATION_CHECK` for this offline
+development CA. For a local CLI check, use `--ssl-revoke-best-effort`; do not
+use `--insecure`, which would also disable certificate validation.
 
 The Windows browser uses Docker's Windows port forwarding. If an unrelated
 K3s installation is already listening on port 443 inside WSL, a WSL

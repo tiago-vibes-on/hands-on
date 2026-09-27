@@ -13,8 +13,9 @@ npm install
 npm test
 ```
 
+`npm test` runs the local Traefik suite and excludes k3d-only tests.
 `npm run test:auth` runs only `tests/authentication.spec.js` (currently the
-full suite). The runner uses Playwright's official Chromium Docker image at
+full local suite). The runner uses Playwright's official Chromium Docker image at
 the version pinned in `package-lock.json`, so no host browser installation is
 required. The frontend image runs `npm ci` during its Docker build; frontend
 `node_modules` on the host are not needed.

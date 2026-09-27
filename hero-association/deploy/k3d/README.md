@@ -57,9 +57,9 @@ The k3d URLs are `https://k3d.heroassociation.test:19443` and
 `https://auth.k3d.heroassociation.test:19443`; port `19443` is explicit because
 normal Docker Compose development already uses port 443. The k3d leaf
 certificate covers both hosts and is signed by the same local development CA.
-The CA has not been imported into the Windows trust store, so a browser may
-still show a certificate warning. Backend, Keycloak, and frontend routes are
-installed by their separate deployment scripts below.
+Trust the CA in the Windows current-user store as described in the
+[backend README](../../backend/README.md#local-https-gateway); otherwise the
+browser may show a warning. Routes are installed by their deployment scripts.
 
 Envoy Gateway owns browser ingress in k3d. Istio is separate: workload-level
 sidecars will observe and secure BFF-to-Core traffic. There is no Istio ingress

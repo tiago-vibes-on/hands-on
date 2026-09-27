@@ -192,9 +192,9 @@ resulting state.
 
 - [x] Add an initial local Caddy edge stack with HTTPS, a packaged frontend,
   same-origin BFF routing, and a separate Keycloak hostname.
-- [ ] Finish the local Caddy-to-Traefik migration by trusting the development
-  CA in the browser and removing obsolete Caddy files. The isolated E2E suite
-  already passes. See [`DEPLOYMENT.md`](DEPLOYMENT.md).
+- [x] Finish the local Caddy-to-Traefik migration. The Windows current-user
+  store trusts the development CA, the isolated local E2E suite passes, and
+  obsolete Caddy files are removed. See [`DEPLOYMENT.md`](DEPLOYMENT.md).
 - [x] Bootstrap the isolated k3d cluster with Istio and an Envoy Gateway
   HTTPS edge; application deployment and scaling remain separate tasks.
 - [x] Install a disposable k3d observability stack with OpenTelemetry,

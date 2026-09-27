@@ -1,8 +1,7 @@
 # Local Delivery and Scaling Plan
 
-This checklist tracks the Traefik local gateway and the planned isolated k3d
-lab. Checkboxes reflect implementation and verification, including the
-remaining browser-trust step for the local certificate.
+This checklist tracks the completed Traefik local migration and isolated k3d
+lab. Checkboxes reflect verified work; a manual k3d browser check remains.
 
 ## Agreed scope
 
@@ -21,23 +20,23 @@ remaining browser-trust step for the local certificate.
 
 ## Phase 1 — Replace Caddy and verify the edge
 
-- [ ] Replace Caddy with Traefik in the normal hot-reload infrastructure and
+- [x] Replace Caddy with Traefik in the normal hot-reload infrastructure and
   packaged Docker Compose workflows. Preserve `heroassociation.test` and
   `auth.heroassociation.test`, same-origin `/api` and `/auth` routing, local
   HTTPS, trusted browser certificates, and the Keycloak login/logout flow.
   Prefer a file-based Traefik configuration so this migration does not grant
   the gateway access to the Docker daemon socket.
-  Gateway routing is verified; importing the generated CA into the Windows
-  current-user trust store is the remaining manual/approval-dependent step.
+  The local CA was imported into the Windows current-user root store on
+  2026-09-27; Windows HTTPS checks validate the local hostnames.
 - [x] Extend the isolated Playwright stack to reach the application through
   Traefik and HTTPS. The browser uses the gateway's two HTTPS hostnames while
   retaining separate Compose ports, databases, and Redis state.
 - [x] Run the full browser E2E suite (`npm test` from `e2e/`) after the migration.
   Verify registration, login, logout, login again, API routing, and the shared
   session across two BFF instances. Run relevant service tests as well.
-- [ ] Only after those checks pass, remove obsolete Caddy build/configuration
-  references and update local development, authentication, and E2E docs.
-  Finish the remaining browser-trust work before full k3d browser validation.
+- [x] Remove obsolete Caddy files and the old Caddy CA from Windows trust.
+  Update local development, authentication, and E2E docs. Manual Windows
+  browser verification of the separate k3d lab remains a follow-up below.
 
 ## Phase 2 — Create an isolated k3d application lab
 
@@ -64,8 +63,8 @@ agents are Ready, and Istio 1.30.5 and Envoy Gateway 1.9.1 are healthy. Core,
 BFF, Keycloak, PostgreSQL, Redis, and the frontend are Ready at one replica
 each. HTTPS serves the app and preserves the BFF `/api` and `/auth` routes.
 Two k3d Playwright tests passed against seeded users, including login, logout,
-account identity, and an agency-state API read. Windows browser CA trust is
-still a separate manual task.
+account identity, and an agency-state API read. Windows current-user CA trust
+is installed; manual k3d browser verification remains a separate task.
 
 The disposable observability Pod is also Ready: its OpenTelemetry receiver,
 Prometheus, Loki, Tempo, and Grafana endpoints passed local smoke checks.
@@ -85,8 +84,10 @@ BFF and Core now emit traces, metrics, and logs to it in the k3d lab.
 - [x] Run k3d-specific Playwright coverage for seeded users: login, logout,
   login again, account identity, and an authorized agency-state API read. The
   test browser ignores the untrusted local CA warning only for this run.
-- [ ] Import the local CA into the Windows browser trust store and manually
-  verify the same k3d login flow without a certificate warning.
+- [x] Import the local CA into the Windows current-user root store. Windows
+  HTTPS checks validate both k3d hostnames with offline revocation best-effort.
+- [ ] After restarting the Windows browser, manually verify the same k3d
+  login flow without a certificate warning.
 - [x] Confirm BFF-to-Core traffic uses Istio mutual TLS, enforce STRICT mTLS
   only on Core, and rerun k3d browser tests. A direct request from the
   non-meshed frontend Pod is rejected while Envoy-to-BFF remains available.
