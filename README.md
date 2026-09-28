@@ -8,4 +8,4 @@ Local development: [backend](hero-association/backend/README.md),
 [frontend](hero-association/frontend/README.md), and the
 [isolated k3d lab](hero-association/deploy/k3d/README.md).
 Reusable local builds: [pipeline](hero-association/pipeline/README.md).
-Youtube: [Youtube](https://www.youtube.com/@TiagoVibesOn).
+Videos: [Youtube](https://www.youtube.com/@TiagoVibesOn).
