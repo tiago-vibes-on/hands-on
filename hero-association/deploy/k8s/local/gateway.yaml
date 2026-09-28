@@ -48,5 +48,4 @@ spec:
         - type: RequestRedirect
           requestRedirect:
             scheme: https
-            port: 19443
             statusCode: 301

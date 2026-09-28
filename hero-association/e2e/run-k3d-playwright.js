@@ -20,6 +20,8 @@ const argumentsForDocker = [
   '--workdir', '/work',
   '--env', `HERO_ASSOCIATION_K3D_LOAD_SECONDS=${process.env.HERO_ASSOCIATION_K3D_LOAD_SECONDS || ''}`,
   '--env', `HERO_ASSOCIATION_K3D_LOAD_CLIENTS=${process.env.HERO_ASSOCIATION_K3D_LOAD_CLIENTS || ''}`,
+  '--env', `HERO_ASSOCIATION_K3D_MIXED_SECONDS=${process.env.HERO_ASSOCIATION_K3D_MIXED_SECONDS || ''}`,
+  '--env', `HERO_ASSOCIATION_K3D_MIXED_CLIENTS=${process.env.HERO_ASSOCIATION_K3D_MIXED_CLIENTS || ''}`,
   playwrightImage,
   'npx', 'playwright', 'test', '--config', configFile,
   ...process.argv.slice(2),

@@ -3,7 +3,6 @@ package io.tiagovibeson.heroassociation.application;
 import java.util.List;
 import java.util.UUID;
 
-import io.tiagovibeson.heroassociation.api.v1.agency.AgencyStateResponse;
 import io.tiagovibeson.heroassociation.api.v1.market.MarketOrderResponse;
 import io.tiagovibeson.heroassociation.application.exception.AgencyNotFoundException;
 import io.tiagovibeson.heroassociation.application.exception.MarketOrderNotFoundException;
@@ -39,13 +38,10 @@ public class MarketOrderService {
     MarketOrderRepository marketOrderRepository;
 
     @Inject
-    AgencyStateService agencyStateService;
-
-    @Inject
     AgencyAccessService agencyAccessService;
 
     @Transactional
-    public AgencyStateResponse createOrder(
+    public MarketOrderResponse createOrder(
             UUID agencyId,
             MarketOrderSide side,
             UUID itemId,
@@ -61,11 +57,14 @@ public class MarketOrderService {
         marketOrderRepository.persist(order);
         match(order);
 
-        return agencyStateService.findState(agencyId);
+        return MarketOrderResponse.from(order);
     }
 
     @Transactional
-    public AgencyStateResponse cancelOrder(UUID agencyId, UUID orderId) {
+    public MarketOrderResponse cancelOrder(UUID orderId) {
+        MarketOrder existingOrder = marketOrderRepository.findByIdOptional(orderId)
+                .orElseThrow(() -> new MarketOrderNotFoundException(orderId));
+        UUID agencyId = existingOrder.getAgency().getId();
         Agency agency = findAgencyForUpdate(agencyId);
         agencyAccessService.requireLeadership(agencyId);
         MarketOrder order = marketOrderRepository.findForUpdate(orderId, agencyId)
@@ -81,7 +80,7 @@ public class MarketOrderService {
         }
         order.cancel();
 
-        return agencyStateService.findState(agencyId);
+        return MarketOrderResponse.from(order);
     }
 
     @Transactional

@@ -13,4 +13,7 @@ decision changes.
 
 | ADR | Status | Decision |
 | --- | --- | --- |
-| [0001](0001-envoy-gateway-for-k3d-ingress.md) | Accepted | Envoy Gateway for k3d ingress; planned per-user market order limit. |
+| [0001](0001-envoy-gateway-for-k3d-ingress.md) | Accepted | Envoy Gateway for k3d ingress. |
+| [0002](0002-market-order-rate-limit-in-bff.md) | Accepted | Shared per-user market-order limit in BFF. |
+| [0003](0003-market-service-boundary.md) | Route family accepted; owner payload under review | Market-centric API and target service ownership. |
+| [0004](0004-core-as-temporary-modular-monolith.md) | Accepted architectural direction; extraction pending | Keep Core temporarily while validating domain rules before service extraction. |

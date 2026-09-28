@@ -11,7 +11,7 @@ if (!bff) {
   throw new Error('The source realm has no hero-association-bff client');
 }
 
-const origin = 'https://k3d.heroassociation.test:19443';
+const origin = 'https://k3d.heroassociation.test';
 bff.redirectUris = [`${origin}/auth/callback`, `${origin}/auth/post-logout`];
 bff.webOrigins = [origin];
 writeFileSync(target, `${JSON.stringify(realm, null, 2)}\n`, { mode: 0o600 });

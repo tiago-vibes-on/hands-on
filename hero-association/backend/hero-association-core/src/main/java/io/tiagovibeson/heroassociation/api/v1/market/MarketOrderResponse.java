@@ -14,6 +14,7 @@ public record MarketOrderResponse(
         String itemName,
         String itemSymbol,
         String side,
+        String status,
         int quantityRemaining,
         long priceGoldPerItem,
         Instant createdAt) {
@@ -28,6 +29,7 @@ public record MarketOrderResponse(
                 order.getItem().getName(),
                 order.getItem().getSymbol(),
                 order.getSide().name(),
+                order.getStatus().name(),
                 order.getQuantityRemaining(),
                 order.getPriceGoldPerItem(),
                 order.getCreatedAt());

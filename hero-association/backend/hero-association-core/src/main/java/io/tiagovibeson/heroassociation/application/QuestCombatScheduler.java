@@ -18,9 +18,15 @@ public class QuestCombatScheduler {
     @Inject
     QuestCombatProgressionService questCombatProgressionService;
 
+    @Inject
+    ScheduledJobLock scheduledJobLock;
+
     @Scheduled(every = "5s", delayed = "5s", concurrentExecution = ConcurrentExecution.SKIP)
     @Transactional
     void synchronizeActiveCombats() {
+        if (!scheduledJobLock.tryAcquire(ScheduledJobLock.Job.QUEST_COMBAT)) {
+            return;
+        }
         Instant synchronizedAt = Instant.now();
         questCombatRepository.listInProgressForUpdate()
                 .forEach(combat -> questCombatProgressionService.synchronize(combat, synchronizedAt));

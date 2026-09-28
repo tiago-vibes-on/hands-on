@@ -1221,8 +1221,8 @@ function App() {
     setIsSubmittingMarketOrder(true)
     setMarketError(null)
     try {
-      const state = await createMarketOrder({ agencyId: gameState.agency.id, ...order })
-      applyRemoteAgencyState(state)
+      await createMarketOrder({ agencyId: gameState.agency.id, ...order })
+      applyRemoteAgencyState(await fetchAgencyState(gameState.agency.id))
       await refreshMarketOrders()
       return true
     } catch (error) {
@@ -1241,8 +1241,8 @@ function App() {
     setIsSubmittingMarketOrder(true)
     setMarketError(null)
     try {
-      const state = await cancelMarketOrder({ agencyId: gameState.agency.id, orderId })
-      applyRemoteAgencyState(state)
+      await cancelMarketOrder({ orderId })
+      applyRemoteAgencyState(await fetchAgencyState(gameState.agency.id))
       await refreshMarketOrders()
     } catch (error) {
       setMarketError(error.message)

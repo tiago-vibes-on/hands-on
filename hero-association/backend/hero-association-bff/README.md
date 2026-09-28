@@ -40,6 +40,13 @@ and Manager onboarding. The Account response lists authorized agency
 memberships. Agency creation and invitations are intentionally not part of this
 stage.
 
+The BFF limits `POST /api/v1/market/orders` to five attempts
+per authenticated Keycloak user in a rolling second. BUY and SELL, all
+agencies, sessions, and BFF replicas share that user's Redis-backed budget.
+Excess requests return `429` with `Retry-After: 1`; a Redis failure returns
+`503` and does not forward the order. Market reads and cancellations are not
+limited by this rule. Core still validates order data and permissions.
+
 In the k3d lab, BFF exports OTLP traces, HTTP/JVM metrics, and structured
 logs. Its Core proxy creates a client span and forwards W3C trace context
 without putting the server-held access token in telemetry. Normal dev mode
@@ -53,5 +60,8 @@ enabled; see
 ./mvnw test
 ```
 
-The unit tests disable OIDC and use a local Game Core stub; the isolated
-Playwright authentication suite validates Redis-backed session storage.
+On WSL with Docker Desktop, run
+`TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal ./mvnw test` if temporary
+container ports are not reachable through `localhost`. Tests disable OIDC,
+use a local Game Core stub, and start an isolated Redis container. The
+Playwright suite validates real sessions and cross-replica market limiting.

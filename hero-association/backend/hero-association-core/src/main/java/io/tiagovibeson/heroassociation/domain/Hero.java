@@ -1,9 +1,12 @@
 package io.tiagovibeson.heroassociation.domain;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -32,10 +35,19 @@ public class Hero extends UuidEntity {
     private HeroClass heroClass;
 
     @Column(nullable = false)
-    private int level;
+    private long experience;
 
-    @Column(name = "magic_level", nullable = false)
-    private int magicLevel;
+    @Column(name = "melee_points", nullable = false, precision = 20, scale = 6)
+    private BigDecimal meleePoints = BigDecimal.ZERO;
+
+    @Column(name = "distance_points", nullable = false, precision = 20, scale = 6)
+    private BigDecimal distancePoints = BigDecimal.ZERO;
+
+    @Column(name = "magic_points", nullable = false, precision = 20, scale = 6)
+    private BigDecimal magicPoints = BigDecimal.ZERO;
+
+    @Column(name = "shield_points", nullable = false, precision = 20, scale = 6)
+    private BigDecimal shieldPoints = BigDecimal.ZERO;
 
     @Column(name = "current_health", nullable = false)
     private int currentHealth;
@@ -43,8 +55,8 @@ public class Hero extends UuidEntity {
     @Column(name = "current_mana", nullable = false)
     private int currentMana;
 
-    @Column(nullable = false)
-    private int stamina;
+    @Column(name = "stamina_milliseconds", nullable = false)
+    private long staminaMilliseconds;
 
     @Column(name = "last_resource_synchronized_at", nullable = false)
     private Instant lastResourceSynchronizedAt;
@@ -73,11 +85,10 @@ public class Hero extends UuidEntity {
         hero.name = name;
         hero.alias = alias;
         hero.heroClass = heroClass;
-        hero.level = 1;
-        hero.magicLevel = 0;
+        hero.experience = 0;
         hero.currentHealth = heroClass.getBaseHealth();
         hero.currentMana = heroClass.getBaseMana();
-        hero.stamina = 100;
+        hero.staminaMilliseconds = HeroProgression.MAX_STAMINA_MILLISECONDS;
         hero.activity = HeroActivity.TRAINING;
         return hero;
     }
@@ -102,11 +113,59 @@ public class Hero extends UuidEntity {
     }
 
     public int getLevel() {
-        return level;
+        return HeroProgression.levelForExperience(experience);
+    }
+
+    public long getExperience() {
+        return experience;
     }
 
     public int getMagicLevel() {
-        return magicLevel;
+        return getSkillLevel(HeroSkill.MAGIC);
+    }
+
+    public int getSkillLevel(HeroSkill skill) {
+        return HeroProgression.skillLevelForPoints(getSkillPoints(skill));
+    }
+
+    public BigDecimal getSkillPoints(HeroSkill skill) {
+        return switch (Objects.requireNonNull(skill)) {
+            case MELEE -> meleePoints;
+            case DISTANCE -> distancePoints;
+            case MAGIC -> magicPoints;
+            case SHIELD -> shieldPoints;
+        };
+    }
+
+    public void addExperience(long amount) {
+        if (amount < 0) {
+            throw new IllegalArgumentException("Experience award cannot be negative.");
+        }
+        experience = Math.addExact(experience, amount);
+    }
+
+    public void addSkillPoints(HeroSkill skill, BigDecimal amount) {
+        Objects.requireNonNull(skill);
+        BigDecimal increment = Objects.requireNonNull(amount).setScale(6, RoundingMode.UNNECESSARY);
+        if (increment.signum() < 0) {
+            throw new IllegalArgumentException("Skill point award cannot be negative.");
+        }
+        switch (skill) {
+            case MELEE -> meleePoints = meleePoints.add(increment);
+            case DISTANCE -> distancePoints = distancePoints.add(increment);
+            case MAGIC -> magicPoints = magicPoints.add(increment);
+            case SHIELD -> shieldPoints = shieldPoints.add(increment);
+        }
+    }
+
+    public int getMaxHealth() {
+        return Math.toIntExact((long) heroClass.getBaseHealth()
+                + (long) (getLevel() - 1) * heroClass.getHealthGainPerLevel());
+    }
+
+    public int getMaxMana() {
+        return Math.toIntExact((long) heroClass.getBaseMana()
+                + (long) (getLevel() - 1) * heroClass.getManaGainPerLevel());
     }
 
     public int getCurrentHealth() {
@@ -118,7 +177,28 @@ public class Hero extends UuidEntity {
     }
 
     public int getStamina() {
-        return stamina;
+        return Math.toIntExact(staminaMilliseconds * 100
+                / HeroProgression.MAX_STAMINA_MILLISECONDS);
+    }
+
+    public long getStaminaMilliseconds() {
+        return staminaMilliseconds;
+    }
+
+    public void consumeStaminaMilliseconds(long amount) {
+        if (amount < 0) {
+            throw new IllegalArgumentException("Stamina consumption cannot be negative.");
+        }
+        staminaMilliseconds = Math.max(0, staminaMilliseconds
+                - Math.min(amount, HeroProgression.MAX_STAMINA_MILLISECONDS));
+    }
+
+    public void recoverStaminaMilliseconds(long amount) {
+        if (amount < 0) {
+            throw new IllegalArgumentException("Stamina recovery cannot be negative.");
+        }
+        staminaMilliseconds = Math.min(HeroProgression.MAX_STAMINA_MILLISECONDS,
+                staminaMilliseconds + Math.min(amount, HeroProgression.MAX_STAMINA_MILLISECONDS));
     }
 
     public HeroActivity getActivity() {
@@ -151,12 +231,12 @@ public class Hero extends UuidEntity {
         int recoveryMultiplier = activity == HeroActivity.RESTING ? 2 : 1;
         currentHealth = recover(
                 currentHealth,
-                heroClass.getBaseHealth(),
+                getMaxHealth(),
                 heroClass.getHealthRecoveryPerSecond() * recoveryMultiplier,
                 elapsedSeconds);
         currentMana = recover(
                 currentMana,
-                heroClass.getBaseMana(),
+                getMaxMana(),
                 heroClass.getManaRecoveryPerSecond() * recoveryMultiplier,
                 elapsedSeconds);
         lastResourceSynchronizedAt = lastResourceSynchronizedAt.plusSeconds(elapsedSeconds);
@@ -188,9 +268,9 @@ public class Hero extends UuidEntity {
         agency = newAgency;
         party = null;
         activity = HeroActivity.TRAINING;
-        currentHealth = heroClass.getBaseHealth();
-        currentMana = heroClass.getBaseMana();
-        stamina = 100;
+        currentHealth = getMaxHealth();
+        currentMana = getMaxMana();
+        staminaMilliseconds = HeroProgression.MAX_STAMINA_MILLISECONDS;
         lastResourceSynchronizedAt = Instant.now();
     }
 

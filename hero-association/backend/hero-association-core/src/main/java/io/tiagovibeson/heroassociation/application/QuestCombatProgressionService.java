@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
+import io.tiagovibeson.heroassociation.application.combat.CombatProgressionApplier;
 import io.tiagovibeson.heroassociation.application.combat.QuestCombatSnapshotMapper;
 import io.tiagovibeson.heroassociation.domain.Hero;
 import io.tiagovibeson.heroassociation.domain.HeroActivity;
@@ -33,6 +34,7 @@ public class QuestCombatProgressionService {
             var events = battle.advanceTo(
                     combat.getCurrentTimeMilliseconds() + elapsedMilliseconds,
                     ThreadLocalRandom.current()::nextDouble);
+            CombatProgressionApplier.apply(combat, events, battle.getStatus(), battle.getCurrentTimeMilliseconds());
             QuestCombatSnapshotMapper.apply(combat, battle, synchronizedAt);
             combat.appendEvents(events);
         }

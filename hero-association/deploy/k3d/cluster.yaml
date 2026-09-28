@@ -11,10 +11,10 @@ kubeAPI:
 # Kubernetes 1.35 refuses cgroup v1, which this Docker Desktop engine uses.
 image: rancher/k3s:v1.34.7-k3s1
 ports:
-  - port: "127.0.0.1:19080:80"
+  - port: "127.0.0.1:80:80"
     nodeFilters:
       - loadbalancer
-  - port: "127.0.0.1:19443:443"
+  - port: "127.0.0.1:443:443"
     nodeFilters:
       - loadbalancer
 options:

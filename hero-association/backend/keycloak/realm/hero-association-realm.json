@@ -59,6 +59,166 @@
           "temporary": false
         }
       ]
+    },
+    {
+      "id": "019c4c00-0100-7000-8000-000000000101",
+      "username": "manager1@mail.com",
+      "email": "manager1@mail.com",
+      "firstName": "Manager1",
+      "lastName": "Last1",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "manager1",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "id": "019c4c00-0100-7000-8000-000000000102",
+      "username": "manager2@mail.com",
+      "email": "manager2@mail.com",
+      "firstName": "Manager2",
+      "lastName": "Last2",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "manager2",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "id": "019c4c00-0100-7000-8000-000000000103",
+      "username": "manager3@mail.com",
+      "email": "manager3@mail.com",
+      "firstName": "Manager3",
+      "lastName": "Last3",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "manager3",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "id": "019c4c00-0100-7000-8000-000000000104",
+      "username": "manager4@mail.com",
+      "email": "manager4@mail.com",
+      "firstName": "Manager4",
+      "lastName": "Last4",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "manager4",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "id": "019c4c00-0100-7000-8000-000000000105",
+      "username": "manager5@mail.com",
+      "email": "manager5@mail.com",
+      "firstName": "Manager5",
+      "lastName": "Last5",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "manager5",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "id": "019c4c00-0100-7000-8000-000000000106",
+      "username": "manager6@mail.com",
+      "email": "manager6@mail.com",
+      "firstName": "Manager6",
+      "lastName": "Last6",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "manager6",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "id": "019c4c00-0100-7000-8000-000000000107",
+      "username": "manager7@mail.com",
+      "email": "manager7@mail.com",
+      "firstName": "Manager7",
+      "lastName": "Last7",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "manager7",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "id": "019c4c00-0100-7000-8000-000000000108",
+      "username": "manager8@mail.com",
+      "email": "manager8@mail.com",
+      "firstName": "Manager8",
+      "lastName": "Last8",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "manager8",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "id": "019c4c00-0100-7000-8000-000000000109",
+      "username": "manager9@mail.com",
+      "email": "manager9@mail.com",
+      "firstName": "Manager9",
+      "lastName": "Last9",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "manager9",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "id": "019c4c00-0100-7000-8000-000000000110",
+      "username": "manager10@mail.com",
+      "email": "manager10@mail.com",
+      "firstName": "Manager10",
+      "lastName": "Last10",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "manager10",
+          "temporary": false
+        }
+      ]
     }
   ],
   "components": {

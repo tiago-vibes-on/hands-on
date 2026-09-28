@@ -9,4 +9,5 @@ resources:
   - keycloak.yaml
   - core.yaml
   - bff.yaml
+  - hpa.yaml
   - routes.yaml

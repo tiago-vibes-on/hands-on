@@ -7,7 +7,9 @@
     "test": "node run-playwright.js",
     "test:auth": "node run-playwright.js tests/authentication.spec.js",
     "test:k3d": "node run-k3d-playwright.js",
-    "load:k3d": "HERO_ASSOCIATION_K3D_PLAYWRIGHT_CONFIG=playwright.k3d.load.config.js node run-k3d-playwright.js"
+    "test:market:k6": "node run-k3d-k6.js",
+    "load:k3d": "HERO_ASSOCIATION_K3D_PLAYWRIGHT_CONFIG=playwright.k3d.load.config.js node run-k3d-playwright.js",
+    "load:mixed:k3d": "HERO_ASSOCIATION_K3D_PLAYWRIGHT_CONFIG=playwright.k3d.mixed.config.js node run-k3d-playwright.js"
   },
   "engines": {
     "node": ">=24"

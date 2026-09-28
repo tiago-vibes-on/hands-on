@@ -25,13 +25,21 @@ class MarketOrderControllerTest {
                 .contentType(ContentType.JSON)
                 .body("""
                         {
+                          "agencyId": "%s",
                           "side": "SELL",
                           "itemId": "%s",
                           "quantity": 1,
                           "priceGoldPerItem": 100
                         }
-                        """.formatted(MAGIC_CRYSTAL_ID))
-                .when().post("/api/v1/agencies/%s/market-orders".formatted(DAWNWATCH_AGENCY_ID))
+                        """.formatted(DAWNWATCH_AGENCY_ID, MAGIC_CRYSTAL_ID))
+                .when().post("/api/v1/market/orders")
+                .then()
+                .statusCode(200)
+                .body("status", is("FILLED"))
+                .body("quantityRemaining", is(0));
+
+        given()
+                .when().get("/api/v1/agencies/%s/state".formatted(DAWNWATCH_AGENCY_ID))
                 .then()
                 .statusCode(200)
                 .body("agency.gold", is(2570))
@@ -49,9 +57,23 @@ class MarketOrderControllerTest {
     @TestSecurity(user = "019c4c00-0100-7000-8000-000000000002")
     void shouldReturnReservedItemsWhenCancellingAnOpenSellOrder() {
         given()
-                .when().delete("/api/v1/agencies/%s/market-orders/%s".formatted(IRONRIDGE_AGENCY_ID, IRONRIDGE_SELL_ORDER_ID))
+                .when().delete("/api/v1/market/orders/%s".formatted(IRONRIDGE_SELL_ORDER_ID))
+                .then()
+                .statusCode(200)
+                .body("status", is("CANCELLED"));
+
+        given()
+                .when().get("/api/v1/agencies/%s/state".formatted(IRONRIDGE_AGENCY_ID))
                 .then()
                 .statusCode(200)
                 .body("itemInventory.find { it.item.code == 'iron-ingot' }.quantity", is(60));
+    }
+
+    @Test
+    void shouldRejectCancellationByAnotherAgencyLeader() {
+        given()
+                .when().delete("/api/v1/market/orders/%s".formatted(IRONRIDGE_SELL_ORDER_ID))
+                .then()
+                .statusCode(403);
     }
 }

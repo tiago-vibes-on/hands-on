@@ -26,7 +26,7 @@ spec:
               - name: X-Forwarded-Proto
                 value: https
               - name: X-Forwarded-Port
-                value: "19443"
+                value: "443"
       backendRefs:
         - name: bff
           port: 8080

@@ -49,7 +49,7 @@ lab. Checkboxes reflect verified work; a manual k3d browser check remains.
   Generate ignored lab-only secrets; never reuse normal development data.
 - [x] Deploy one Core and one BFF Pod with private Services, health probes,
   resource requests, and opt-in Istio sidecars. Keep Core on a `Recreate`
-  rollout while startup drops and reseeds its schema.
+  rollout pending two-Pod correctness and restart tests.
 - [x] Route BFF `/api` and `/auth` and the Keycloak hostname through the
   existing Envoy Gateway, using the k3d HTTPS port in OIDC callbacks.
 - [x] Verify rollouts, seeded Core data, BFF session and login redirects,
@@ -131,29 +131,64 @@ BFF and Core now emit traces, metrics, and logs to it in the k3d lab.
 
 ## Phase 3 — Make Game Core safe for multiple Pods
 
-- [ ] Move schema creation and deterministic seed data out of Core startup.
-  The lab database may remain disposable, but starting or replacing a Core
-  Pod must not drop shared tables or reseed them independently. Choose a
-  single-run bootstrap or migrations before implementing this task.
-- [ ] Make combat progression and agency recovery cluster-safe. The current
-  in-process `@Scheduled(... concurrentExecution = SKIP)` jobs run in every
-  Core instance; choose and test a single-owner or coordinated-work approach
-  so two Pods cannot apply the same progression twice.
-- [ ] Run concurrency and restart tests with at least two Core Pods sharing
-  one PostgreSQL database. Confirm no duplicated recovery, combat events, or
-  quest resolutions before enabling Core autoscaling.
+- [x] Move schema creation and deterministic seed data out of normal Core
+  startup. A one-shot k3d Job creates and seeds an absent database; ordinary
+  Core Pods validate the schema and preserve data. An explicit
+  `deploy-backend.sh --reset-core-db` resets only this disposable lab's Core
+  database. Dev/test and packaged Compose keep their deliberate reset behavior.
+  Verified with a temporary database, an unchanged table identity and row
+  count after validation and Core restart, and the k3d browser suite (2/2).
+- [x] Coordinate combat progression and agency recovery across Core Pods.
+  Separate transaction-scoped PostgreSQL advisory locks let one Pod run each
+  job while another skips; the next tick catches up from persisted timestamps.
+  Testcontainers verifies competing transactions, skip/resume for both jobs,
+  independent locks, and release after rollback.
+- [x] Run concurrency and restart tests with two Core Pods sharing one
+  PostgreSQL database. The isolated k3d test puts the Pods on distinct nodes,
+  verifies recovery against elapsed time and combat event continuity, restarts
+  a Pod during combat, forces one quest resolution, then restarts a Pod again
+  and verifies that the resolved quest and event count remain unchanged.
+  The test database and Pods are removed afterward; live Core stayed at one
+  replica until the Phase 4 scaling configuration was introduced.
 
 ## Phase 4 — Autoscaling and load tests
 
-- [ ] Configure separate `autoscaling/v2` HPAs for BFF and Core, each with
-  `minReplicas: 2` and `maxReplicas: 8`. Start with CPU metrics from K3s Metrics
-  Server and tune utilization targets and resource requests after measuring
-  baseline usage. Do not autoscale PostgreSQL, Redis, or Keycloak as part of
-  this first experiment.
-- [ ] Add repeatable load tests and observe scale-out and scale-in, request
-  latency/errors, browser sessions across BFF Pods, and quest/recovery
-  correctness across Core Pods. Include Istio sidecar CPU and memory overhead
-  when setting HPA requests and interpreting load-test results. Confirm a
-  rollout or Pod restart does not break the authenticated flow.
-- [ ] Document observed capacity limits and the distinction between Pod
-  autoscaling on one computer and real multi-node or multi-AZ resilience.
+- [x] Configure separate `autoscaling/v2` HPAs for BFF and Core, each
+  with `minReplicas: 2`, `maxReplicas: 8`, and an initial 60% Pod-CPU target
+  from K3s Metrics Server. Pod CPU includes Istio sidecar overhead. Both use
+  rolling updates and a 15-second drain before termination; an explicit
+  Core database reset removes its HPA before stopping Pods. PostgreSQL,
+  Redis, and Keycloak are not autoscaled.
+- [x] Add a repeatable authenticated read-load and rollout test. A 90-second,
+  16-client run returned 9,344/9,344 HTTP 200 responses at 103.7 requests/s
+  with 96 ms p95 and 206 ms p99 while BFF rolled. BFF reached six Pods,
+  Core eight, and both returned to two; four k3d browser tests passed after
+  scale-in. Early runs exposed brief 503s during Pod turnover, resolved by
+  the drain window.
+- [x] Exercise active quest/combat and agency recovery while an isolated Core
+  deployment scales from two to four to eight Pods on three k3d nodes. A
+  20-transaction/s PostgreSQL read workload runs against the same temporary
+  database while Core writes. The run completed 3,640 read transactions with
+  zero failures, and verified elapsed-time recovery, combat event continuity,
+  one quest resolution, and active/post-resolution Pod restarts. This validates
+  shared-database concurrency, not authenticated API writes.
+- [x] Measure a bounded mixed API workload against an isolated k3d BFF/Core
+  stack and temporary Core database. With 90% authenticated state reads and
+  10% activity writes, the staged 2-8-Pod HPA run passed 64 clients at 247.2
+  requests/s with zero errors. In a warmed fixed-eight-Pod run, 64 clients
+  passed at 251.5 requests/s; 128 clients reached 301.7 requests/s but
+  breached the illustrative 500 ms write-p95 target (581 ms). These are
+  workload- and warm-up-dependent lab observations, not a universal maximum.
+  All k3d nodes share one computer, so this does not prove physical-node or
+  multi-AZ resilience. See `deploy/k3d/CAPACITY.md` for method and caveats.
+- [x] Roll the Redis-backed market limiter into the running k3d BFF without
+  restarting Core or resetting its database. Both BFF Pods started from the
+  imported image, and five k3d browser tests passed through Envoy Gateway.
+  The new test sent six concurrent invalid market-order attempts from two
+  sessions of one user: five reached Core validation, one received `429`,
+  while another user's request remained independent.
+- [x] Move k3d browser ingress to host ports 80/443, exclusive with local
+  Compose. Recreated only the disposable k3d lab and restored Istio, Envoy,
+  observability, and seeded application data on 2026-09-28. Windows HTTP to
+  HTTPS, frontend, BFF, and Keycloak checks passed; k3d Playwright passed 5/5
+  and k6 thresholds passed. A stop/start switch preserved local Compose data.

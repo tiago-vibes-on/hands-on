@@ -261,14 +261,14 @@ the local Keycloak realm, stop the infrastructure from `backend/` with
 then start it again. Google is intentionally not configured until its social-login
 task is implemented.
 
-The versioned realm includes three development-only test users:
-`user1@mail.com` / `user1` has the direct Keycloak profile name `User1 Last1`
-and corresponds to the seeded User 1 Manager leading Dawnwatch Agency;
-`user2@mail.com` / `user2` has `User2 Last2` and corresponds to the seeded User
-2 Manager leading Ironridge Exchange; `user3@mail.com` / `user3` has `User3
-Last3` and is intentionally unprovisioned so local and E2E testing can cover
-Manager onboarding, no-agency access, and first-agency creation. These
-credentials must never be used outside local development.
+The versioned realm includes `user1@mail.com` / `user1` (Dawnwatch leader),
+`user2@mail.com` / `user2` (Ironridge leader), and `user3@mail.com` / `user3`
+(an intentionally unprovisioned onboarding user). It also includes
+`manager1@mail.com` through `manager10@mail.com`, each with the matching
+`managerN` password, seeded Manager, and agency membership. Three agencies now
+have multiple Managers; the complete roles and credentials are in
+[TEST_DATA.md](TEST_DATA.md). These weak credentials must never be used outside
+local development or the isolated k3d lab.
 
 The BFF uses Quarkus's Redis token-state manager. It stores Keycloak ID,
 access, and refresh tokens in `redis-bff`; the browser receives only an opaque

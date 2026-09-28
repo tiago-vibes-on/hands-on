@@ -60,14 +60,45 @@ container through Dev Services.
 
 ### Development database reset
 
-Until Flyway is introduced, every application startup drops and recreates the
-database schema, then loads deterministic game data from
+Until Flyway is introduced, the development and test profiles drop and
+recreate the database schema on startup, then load deterministic game data from
 `src/main/resources/import.sql`. The seed contains Dawnwatch Agency, its
 leader and six heroes, the three globally available recruitment NPCs, Broken
 Pass Party, an in-progress troll quest and its initial combat snapshot, seven
 rune definitions, Magic Crystals, Iron Ingots, agency rune inventory, the
 party's equipped runes, two feed posts, Ironridge Exchange, and its open market
-orders. Do not use this configuration with data that must be retained.
+orders. It also seeds manager1 through manager10 across Dawnwatch, Ironridge,
+and Silverkeep Guild; see the [test-data map](../../TEST_DATA.md). Do not use
+this configuration with data that must be retained.
+
+The progression schema now stores cumulative XP, fractional Melee, Distance,
+Magic, and Shield points, and up to 48 hours of stamina in milliseconds.
+Hero and skill levels derive from those totals; class-specific maximum health
+and mana derive from hero level. Restarting `quarkus:dev` recreates and reseeds
+the local database with this schema. The existing Hero API still returns a
+percentage stamina value until the planned frontend/API update.
+
+Combat synchronization now drains stamina for each living hero by active
+battle time and grants Melee or Distance points for Warrior/Archer attacks
+and Magic points from mana actually spent. It processes every new combat
+event before retaining only the latest 100 for the UI. Each creature
+defeat grants its 100-XP provisional base separately to every living party
+hero, adjusted by individual stamina at the kill time; repeated syncs do not
+award it twice. Shield blocking and agency stamina recovery remain planned.
+
+The packaged JVM and native Compose stacks opt into the same reset behavior
+explicitly. A packaged Core started without that override instead validates
+its schema and does not load seed data. In k3d, `deploy-backend.sh` runs a
+one-shot bootstrap Job only when the schema is absent; `--reset-core-db`
+requests a destructive lab reset. Ordinary Core Pod restarts preserve data.
+An existing k3d lab database using the earlier Hero schema needs an explicit
+`--reset-core-db` redeploy;
+normal Pod restarts cannot migrate it. Do not reset data you need to retain.
+Scheduled progression and recovery use separate PostgreSQL transaction locks,
+so concurrent Pods skip competing ticks. An isolated k3d concurrency test
+checks recovery, combat, and quest resolution while scaling from two to eight
+Pods under concurrent database reads. The k3d Core HPA runs two to eight
+replicas; normal Core Pods validate the shared database schema.
 
 ### Stop the local database
 
@@ -204,8 +235,13 @@ market orders.
 - `POST /api/v1/agencies/{agencyId}/quests/{questId}/combat/sync`
 - `POST /api/v1/agencies/{agencyId}/feed-posts`
 - `GET /api/v1/market/orders`
-- `POST /api/v1/agencies/{agencyId}/market-orders`
-- `DELETE /api/v1/agencies/{agencyId}/market-orders/{orderId}`
+- `POST /api/v1/market/orders` (JSON body includes `agencyId`, `side`, `itemId`, `quantity`, and `priceGoldPerItem`)
+- `DELETE /api/v1/market/orders/{orderId}`
+
+Market mutations return the market order and its status, not agency state.
+Refresh `GET /api/v1/agencies/{agencyId}/state` after placing or cancelling an
+order. Core still executes market matching and resource transfers in one
+PostgreSQL transaction until Market is extracted as its own service.
 
 
 The initial global board contains free Level 1 NPCs. A candidate is globally
@@ -246,11 +282,13 @@ server-generated combat events; ordinary state reads remain read-only. A
 five-second background worker advances every active snapshot while the API is
 running. When combat reaches `HERO_VICTORY`, its quest becomes `COMPLETED`;
 when it reaches `CREATURE_VICTORY`, it becomes `FAILED`. Both outcomes set
-`finishedAt`, release the party, and return its heroes to `TRAINING`. Rewards,
-stamina costs, permanent death, and death fees remain unimplemented. Each
-combat synchronization persists the current health and mana of heroes in that
-encounter. A separate five-second background worker restores agency hero health
-and mana from elapsed time: Training uses the base class rate and Resting uses
+`finishedAt`, release the party, and return its heroes to `TRAINING`.
+Combat synchronization persists hero health and mana, drains active-battle
+stamina, grants eligible Melee, Distance, and Magic skill points, and awards
+creature XP to living party heroes. Economic rewards and the non-permanent
+defeat penalty remain planned; permanent death and death fees are no longer
+part of the current design. A separate five-second background worker restores
+agency hero health and mana from elapsed time: Training uses the base class rate and Resting uses
 twice that rate. Stamina recovery is not implemented yet.
 Agency state also includes newest-first feed posts. A 500-character text post
 can be created as the agency, its current leader, or any hero belonging to the

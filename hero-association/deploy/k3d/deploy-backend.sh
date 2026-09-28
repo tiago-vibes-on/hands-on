@@ -6,6 +6,12 @@ kubeconfig_path="$script_dir/.kubeconfig"
 secret_dir="$script_dir/secrets"
 namespace=hero-association
 
+if [[ $# -gt 1 || ( $# -eq 1 && "$1" != "--reset-core-db" ) ]]; then
+  printf 'Usage: %s [--reset-core-db]\n' "$0" >&2
+  exit 2
+fi
+reset_core_db="${1:-}"
+
 if [[ ! -f "$kubeconfig_path" ]]; then
   printf 'Missing %s. Create the k3d cluster first.\n' "$kubeconfig_path" >&2
   exit 1
@@ -55,10 +61,40 @@ for dependency in postgres-core postgres-keycloak redis-bff; do
   kubectl -n "$namespace" rollout status "deployment/$dependency" --timeout=5m
 done
 
+core_schema_exists="$(kubectl -n "$namespace" exec deployment/postgres-core -c postgres -- \
+  psql -U hero_association -d hero_association -At \
+  -c "SELECT to_regclass('public.account') IS NOT NULL")"
+if [[ "$core_schema_exists" != "t" && "$core_schema_exists" != "f" ]]; then
+  printf 'Unexpected Core schema status: %s\n' "$core_schema_exists" >&2
+  exit 1
+fi
+
+core_bootstrapped=false
+if [[ "$core_schema_exists" == "f" || "$reset_core_db" == "--reset-core-db" ]]; then
+  # Stop autoscaling before taking Core offline for a deliberate database reset.
+  kubectl -n "$namespace" delete hpa core --ignore-not-found=true
+  if kubectl -n "$namespace" get deployment/core >/dev/null 2>&1; then
+    kubectl -n "$namespace" scale deployment/core --replicas=0
+    kubectl -n "$namespace" rollout status deployment/core --timeout=5m
+  fi
+  job_name="$(kubectl create -f "$script_dir/../k8s/backend/core-db-bootstrap.yaml" -o jsonpath='{.metadata.name}')"
+  if ! kubectl -n "$namespace" wait --for=condition=complete "job/$job_name" --timeout=5m; then
+    kubectl -n "$namespace" logs "job/$job_name" --all-containers=true || true
+    exit 1
+  fi
+  kubectl -n "$namespace" logs "job/$job_name" --all-containers=true
+  core_bootstrapped=true
+else
+  printf 'Core schema exists; skipping destructive bootstrap. Use --reset-core-db for an explicit lab reset.\n'
+fi
+
 kubectl apply -f "$script_dir/../k8s/backend/keycloak.yaml"
 kubectl -n "$namespace" rollout status deployment/keycloak --timeout=5m
 
 kubectl apply -k "$script_dir/../k8s/backend"
+if [[ "$core_bootstrapped" == true ]]; then
+  kubectl -n "$namespace" scale deployment/core --replicas=2
+fi
 for service in core bff; do
   kubectl -n "$namespace" rollout status "deployment/$service" --timeout=5m
 done

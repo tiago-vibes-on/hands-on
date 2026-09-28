@@ -130,15 +130,15 @@ export async function fetchMarketOrders() {
 }
 
 export async function createMarketOrder({ agencyId, side, itemId, quantity, priceGoldPerItem }) {
-  return request(`/api/v1/agencies/${agencyId}/market-orders`, {
+  return request('/api/v1/market/orders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ side, itemId, quantity, priceGoldPerItem }),
+    body: JSON.stringify({ agencyId, side, itemId, quantity, priceGoldPerItem }),
   })
 }
 
-export async function cancelMarketOrder({ agencyId, orderId }) {
-  return request(`/api/v1/agencies/${agencyId}/market-orders/${orderId}`, {
+export async function cancelMarketOrder({ orderId }) {
+  return request(`/api/v1/market/orders/${orderId}`, {
     method: 'DELETE',
   })
 }

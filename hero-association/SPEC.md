@@ -9,6 +9,13 @@ server-held Keycloak access token with the existing API to Core.
 
 ## Architecture
 
+Game Core is a temporary home for multiple game domains while their ownership
+and behavior are established. New domain logic should have clear internal
+boundaries; cohesive domains such as Market are intended to become separate
+services later, with their own data and reliable cross-domain contracts. See
+[ADR 0004](adr/0004-core-as-temporary-modular-monolith.md). This is an
+architecture direction, not an implemented service split.
+
 The backend is split into independently buildable services:
 
 - `backend/hero-association-bff`: the public API boundary on port `8080`; it
@@ -78,11 +85,21 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
 - `POST /api/v1/agencies/{agencyId}/feed-posts` creates an agency-scoped text
   post and returns the updated agency state.
 - `GET /api/v1/market/orders` returns the global open market order book.
-- `POST /api/v1/agencies/{agencyId}/market-orders` creates and attempts to
-  match a buy or sell order, returning the updated agency state.
-- `DELETE /api/v1/agencies/{agencyId}/market-orders/{orderId}` cancels an open
-  order, releases its remaining reservation, and returns the updated agency
-  state.
+- `POST /api/v1/market/orders` accepts `agencyId`, `side`, `itemId`,
+  `quantity`, and `priceGoldPerItem` in the JSON body. It creates and attempts
+  to match a buy or sell order and returns the resulting market order, including
+  its status. The authenticated user must lead the selected agency.
+  The BFF admits at most five order-placement attempts per authenticated
+  Keycloak user in any rolling one-second window, shared across sessions,
+  agencies, buy/sell sides, and BFF replicas. Excess attempts return `429`
+  with `Retry-After: 1`; if the shared limiter is unavailable, the BFF returns
+  `503` without forwarding the order. Reads and cancellations are not limited.
+- `DELETE /api/v1/market/orders/{orderId}` cancels an open order owned by
+  an agency led by the authenticated user, releases its remaining reservation,
+  and returns the cancelled market order. Clients refresh agency state
+  separately after order mutations. Market orders still execute inside Game
+  Core's database transaction; the future Market service split is not yet
+  implemented.
 - An unknown agency returns `404 Not Found` with an error message.
 
 The initial recruitment board contains Alden Steelward (Warrior), Seris
@@ -135,7 +152,44 @@ previous sync, and persists the result and any new events atomically. A
 background worker uses the same operation every five seconds for all active
 snapshots. `GET /state` is read-only and does not advance combat. Each
 synchronization also persists the current health and mana of heroes in the
-encounter; stamina, rewards, and death resolution are not implemented yet.
+encounter. It drains each living hero by elapsed active battle time, stopping
+at the actual terminal event or that hero defeat. Valid Warrior and Archer
+basic attacks earn Melee and Distance points; mana actually spent earns Magic
+points using the class aptitude and below-15-hour stamina penalty. The full
+new event stream is processed inside the combat transaction before retaining
+only the latest 100 UI events. Each creature defeat awards its full base
+XP separately to every living party hero using the stamina of each hero at
+the kill time. Provisional creatures currently have 100 base XP. Shield
+combat points, stamina recovery, economic rewards, and death resolution
+remain planned.
+
+Core now persists cumulative hero XP, fractional Melee, Distance, Magic, and
+Shield points, and up to 48 hours of millisecond-precise stamina. Hero and
+skill levels derive from those totals, and class-specific maximum health and
+mana derive from hero level. New heroes start at Level 1 with all four skills
+at Level 10. The existing Hero API still returns percentage stamina for the
+frontend; a time-based API is planned separately. Combat skill and
+creature XP awards are active; agency practice is not.
+
+Combat XP is calculated separately for each living party hero from the full
+creature base XP at defeat, without a party-size or damage split. Individual
+stamina can change the final award. Shield combat progress awaits a
+block rule. Agency Training will recover one stamina minute per real minute; Resting will recover two at Rest Level 1, plus 10% of that baseline
+per later level. Training skill progress will start at 2x and gain 5% of that
+baseline per later Training Level. Above 40 hours adds 50 percentage points
+to hero XP only; below 15 hours halves hero XP and skill progress. A battle
+with no kill can still drain stamina and advance skills. Gold and item rewards
+remain deferred until game domains are separated.
+
+Both five-second Core jobs use separate transaction-scoped PostgreSQL
+advisory locks, so a competing Pod skips that tick rather than repeating
+combat progression or agency recovery. Each lock spans the same transaction
+as its updates and is released when the transaction ends. The next tick uses
+persisted timestamps to catch up. A k3d integration test scales an isolated
+Core deployment from two to four to eight Pods against one temporary PostgreSQL
+database while read-only SQL traffic runs. It verifies recovery, combat event
+continuity, and single quest resolution through Pod restarts.
+
 Feed posts are limited to 500 characters. An agency can post as itself, its
 single current leader, or one of its heroes; the author must belong to the
 agency. Agency membership authorization is enforced; feed visibility beyond an
@@ -169,14 +223,23 @@ IDs must not be added for entities or exposed through the API.
   `hero`, `party`, `quest`, `quest_combat`, `quest_combatant`,
   `quest_combat_event`, `quest_combat_hit`, `rune`, `agency_rune`, `item`,
   `agency_item`, `hero_rune`, `feed_post`, and `market_order`.
-- Until Flyway is introduced, application startup drops and recreates the
-  schema, then loads deterministic state from `import.sql`. The seed contains
-  local Accounts for the Dawnwatch and Ironridge managers, Dawnwatch Agency,
-  its leader and six heroes, the three globally available recruitment NPCs,
+- Until Flyway is introduced, Core's development and test profiles drop and
+  recreate the schema on startup, then load deterministic state from
+  `import.sql`. Packaged Docker Compose explicitly keeps this disposable
+  reset behavior. The k3d lab instead runs a single bootstrap Job only when
+  its Core schema is absent or an explicit reset is requested; normal Core
+  Pods validate the schema without modifying data. The seed contains
+  local Accounts and Managers for user1, user2, and manager1 through
+  manager10, plus a Core-only Soren fixture. User3 remains unprovisioned for
+  onboarding tests. Dawnwatch Agency has six members and six heroes;
+  Ironridge Exchange has four members and open market orders; Silverkeep Guild
+  has three members. The seed also contains three globally available recruits,
   Broken Pass Party and its in-progress quest and initial Troll combat snapshot,
-  the available Lost Courier quest, rune inventory, Magic Crystals, Iron
-  Ingots, equipped runes, two feed posts, Ironridge Exchange, and its open
-  market orders. This development-only workflow does not retain application data.
+  Lost Courier, rune inventory, Magic Crystals, Iron Ingots, equipped runes,
+  and two feed posts. See [TEST_DATA.md](TEST_DATA.md) for all credentials and
+  memberships. Manager-owned heroes, wallets, and inventory are planned in
+  [GAME.md](GAME.md), not implemented by this seed change. This development-only
+  workflow does not retain application data.
   The product is in an early stage, so local and pre-production schema and
   seed-data changes may be applied directly by resetting and recreating data;
   they do not require backwards compatibility before Flyway is introduced.
@@ -321,20 +384,30 @@ IDs must not be added for entities or exposed through the API.
   interval, 100 mana, no recovery, and no critical chance. Phaser renders any
   active quest snapshot. `HERO_VICTORY` completes a quest and
   `CREATURE_VICTORY` fails it. Either result sets `finishedAt`, releases the
-  party, and returns its heroes to Training; rewards, stamina costs, permanent
-  death, and death fees remain unimplemented.
+  party, and returns its heroes to Training. Economic rewards and the planned
+  non-permanent defeat penalty remain unimplemented.
 - A background worker restores agency hero health and mana every five seconds
   from elapsed full seconds. Training uses the base class rate and Resting uses
   twice that rate. Stamina recovery is not implemented yet.
 - The server combat engine recovers hero health and mana once per second. Warrior
   recovery is 10 health and 2 mana; Mage recovery is 2 health and 10 mana;
-  Archer recovery is 6 health and 6 mana. Party members are shown as earning
-  experience from creatures.
-- The stamina display is green at 80% or more, yellow from 30% through 79%,
-  and red below 30%. The matching experience gain is 150%, 100%, and 50%.
+  Archer recovery is 6 health and 6 mana. The UI still shows prototype XP;
+  Core now awards hero XP on creature defeat.
+- Stamina is stored as time up to 48 hours, but the existing Hero API still
+  exposes a derived percentage. The display keeps prototype colors: green
+  at 80% or more, yellow from 30% through 79%, and red below 30%. The
+  planned UI compares raw time instead: green above 40 hours, yellow from
+  15 through 40 hours, and red below 15 hours. At the current `1x` rate, hero XP is
+  150%, 100%, and 50%; a planned `2x` rate would yield 250%, 200%, and 100%.
+- Core now stores fractional Melee, Distance, Magic, and Shield points for
+  every hero and derives their skill levels, starting each skill at Level 10.
+  Valid Warrior and Archer basic attacks now earn Melee and Distance points;
+  mana actually spent earns Magic points. Successful shield blocks and agency
+  practice are not implemented yet. Planned agency practice earns 2x points
+  before class and server rates; see `PROGRESSION.md` for provisional rates.
 - Every hero card ends with five rune slots loaded from the API. Heroes with
-  learned spells also show their spell slots; currently only Elara has the two
-  mage spells. Critical Chance and Critical Damage Runes affect server combat;
+  learned spells also show their spell slots; Elara has both mage spells,
+  while other Mages now start at Magic Level 10 with Fire Ball available. Critical Chance and Critical Damage Runes affect server combat;
   other rune stat effects do not yet change gameplay. Combat displays five
   read-only rune slots for each hero so their equipped loadout is visible;
   creatures do not display rune slots.
@@ -375,22 +448,27 @@ cd hero-association/backend/hero-association-bff
 ## Isolated k3d backend lab
 
 The k3d environment is independent of normal Compose development and uses
-Envoy Gateway for browser ingress. Its first backend deployment runs JVM BFF
-and Core images, one replica each, with private ClusterIP Services and opt-in
-Istio sidecars. Separate PostgreSQL databases serve Core and Keycloak, and a
+Envoy Gateway for browser ingress. Its backend runs JVM BFF and Core images
+with private ClusterIP Services and opt-in Istio sidecars. Separate PostgreSQL
+databases serve Core and Keycloak, and a
 separate Redis instance stores BFF sessions. Generated lab-only credentials
-and a k3d-only Keycloak realm register callbacks and issuer URLs on port
-`19443`; the normal development realm and data are unchanged. Kubernetes
-startup, readiness, and liveness probes use Quarkus SmallRye Health. Core
-uses a `Recreate` rollout because schema drop-and-create and seeding still
-happen on startup. Do not scale Core until schema bootstrap and scheduled
-progression/recovery have been made safe for multiple Pods. The k3d frontend
-is a separate non-meshed Nginx Pod with a private Service; Envoy Gateway routes
+and a k3d-only Keycloak realm register callbacks and issuer URLs on standard
+HTTPS port 443. Normal Compose and k3d both bind host ports 80 and 443, so
+only one gateway may run at a time; their realms and data remain separate.
+Kubernetes startup, readiness, and liveness probes use Quarkus SmallRye Health.
+BFF and Core use rolling updates and separate CPU-based `autoscaling/v2` HPAs with
+two to eight replicas. The HPAs use Pod CPU, including Istio sidecar overhead,
+and hold downscale recommendations for 60 seconds in this disposable lab.
+Each Pod waits 15 seconds before shutdown to drain old connections; an
+explicit Core database reset removes the Core HPA before stopping Core Pods.
+The k3d frontend is a separate non-meshed Nginx Pod with a private Service;
+Envoy Gateway routes
 its root path to the frontend while `/api` and `/auth` reach BFF. The normal
 Vite/Compose development environment is unchanged. An isolated Playwright
-suite verifies seeded-user login, logout, login again, account identity, and
-an authorized agency-state API read through k3d HTTPS. It does not reset
-cluster data; Windows browser certificate trust remains a manual setup step.
+suite verifies seeded-user login, logout, login again, account identity,
+repeated authenticated agency-state reads, and rejection of cross-agency
+reads through k3d HTTPS. It does not reset cluster data; Windows browser
+certificate trust remains a manual setup step.
 
 Core's k3d `PeerAuthentication` is STRICT and workload-scoped; BFF-to-Core
 traffic is reported by Istio as `mutual_tls`, while a plaintext request from
@@ -399,14 +477,21 @@ ServiceAccounts. A Core-scoped Istio `AuthorizationPolicy` allows only callers
 presenting the BFF ServiceAccount identity; another meshed identity receives
 403. BFF remains reachable through Envoy Gateway. Core's OIDC checks still
 authorize the end user on protected APIs. Changing Core's ServiceAccount
-restarts its Pod and currently drops and reseeds its disposable database.
+restarts its Pod without resetting the Core database.
 
 A preliminary k3d baseline uses four authenticated clients for 60 seconds
 of read-only agency-state requests through Envoy Gateway, BFF, and Core,
 sharing one local-only account session.
 Resource requests are 300m CPU / 256Mi memory for BFF and 500m / 384Mi for
 Core, based on observed single-Pod CPU and memory under that traffic. This
-does not establish capacity for writes, combat, or 2-to-8-Pod scaling.
+does not establish capacity for writes or combat. A separate 16-client
+autoscaling run exercises authenticated reads and a BFF rolling restart;
+scaling on one computer does not demonstrate multi-node or multi-AZ resilience.
+A separate k3d capacity lab creates temporary BFF/Core Deployments and a
+temporary Core database. Header-marked requests exercise authenticated
+agency-state reads and hero-activity writes through the temporary stack;
+ordinary requests continue to use the live BFF. The test only establishes
+a workload-specific latency boundary on this one computer.
 
 In the k3d lab, BFF and Core export OTLP traces, HTTP/JVM metrics, and
 structured logs to the private observability Pod. Packaged containers

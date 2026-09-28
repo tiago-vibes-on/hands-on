@@ -7,6 +7,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 public record CreateMarketOrderRequest(
+        @NotNull UUID agencyId,
         @NotNull MarketOrderSide side,
         @NotNull UUID itemId,
         @Positive int quantity,

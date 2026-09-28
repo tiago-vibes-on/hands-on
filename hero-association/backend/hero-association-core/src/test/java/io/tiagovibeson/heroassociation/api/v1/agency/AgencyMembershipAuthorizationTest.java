@@ -30,13 +30,14 @@ class AgencyMembershipAuthorizationTest {
                 .contentType(ContentType.JSON)
                 .body("""
                         {
+                          "agencyId": "%s",
                           "side": "SELL",
                           "itemId": "%s",
                           "quantity": 1,
                           "priceGoldPerItem": 100
                         }
-                        """.formatted(MAGIC_CRYSTAL_ID))
-                .when().post("/api/v1/agencies/%s/market-orders".formatted(DAWNWATCH_AGENCY_ID))
+                        """.formatted(DAWNWATCH_AGENCY_ID, MAGIC_CRYSTAL_ID))
+                .when().post("/api/v1/market/orders")
                 .then()
                 .statusCode(403)
                 .body("message", is("Only an agency leader can perform this action."));

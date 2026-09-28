@@ -75,6 +75,8 @@ services:
       QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres-core:5432/hero_association
       QUARKUS_DATASOURCE_USERNAME: hero_association
       QUARKUS_DATASOURCE_PASSWORD: hero_association
+      QUARKUS_HIBERNATE_ORM_SCHEMA_MANAGEMENT_STRATEGY: drop-and-create
+      QUARKUS_HIBERNATE_ORM_SQL_LOAD_SCRIPT: import.sql
       HERO_ASSOCIATION_OIDC_AUTH_SERVER_URL: http://keycloak:8080/realms/hero-association
       HERO_ASSOCIATION_OIDC_ISSUER: http://localhost:${HERO_ASSOCIATION_KEYCLOAK_HTTP_PORT:-17180}/realms/hero-association
     expose:

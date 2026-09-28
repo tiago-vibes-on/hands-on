@@ -33,7 +33,7 @@ spec:
                   name: hero-association-k3d-credentials
                   key: KEYCLOAK_DATABASE_PASSWORD
             - name: KC_HOSTNAME
-              value: https://auth.k3d.heroassociation.test:19443
+              value: https://auth.k3d.heroassociation.test
             - name: KC_HTTP_ENABLED
               value: "true"
             - name: KC_PROXY_HEADERS

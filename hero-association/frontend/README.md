@@ -98,7 +98,7 @@ Build and deploy it after the k3d backend from `../deploy/k3d`:
 ./deploy-frontend.sh
 ```
 
-Open `https://k3d.heroassociation.test:19443`. Envoy Gateway serves the UI
+Open `https://k3d.heroassociation.test`. Envoy Gateway serves the UI
 and routes `/api` and `/auth` to BFF on the same origin. The k3d Playwright
 suite runs with `npm run test:k3d` from `../e2e` without resetting lab data.
 See [`../deploy/k3d/README.md`](../deploy/k3d/README.md#build-and-deploy-the-frontend)
@@ -126,8 +126,10 @@ for cluster setup, local CA trust, and image-restart instructions.
 - Agency heroes shown as Training or Resting; quest party members shown earning
   experience from creatures
 - Training and Resting actions persist through the backend when it is available
-- Stamina color and XP gain preview: 150% at 80% or more, 100% from 30% to
-  79%, and 50% below 30%
+- The current stamina color and XP preview still use prototype percentage
+  thresholds: 150% at 80% or more, 100% from 30% to 79%, and 50% below
+  30%. The planned 48-hour model and its different thresholds are described
+  in [`GAME.md`](../GAME.md); the UI has not been updated yet.
 - Five rune slots on every hero card and two displayed mage spell slots for
   Elara Moonweaver
 - Five read-only rune slots beneath each hero in combat, populated from the

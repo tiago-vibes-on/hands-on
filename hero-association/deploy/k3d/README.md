@@ -18,10 +18,14 @@ installer downloads a checksum-pinned manifest and requires network access.
 Java 25 and Node.js 24/npm 11 are needed for building the application; Node.js
 is also used to derive the k3d-only Keycloak realm during backend deployment.
 
+If the pinned CLIs are cached in this checkout's ignored `.tools/` directory,
+run `export PATH="$PWD/.tools:$PATH"` from `deploy/k3d` before the commands
+below. Otherwise install `k3d` and `istioctl` on your normal `PATH`.
+
 The config pins K3s 1.34.7 because this Docker Desktop engine exposes cgroup
 v1 and Kubernetes 1.35's kubelet does not start on cgroup v1 by default. It
 creates one server and two agents, disables K3s's bundled Traefik, and reserves
-host ports `16550` for the Kubernetes API, `19080` for HTTP, and `19443` for
+host ports `16550` for the Kubernetes API, `80` for HTTP, and `443` for
 HTTPS. It does not modify the default kubeconfig or switch the current context,
 protecting the existing WSL K3s context.
 
@@ -30,6 +34,7 @@ protecting the existing WSL K3s context.
 Run the following from this directory (`hero-association/deploy/k3d`):
 
 ```bash
+(cd ../../backend && docker compose -f compose.infra.yaml down)
 k3d cluster create --config cluster.yaml
 k3d kubeconfig get hero-association > .kubeconfig
 chmod 600 .kubeconfig
@@ -42,6 +47,32 @@ pauses only this lab; `k3d cluster start hero-association` resumes it. Deleting 
 lab with `k3d cluster delete hero-association` permanently removes its own
 cluster data—never use that command to reset normal development.
 
+For an existing cluster created with the old `19080`/`19443` bindings,
+changing `cluster.yaml` does not update its Docker port mappings. Stop local
+Compose, run `k3d cluster delete hero-association`, then repeat the creation
+and deployment steps below. This
+recreates the isolated k3d databases and telemetry; normal Compose volumes
+are untouched.
+
+For everyday switching, run these commands from this directory. Stop any
+host-run Quarkus/Vite processes separately if they are still running. To use
+k3d after local development:
+
+```bash
+(cd ../../backend && docker compose -f compose.infra.yaml down)
+k3d cluster start hero-association
+```
+
+To return to local development without deleting k3d data:
+
+```bash
+k3d cluster stop hero-association
+(cd ../../backend && ./scripts/start-infra.sh)
+```
+
+If the other gateway still owns port 80 or 443, the new environment will not
+start; stop the other environment first. Do not use `down --volumes` to switch.
+
 Keep normal development's hosts entries and add the two k3d names to the
 Windows hosts file (`C:\Windows\System32\drivers\etc\hosts`) or the Linux
 hosts file (`/etc/hosts`). Entries contain names, not URL schemes:
@@ -53,19 +84,27 @@ hosts file (`/etc/hosts`). Entries contain names, not URL schemes:
 127.0.0.1 auth.k3d.heroassociation.test
 ```
 
-The k3d URLs are `https://k3d.heroassociation.test:19443` and
-`https://auth.k3d.heroassociation.test:19443`; port `19443` is explicit because
-normal Docker Compose development already uses port 443. The k3d leaf
-certificate covers both hosts and is signed by the same local development CA.
+The k3d URLs are `https://k3d.heroassociation.test` and
+`https://auth.k3d.heroassociation.test`. Both use standard HTTPS port 443.
+Normal Compose development uses the same host ports, so stop its gateway
+before starting k3d; only one environment can own ports 80 and 443 at a time.
+The k3d leaf certificate covers both hosts and is signed by the same local
+development CA.
 Trust the CA in the Windows current-user store as described in the
 [backend README](../../backend/README.md#local-https-gateway); otherwise the
 browser may show a warning. Routes are installed by their deployment scripts.
 
+On WSL with the separate, pre-existing K3s installation, WSL `curl` to
+`127.0.0.1:80` or `:443` may reach K3s's Traefik instead of Docker Desktop's
+k3d port forwarding. Verify these URLs from the Windows browser or Windows
+`curl.exe` (with `--ssl-revoke-best-effort` for the offline development CA),
+or run the containerized E2E tests. Do not stop the separate WSL K3s service.
+
 Envoy Gateway owns browser ingress in k3d. Istio is separate: workload-level
 sidecars will observe and secure BFF-to-Core traffic. There is no Istio ingress
-gateway, and the namespace is not globally labeled for injection. We will
-validate the app with probes before enforcing Core mTLS or enabling 2-to-8-Pod
-HPAs.
+gateway, and the namespace is not globally labeled for injection. Core mTLS
+is enforced after probe and identity checks; separate CPU HPAs now manage
+two to eight BFF and Core Pods.
 
 Install the pinned Istio 1.30.5 `istioctl` binary, then install only its
 control plane using the isolated kubeconfig:
@@ -88,8 +127,8 @@ applies the versioned resources under `../k8s/`:
 KUBECONFIG="$PWD/.kubeconfig" kubectl -n hero-association wait --for=condition=Programmed gateway/hero-association --timeout=150s
 ```
 
-The Gateway listens through k3d's mapped ports `19080` and `19443`. HTTP
-redirects to HTTPS on `19443`. `deploy-backend.sh` adds the BFF `/api` and
+The Gateway listens through k3d's mapped ports `80` and `443`. HTTP
+redirects to HTTPS on port `443`. `deploy-backend.sh` adds the BFF `/api` and
 `/auth` routes plus Keycloak's hostname; `deploy-frontend.sh` adds the app
 root route. More-specific BFF paths continue to reach BFF.
 
@@ -99,7 +138,7 @@ check the response, and remove them immediately:
 ```bash
 KUBECONFIG="$PWD/.kubeconfig" kubectl apply -f gateway-smoke.yaml
 KUBECONFIG="$PWD/.kubeconfig" kubectl -n hero-association rollout status deploy/gateway-smoke
-curl --cacert ../../traefik/certs/local-ca.crt --resolve 'k3d.heroassociation.test:19443:127.0.0.1' https://k3d.heroassociation.test:19443/__gateway_smoke
+curl --cacert ../../traefik/certs/local-ca.crt --resolve 'k3d.heroassociation.test:443:127.0.0.1' https://k3d.heroassociation.test/__gateway_smoke
 KUBECONFIG="$PWD/.kubeconfig" kubectl delete -f gateway-smoke.yaml
 ```
 
@@ -190,10 +229,10 @@ The **Hero Association** Grafana folder provisions two dashboards:
   Gateway upstream traffic and BFF-to-Core mesh traffic.
 - `http://127.0.0.1:13000/d/hero-association-scaling/hero-association-scaling`
   shows BFF/Core Pod count, Pod CPU, working memory, latency, and errors
-  during future 2-to-8-Pod scaling runs. It shows one Pod per service now.
+  during 2-to-8-Pod scaling runs. The idle baseline is two Pods per service.
   Pod count is inferred from sampled resource metrics and may lag briefly
-  during a rollout. Do not scale Core until shared-database startup and
-  jobs are made safe.
+  during a rollout. Shared-database startup and jobs passed an isolated
+  two-Pod test before the HPAs were enabled.
 
 In Explore, query `istio_requests_total`,
 `envoy_cluster_external_upstream_rq_total`, and
@@ -248,26 +287,39 @@ The deploy script refuses any context except the isolated
 `k3d-hero-association` context in `.kubeconfig`. It creates random credentials
 in the ignored `secrets/` directory, derives a k3d-only Keycloak realm from the
 versioned local realm, and deploys isolated Core and Keycloak PostgreSQL, BFF
-Redis, Keycloak, Core, and BFF. Core and BFF each have one Istio-injected Pod
-and private Services. Core uses `Recreate` rollout because its current startup
-still drops and reseeds its database. Do not scale Core or enable an HPA yet.
+Redis, Keycloak, Core, and BFF. Core and BFF have Istio-injected Pods and
+private Services. If the Core schema is absent, the script first runs a
+one-shot bootstrap Job using the Core image to create the schema and load
+deterministic seed data. Normal Core Pods only validate the schema; redeploys
+and restarts preserve the database. To deliberately discard this lab's Core
+game data and reseed it, run `./deploy-backend.sh --reset-core-db`. The script
+stops Core before the reset and leaves it stopped if bootstrap fails. This
+flag does not reset Keycloak or Redis. The script temporarily removes the
+Core HPA before an explicit reset, then restores it afterward. BFF and Core
+use rolling updates and separate CPU HPAs with two to eight replicas. Both
+scheduled jobs use distinct transaction-scoped PostgreSQL advisory locks, so
+competing Core Pods skip a tick. An isolated correctness test now exercises
+two, four, and eight Pods during combat and recovery.
+
 The Envoy BFF route sets trusted forwarded host, scheme, and port headers so
-Quarkus generates OIDC callbacks on the external `:19443` URL. The local
+Quarkus generates OIDC callbacks on the public HTTPS URL. The local
 Compose environment and its volumes are not changed.
 
 Check the Pods and browser-facing routes:
 
 ```bash
 KUBECONFIG="$PWD/.kubeconfig" kubectl -n hero-association get pods,svc,httproute
-curl --cacert ../../traefik/certs/local-ca.crt --resolve 'k3d.heroassociation.test:19443:127.0.0.1' https://k3d.heroassociation.test:19443/api/v1/session
-curl --cacert ../../traefik/certs/local-ca.crt --resolve 'auth.k3d.heroassociation.test:19443:127.0.0.1' https://auth.k3d.heroassociation.test:19443/realms/hero-association
+curl --cacert ../../traefik/certs/local-ca.crt --resolve 'k3d.heroassociation.test:443:127.0.0.1' https://k3d.heroassociation.test/api/v1/session
+curl --cacert ../../traefik/certs/local-ca.crt --resolve 'auth.k3d.heroassociation.test:443:127.0.0.1' https://auth.k3d.heroassociation.test/realms/hero-association
 ```
 
-The frontend is served at `https://k3d.heroassociation.test:19443`. The
-imported test users are `user1@mail.com` / `user1` and `user2@mail.com` /
-`user2`, for this disposable lab only. The Keycloak admin username is
-`hero-association-admin`; its generated password is in the ignored
-`secrets/KEYCLOAK_ADMIN_PASSWORD` file.
+The frontend is served at `https://k3d.heroassociation.test`. The
+imported test users include `user1@mail.com` / `user1`, `user2@mail.com` /
+`user2`, and `manager1@mail.com` through `manager10@mail.com` with matching
+`managerN` passwords, for this disposable lab only. See the
+[test-data map](../../TEST_DATA.md) for agency roles.
+The Keycloak admin username is `hero-association-admin`; its generated
+password is in the ignored `secrets/KEYCLOAK_ADMIN_PASSWORD` file.
 
 To rebuild after source changes, rerun both scripts and restart the two
 Deployments so they use the newly imported fixed `:k3d` image tags:
@@ -277,6 +329,46 @@ KUBECONFIG="$PWD/.kubeconfig" kubectl -n hero-association rollout restart deploy
 KUBECONFIG="$PWD/.kubeconfig" kubectl -n hero-association rollout status deploy/core
 KUBECONFIG="$PWD/.kubeconfig" kubectl -n hero-association rollout status deploy/bff
 ```
+
+For BFF-only changes, keep Core and its database running. Build, test, and
+import just the BFF image, then restart only its Deployment:
+
+```bash
+./build-backend-images.sh bff
+KUBECONFIG="$PWD/.kubeconfig" kubectl -n hero-association rollout restart deploy/bff
+KUBECONFIG="$PWD/.kubeconfig" kubectl -n hero-association rollout status deploy/bff
+cd ../../e2e && npm run test:k3d
+```
+
+The image builder also accepts `core` alone; with no argument it builds both.
+On WSL with Docker Desktop, prefix the builder with
+`TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal` if its temporary test
+container ports are not reachable through `localhost`.
+
+## Test Core scaling under concurrent work
+
+After building and importing the Core JVM image and deploying the backend, run
+this isolated correctness test from `deploy/k3d`:
+
+```bash
+./test-core-concurrency.sh
+```
+
+The script checks the k3d context, creates a uniquely named temporary Core
+PostgreSQL database, and seeds it with the one-shot bootstrap Job. It starts
+two test-only Core Pods on different nodes, then scales them to four and eight
+across the three k3d nodes. While Core writes combat and agency recovery, the
+PostgreSQL Pod runs `pgbench` at 20 read-only transactions per second against
+that same temporary database for 180 seconds; no host-side `pgbench` install
+is needed. The test checks elapsed-time recovery, persisted combat time and
+event sequence continuity at each size, restarts a Pod during combat, resolves
+the quest once, and restarts a Pod again to check that the result stays fixed.
+
+The script removes its test Pods, bootstrap Job, and temporary database on
+exit. It does not modify the live Core database or deployment, and its manifest
+is excluded from the normal backend Kustomization. A failed test prints Pod
+diagnostics and returns nonzero. This is a shared-database concurrency check,
+not a measurement of maximum capacity or authenticated API-write traffic.
 
 ## Core mesh policy
 
@@ -289,9 +381,9 @@ Keycloak, and the frontend stay outside the mesh. Core still checks OIDC
 user tokens for protected APIs; workload authorization is an additional layer.
 Istio rewrites Core's HTTP probes, so kubelet health checks remain functional.
 
-Core uses a `Recreate` rollout. Changing its ServiceAccount or restarting its
-Pod currently drops and reseeds the disposable Core schema; avoid the rollout
-if you need to keep local changes. This must be fixed before scaling Core.
+Core uses a rolling update with at least two replicas. Changing its
+ServiceAccount or restarting a Pod preserves the Core schema. The separate
+bootstrap Job is not part of normal Pod startup.
 
 Check the policies, Pods, and per-container usage from this directory:
 
@@ -329,6 +421,18 @@ both mesh policies. On 2026-09-27, a brief idle/test snapshot showed BFF at
 46m CPU / 136Mi memory plus a 7m / 40Mi sidecar, and Core at 3m / 223Mi plus
 a 5m / 47Mi sidecar. This idle snapshot is not an HPA target.
 
+## Market order rate-limit load check
+
+From `hero-association/e2e`, run `npm run test:market:k6` after the JVM
+backend and frontend are deployed. It signs in with three local-only browser
+sessions, then uses the pinned k6 Docker image to verify that user 1 gets
+five forwarded requests and one HTTP 429 in a burst, while user 2 keeps a
+separate budget. A ten-second, 20-attempts-per-second scenario checks that
+the same per-user limit continues to hold through Envoy Gateway and the BFF
+replicas. Requests are intentionally invalid, so they cannot place orders.
+See [the E2E README](../../e2e/README.md#measure-the-market-order-rate-limit-with-k6)
+for prerequisites and expected results.
+
 ## Sustained read-load baseline
 
 From `hero-association/e2e`, run `npm run load:k3d` while sampling
@@ -349,9 +453,64 @@ and p99 45 ms. Sampled container peaks during that run were:
 
 Lab requests, tuned after an initial run, are 300m CPU / 256Mi memory
 for BFF and 500m / 384Mi for Core. Istio sidecars retain their injected
-100m / 128Mi requests. The rollouts and both k3d browser tests passed.
-This is a preliminary read-only baseline, not a
-mixed-workload capacity limit or a reason to enable Core autoscaling yet.
+100m / 128Mi requests. The original rollouts and two browser tests passed.
+This was a preliminary read-only baseline used to choose initial HPA requests
+and targets, not a mixed-workload capacity limit.
+
+## Autoscaling and sustained validation
+
+K3s Metrics Server supplies CPU samples for separate `autoscaling/v2` HPAs
+named `bff` and `core`. Each holds a minimum of two and a maximum of eight
+Pods with an initial 60% Pod-CPU target. Pod CPU includes the application and
+its Istio sidecar, so include the sidecar's 100m CPU / 128Mi memory request
+when interpreting utilization and host capacity. These are lab starting
+values, not production sizing. The HPAs use a 60-second downscale
+stabilization window and remove at most one Pod per 30 seconds. BFF and Core
+use rolling updates with no unavailable replicas. Each application Pod waits
+15 seconds in a `preStop` hook before exiting, within a 45-second termination
+grace period, so in-flight requests can drain after the Pod leaves endpoints.
+
+From `hero-association/deploy/k3d`, run the repeatable scaling check after
+building/deploying the JVM backend and frontend:
+
+```bash
+./test-autoscaling.sh
+```
+
+It waits for two Ready BFF and Core Pods, runs 16 authenticated read clients
+for 90 seconds, restarts BFF during the load, checks scale-out and zero HTTP
+or transport errors, waits for both services to scale back to two, then runs
+the k3d browser suite. Override the load with
+`HERO_ASSOCIATION_K3D_LOAD_CLIENTS` (1–32) and
+`HERO_ASSOCIATION_K3D_LOAD_SECONDS` (60–600). The script requires Docker,
+Node/npm, kubectl, and the isolated kubeconfig; it does not reset Core game data.
+A lighter override may not trigger scale-out and will fail the full scaling
+check. Watch the live decisions separately with:
+
+```bash
+KUBECONFIG="$PWD/.kubeconfig" kubectl -n hero-association get hpa --watch
+KUBECONFIG="$PWD/.kubeconfig" kubectl -n hero-association top pods --containers
+```
+
+On 2026-09-27, a 16-client run with a BFF rolling restart returned 9,344
+HTTP 200 responses at 103.7 requests/second, with p95 96 ms, p99 206 ms,
+and no transport errors. BFF reached six Pods and Core reached eight during
+and immediately after the run. Earlier runs without the application drain
+window had brief upstream connection failures during Pod turnover; the
+drain-enabled run had none. This is one read-only load point, not a proven
+maximum or a write/combat capacity result. All three k3d nodes share one
+computer and Docker engine; Pod autoscaling here demonstrates workload
+behavior, not physical-node or multi-AZ resilience.
+
+## Mixed read/write capacity lab
+
+Run `./test-mixed-capacity.sh` from this directory after the JVM backend and
+frontend are deployed. It creates a temporary Core database and test-only
+BFF/Core stacks, routes only header-marked requests to them, then measures
+authenticated state reads and hero-activity writes across 2-8-Pod HPAs. It
+removes its resources and database on exit. See [CAPACITY.md](CAPACITY.md)
+for prerequisites, commands, measured latency boundary, and the distinction
+between this single-computer lab and real multi-node resilience.
 
 ## Build and deploy the frontend
 
@@ -385,7 +544,7 @@ npm run test:k3d
 ```
 
 The Playwright container uses Docker host networking and explicit hosts entries
-to reach k3d's loopback-bound port `19443`. It ignores the local CA warning for
+to reach k3d's loopback-bound HTTPS port `443`. It ignores the local CA warning for
 tests only. For a trusted Windows browser, import the development CA as
 described in [`../../backend/README.md`](../../backend/README.md#local-https-gateway).
 

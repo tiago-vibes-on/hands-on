@@ -4,7 +4,12 @@ metadata:
   name: bff
   namespace: hero-association
 spec:
-  replicas: 1
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: bff
@@ -15,6 +20,7 @@ spec:
         sidecar.istio.io/inject: "true"
     spec:
       serviceAccountName: hero-association-bff
+      terminationGracePeriodSeconds: 45
       containers:
         - name: bff
           image: hero-association-bff:k3d
@@ -23,15 +29,15 @@ spec:
             - name: HERO_ASSOCIATION_CORE_BASE_URL
               value: http://core:8081
             - name: HERO_ASSOCIATION_FRONTEND_URL
-              value: https://k3d.heroassociation.test:19443
+              value: https://k3d.heroassociation.test
             - name: HERO_ASSOCIATION_OIDC_AUTH_SERVER_URL
               value: http://keycloak:8080/realms/hero-association
             - name: HERO_ASSOCIATION_OIDC_AUTHORIZATION_PATH
-              value: https://auth.k3d.heroassociation.test:19443/realms/hero-association/protocol/openid-connect/auth
+              value: https://auth.k3d.heroassociation.test/realms/hero-association/protocol/openid-connect/auth
             - name: HERO_ASSOCIATION_OIDC_ISSUER
-              value: https://auth.k3d.heroassociation.test:19443/realms/hero-association
+              value: https://auth.k3d.heroassociation.test/realms/hero-association
             - name: QUARKUS_OIDC_END_SESSION_PATH
-              value: https://auth.k3d.heroassociation.test:19443/realms/hero-association/protocol/openid-connect/logout
+              value: https://auth.k3d.heroassociation.test/realms/hero-association/protocol/openid-connect/logout
             - name: HERO_ASSOCIATION_BFF_OIDC_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
@@ -64,6 +70,10 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 15"]
           startupProbe:
             httpGet:
               path: /q/health/started

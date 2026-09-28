@@ -22,6 +22,10 @@ The BFF keeps Keycloak token state in Redis. See
 [`../AUTHENTICATION.md`](../AUTHENTICATION.md) for the implementation status
 and remaining Account, Manager, and authorization work.
 
+Market endpoints now share `/api/v1/market/orders`, but Market still runs inside
+Core. [ADR 0003](../adr/0003-market-service-boundary.md) records the planned
+separate service and the reservation/settlement work required before extraction.
+
 ## Local development
 
 Copy the environment template and replace every placeholder. The local
@@ -32,6 +36,12 @@ file. The three BFF security values must each be at least 32 characters.
 ```bash
 cp .env.example .env
 ```
+
+Local Compose and the isolated k3d lab both bind host ports 80 and 443.
+Before starting local infrastructure, stop k3d if it is running with
+`k3d cluster stop hero-association` from `../deploy/k3d`. The switch keeps
+both environments' database volumes; see the
+[k3d switching steps](../deploy/k3d/README.md#create-the-cluster).
 
 Start the local infrastructure (Traefik, Keycloak, Game Core PostgreSQL, and Redis), then run the Quarkus services with hot reload:
 
@@ -104,7 +114,9 @@ create one empty Level 1 agency as its leader; invitations are a later task.
 The local Keycloak login page uses the versioned Hero Association theme in
 `keycloak/theme/hero-association`. It preserves Keycloak's standard login
 layout while matching the frontend's dark, gold-accented visual style.
-The development realm includes these test accounts:
+The development realm includes these established workflow accounts. Ten more
+seeded `managerN@mail.com` / `managerN` accounts belong to three multi-Manager
+agencies; see the complete [test-data map](../TEST_DATA.md):
 
 | Email | Password | Keycloak profile | Seeded Manager | Agency role |
 | --- | --- | --- | --- | --- |
@@ -180,7 +192,8 @@ explicitly intend to reset the local Keycloak and Core databases.
 
 The repository-level [`../e2e`](../e2e) Playwright project verifies browser
 registration, logout, relogin, and other authentication flows through the
-frontend, BFF, Keycloak, and Core.
+frontend, BFF, Keycloak, and Core. It also checks that market order placement
+shares a per-user rate limit across two BFF instances and separate sessions.
 It starts an isolated Docker Compose project with its own ports and volumes,
 so it does not share state with the development workflow above:
 
@@ -191,7 +204,7 @@ npm test
 ```
 
 See [`../e2e/README.md`](../e2e/README.md) for the ports, cleanup behavior,
-and current coverage.
+current coverage, and the k6 check of the deployed k3d market-order limit.
 
 ## Containers
 
@@ -211,6 +224,10 @@ docker compose -f compose.yaml -f compose.traefik.yaml up --build
 
 This builds the frontend into its own Nginx container and routes it, the BFF,
 and Keycloak through Traefik. The same local CA is used; Core stays private.
+
+Both packaged Compose stacks explicitly reset and reseed the disposable Core
+database on every Core startup; do not use them with data you need to keep.
+
 The JVM Compose workflow publishes the BFF at `http://localhost:17080` and
 Keycloak at `http://localhost:17180`; Core remains on the private Compose
 network. The native Compose workflow has separate default ports—BFF `19080`,
@@ -224,6 +241,10 @@ docker compose -f compose.native.yaml up --build
 Build and test each service from its own directory. Core-specific workflows,
 including native compilation, are documented in
 [`hero-association-core/README.md`](hero-association-core/README.md).
+For one reusable local archive containing the Core, BFF, and frontend images,
+use the separate [`pipeline`](../pipeline/README.md) build stage. It runs
+the service tests and frontend checks without deploying or changing this
+development environment.
 
 ## Isolated k3d JVM deployment
 
@@ -231,10 +252,25 @@ Normal host-run Quarkus development above remains the default. For the
 separate k3d lab, JVM image build, import, backend deployment, generated
 credentials, and Gateway verification, see
 [`../deploy/k3d/README.md`](../deploy/k3d/README.md#build-and-deploy-the-jvm-backend).
+That workflow supports rebuilding and rolling only BFF when Core has not
+changed, without resetting the lab database.
 The `quarkus-smallrye-health` extension exposes `/q/health/started`,
 `/q/health/ready`, and `/q/health/live` for Kubernetes probes in both services.
-The k3d Core remains one replica because startup still recreates its schema.
-The lab's preliminary read-load command and sampled resource usage are in
+The k3d Core validates its schema on startup; a separate one-shot Job seeds a
+new lab database. After this progression schema change, an existing disposable
+k3d Core database needs `./deploy-backend.sh --reset-core-db` from
+`deploy/k3d/` before the new Core image can validate it. Its scheduled jobs use PostgreSQL advisory locks to avoid
+overlapping across Pods. An isolated concurrency test exercises two, four,
+and eight Core Pods, active combat and recovery, concurrent database reads,
+and Pod restarts without duplicate quest resolution. Separate CPU HPAs keep
+BFF and Core between two and eight Pods in k3d; normal host-run development
+remains unchanged. See the
+[autoscaling test](../deploy/k3d/README.md#autoscaling-and-sustained-validation)
+for the repeatable 16-client run and BFF rollout check.
+The [mixed-workload capacity lab](../deploy/k3d/CAPACITY.md) measures
+authenticated reads and activity writes against a temporary Core database;
+normal host-run development and its data are unchanged. The preliminary
+read-load baseline is in
 [`../deploy/k3d/README.md`](../deploy/k3d/README.md#sustained-read-load-baseline).
 
 The k3d BFF and Core export OTLP traces, HTTP/JVM metrics, and structured

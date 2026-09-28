@@ -37,6 +37,7 @@ test('measure sustained authenticated agency-state reads through k3d', async ({ 
   const path = `/api/v1/agencies/${agencyId}/state`
   const latencies = []
   const statuses = new Map()
+  const failureSamples = []
   let transportErrors = 0
   const started = performance.now()
   const deadline = started + seconds * 1_000
@@ -45,10 +46,17 @@ test('measure sustained authenticated agency-state reads through k3d', async ({ 
     while (performance.now() < deadline) {
       const requestStarted = performance.now()
       try {
-        const response = await api.get(path, { timeout: 15_000 })
+        const response = await api.get(path, { timeout: 15_000, maxRedirects: 0 })
         const status = response.status()
         statuses.set(status, (statuses.get(status) || 0) + 1)
         latencies.push(performance.now() - requestStarted)
+        if (status !== 200 && failureSamples.length < 5) {
+          failureSamples.push({
+            second: Math.round((requestStarted - started) / 1_000),
+            status,
+            body: (await response.text()).slice(0, 160),
+          })
+        }
         await response.dispose()
       } catch (error) {
         transportErrors += 1
@@ -71,6 +79,7 @@ test('measure sustained authenticated agency-state reads through k3d', async ({ 
     requestsPerSecond: Number((latencies.length / elapsedSeconds).toFixed(1)),
     statuses: Object.fromEntries(statuses),
     transportErrors,
+    failureSamples,
     latencyMs: latencies.length ? {
       p50: Math.round(percentile(latencies, 50)),
       p95: Math.round(percentile(latencies, 95)),

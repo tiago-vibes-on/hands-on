@@ -43,6 +43,9 @@ public class QuestCombatant extends UuidEntity {
     @Column(name = "magic_level", nullable = false)
     private int magicLevel;
 
+    @Column(name = "base_experience", nullable = false)
+    private int baseExperience;
+
     @Column(name = "max_health", nullable = false)
     private int maxHealth;
 
@@ -95,9 +98,10 @@ public class QuestCombatant extends UuidEntity {
         combatant.name = hero.getAlias();
         combatant.heroClass = heroClass;
         combatant.magicLevel = hero.getMagicLevel();
-        combatant.maxHealth = heroClass.getBaseHealth();
+        combatant.baseExperience = 0;
+        combatant.maxHealth = hero.getMaxHealth();
         combatant.currentHealth = hero.getCurrentHealth();
-        combatant.maxMana = heroClass.getBaseMana();
+        combatant.maxMana = hero.getMaxMana();
         combatant.currentMana = hero.getCurrentMana();
         combatant.attackDamage = heroClass.getBaseAttackDamage();
         combatant.attackIntervalMilliseconds = heroClass.getAttackIntervalMilliseconds();
@@ -122,6 +126,7 @@ public class QuestCombatant extends UuidEntity {
         combatant.formationIndex = formationIndex;
         combatant.name = name;
         combatant.magicLevel = 0;
+        combatant.baseExperience = 100;
         combatant.maxHealth = 120;
         combatant.currentHealth = 120;
         combatant.maxMana = 100;
@@ -166,6 +171,10 @@ public class QuestCombatant extends UuidEntity {
 
     public int getMagicLevel() {
         return magicLevel;
+    }
+
+    public int getBaseExperience() {
+        return baseExperience;
     }
 
     public int getMaxHealth() {

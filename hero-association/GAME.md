@@ -27,25 +27,62 @@ a hero in combat.
 
 ### Agency revenue
 
-- Quest payments are shared with the managers who take part in the quest.
-- The agency retains a fee from quest payments.
-- This model treats the agency like a real-world company: managers are paid for
-  their work while the agency retains revenue to operate and grow.
+- The agency receives 10% of a Manager's gold earnings by default. Its leader
+  can configure the share from 0% to 99%. The design goal is to cover all
+  Manager gold earnings, but the treatment of market-sale proceeds, transfers,
+  refunds, and the effective rate for work already in progress still needs an
+  explicit rule before implementation.
+- The agency can also charge for borrowed agency heroes; the fee and when it
+  is charged are not defined yet.
+- This treats the agency like a shared organization: Managers retain personal
+  progression while its treasury funds shared heroes and upgrades.
+
+### Planned personal and agency ownership
+
+The current backend is agency-owned: heroes, gold, items, runes, parties, and
+market orders belong to the agency. The next ownership model is a design
+target, **not yet implemented**:
+
+- Each Manager owns a personal hero roster, gold wallet, item and rune
+  inventory, and market orders. These assets stay with the Manager when they
+  leave or change agencies.
+- Each agency separately owns its treasury, heroes, item and rune inventory,
+  and market orders. Agency assets stay with the agency when a Manager leaves.
+- A new Manager starts with zero gold, no items or runes, and three personally
+  owned Level 1 heroes: one Warrior, one Mage, and one Archer. These are starter
+  heroes for each Manager, not three globally unique recruits.
+- Recruiting a hero normally makes that hero Manager-owned. A Manager with
+  agency recruitment permission may explicitly recruit for the agency instead.
+  The exact agency permission model is not defined yet.
+- A Manager owns their prepared parties and may use their own heroes plus
+  available agency heroes borrowed for a fee. Other Managers' personal heroes
+  cannot be added. Borrowing does not change hero ownership.
+- Quest items go to the party's Manager. The agency's configurable gold share
+  applies to the Manager's eligible gold earnings; the exact accounting scope
+  is still open as described above.
+- Managers can place personal market orders. Agency market orders require
+  agency leadership or an explicit trading permission; the initial rule can
+  remain leader-only.
+
+The expanded [local test fixtures](TEST_DATA.md) add multi-Manager agencies
+for developing this model, but do not create personal assets yet.
 
 ## Heroes
 
 - Heroes are recruitable non-player characters (NPCs).
 - The initial global recruitment board offers Alden Steelward (Warrior), Seris
   Dawnflame (Mage), and Tarin Windmark (Archer). They are free Level 1 NPCs;
-  each can join only one agency. A recruited hero starts in `TRAINING` with
-  full class health and mana and 100% stamina.
+  each can currently join only one agency. This existing agency-only claim flow
+  will change under the planned Manager-default/agency-permission model. A
+  recruited hero starts in `TRAINING` with full class health and mana and 100%
+  stamina.
 - Heroes can equip runes.
 - A hero's rune loadout is locked while that hero is on a quest.
 - Each hero has five rune slots. A hero who has learned spells also displays
   spell slots.
-- Unequipped runes are stored in the agency rune inventory. During the initial
-  prototype, any available agency rune can be equipped in any hero rune slot;
-  compatibility rules will be added later.
+- Unequipped runes are currently stored in the agency rune inventory. During
+  the initial prototype, any available agency rune can be equipped in any hero
+  rune slot; compatibility rules will be added later.
 - Agency inventory also stores stackable materials. The initial Magic Crystal
   and Iron Ingot stacks are visible but cannot yet be equipped, spent, looted,
   or traded.
@@ -55,18 +92,33 @@ a hero in combat.
   - Archer
 - Each hero has abilities that affect their performance on quests.
 
-### Initial class training
+### Skill growth and agency training
 
-Each initial class has two core training skills:
+Every class has Melee, Distance, Magic, and Shield Levels, including a
+Warrior's Magic Level. Their strongest skills remain:
 
-| Class | Training skills |
+| Class | Preferred skills |
 | --- | --- |
-| Warrior | Melee Level; Shield Level |
-| Mage | Magic Level |
-| Archer | Distance Level |
+| Warrior | Melee and Shield |
+| Mage | Magic |
+| Archer | Distance |
 
-Training happens only at the agency. Heroes assigned to a quest cannot train;
-they earn individual experience by fighting creatures instead.
+Melee and Distance gain progress on each valid attack attempt against a living
+creature. Magic gains progress from mana actually spent, including on spells;
+free attacks and mana recovery do not train Magic. Shield progresses on
+successful blocks with a shield. Class aptitude makes Warrior Melee, Archer
+Distance, and Mage Magic fastest; other classes learn those skills more slowly.
+
+Planned agency training awards 2x the corresponding skill progress per practice
+action at Training Level 1. Each later Training Level adds 5% of this baseline;
+low stamina halves skill progress even while training. Magic practice must
+spend mana; resting awards no skill progress. Heroes on quests cannot use
+agency training, but can gain hero XP from defeated creatures and skill
+progress from their combat actions. The class-rate table, point formula, and
+proposed death-loss rules are in
+[`PROGRESSION.md`](PROGRESSION.md). Combat stamina, Melee, Distance, Magic,
+and creature XP are implemented; Shield blocking and agency practice remain
+planned.
 
 ### Initial mage spells
 
@@ -93,21 +145,43 @@ clears from right to left across its combat spell icon.
 
 ## Hero stamina and agency management
 
-Managers are responsible for managing their heroes' stamina.
+Managers are responsible for managing their heroes' stamina. Full stamina is
+48 hours. A living hero loses one stamina minute per minute of active battle;
+quest travel, waiting, and time after that hero falls or combat ends do not
+drain it. Creature kills are not required for stamina to decrease.
 
-- Quests will consume hero stamina.
-- At the agency, a hero can train or rest. Both recover health and mana based
-  on the hero's class: training uses the base rate, while resting uses twice
-  the base rate. A background worker applies elapsed recovery every five
-  seconds. Stamina recovery is not implemented yet.
-- Lower stamina reduces a hero's effectiveness on quests.
-- Stamina also changes experience earned from creatures:
+At the agency, Training recovers one stamina minute per real minute. Resting at
+Rest Level 1 recovers two stamina minutes per real minute; each additional Rest
+Level adds 10% of the Level 1 rate (Level 2: 2.2; Level 3: 2.4). Both activities
+also recover health and mana: Training uses the class base rate and Resting
+uses twice that rate. Stamina recovery is not implemented in Core yet.
 
-| Stamina | Experience gain |
-| --- | ---: |
-| 80% or more | 150% |
-| 30% to 79% | 100% |
-| Below 30% | 50% |
+Compare exact stamina time, not rounded percentages. Above 40 hours adds 50
+percentage points to hero XP only; below 15 hours halves XP, skill progress
+(including agency training), and future creature drop chances. Exactly 40 or
+15 hours is the normal band.
+
+| Stamina | Hero XP at `1x` | Hero XP at `2x` | Skills | Future loot chance |
+| --- | ---: | ---: | ---: | ---: |
+| Above 40 hours | 150% | 250% | Normal | Normal |
+| 15 through 40 hours | 100% | 200% | Normal | Normal |
+| Below 15 hours | 50% | 100% | Half | Half |
+
+For example, low stamina halves a `2x` XP event to `1x`, while high stamina
+adds 50 percentage points to make it `2.5x`. Future loot amounts remain the
+same; only drop chance is halved. A mixed-stamina party's loot rule remains
+open until economic rewards are implemented. See [`PROGRESSION.md`](PROGRESSION.md)
+for formulas.
+
+## Server-wide event rates
+
+Core has independent XP and skill rates, each `1x` by default. A timed event
+can temporarily change either rate without restarting the service. The rate
+active when the kill or skill action occurs applies; delayed combat syncs do
+not retroactively receive a new rate. A future reward-owning domain will have
+its own loot-chance rate. It changes drop chances, not amounts or the number
+of rolls, and is not part of the current Core progression slice. See
+[`PROGRESSION.md`](PROGRESSION.md).
 
 ## Agency progression
 
@@ -123,8 +197,10 @@ The Agency Level sets the maximum available level for each specialized upgrade.
 Managers do not need to upgrade every specialized level before advancing the
 Agency Level.
 
-The Rest Level represents the agency's recovery facilities. Its concrete
-mechanical effect will be defined later.
+Each Rest Level after Level 1 increases stamina recovery speed while Resting
+by 10% of the Level 1 rate. Each Training Level after Level 1 increases agency
+skill-practice speed by 5% of the Level 1 rate. These bonuses are additive
+against the baseline, not compounded; neither changes health/mana recovery.
 
 The Size Level determines how much room the agency has for heroes and its
 facilities.
@@ -161,8 +237,8 @@ meaningful without becoming excessively grindy.
   another party.
 - In the seeded Troll encounter, defeating every creature completes the quest;
   defeating every hero fails it. Either outcome records a completion time,
-  releases the party, and returns its heroes to Training. Quest rewards,
-  stamina costs, permanent death, and the agency death fee are not yet applied.
+  releases the party, and returns its heroes to Training. Reward allocation,
+  stamina costs, and experience/skill losses on defeat are not yet applied.
 - Until per-creature difficulty is designed, newly created creatures use a
   shared provisional profile: 120 health, 10 damage, a 1.6-second attack
   interval, 100 mana, no recovery, and no critical chance.
@@ -170,16 +246,27 @@ meaningful without becoming excessively grindy.
 - A poorly matched or exhausted hero can fail a quest.
 - Quests take time to complete and can require objectives such as killing a
   specified number of creatures or another defined objective.
-- Quest rewards can include gold, chests, and items dropped by creatures.
-- After a quest, loot moves from the party's shared Capacity to the agency
-  inventory, where it can be equipped or traded.
-- Each hero in the party earns their own experience from creatures defeated
-  during the quest, using the stamina-based experience gain, and can level up
-  independently.
-- The party has a shared Capacity that determines how many resources it can
-  carry. Items are collected as soon as creatures are defeated.
-- Hero death is permanent. When a hero dies, the agency pays a fee based on
-  that hero's level.
+- Quest rewards can eventually include gold, chests, and items dropped by
+  creatures. Economic rewards and payout rules are deferred until the game
+  domains are separated; creature defeats can drive XP and skill tests now
+  without granting gold or items.
+- Under the planned reward model, items carried by the party belong to the
+  party's Manager, including drops collected by borrowed agency heroes.
+- Each defeated creature has a base XP value. The current provisional Troll
+  base is 100 XP; other provisional creatures also use 100 until balanced.
+  Each living party hero gets their own stamina-adjusted award from that same
+  full base, without dividing it by party size or damage dealt. A fallen hero
+  gets no XP from later kills. Heroes level up independently.
+- Valid attacks and mana spending advance skills even if the creature survives;
+  planned shield blocks will do the same. Only a creature defeat triggers XP.
+- The party will have a shared Capacity that determines how many resources it
+  can carry. Once economic rewards are implemented, items will be collected as
+  soon as creatures are defeated.
+- A defeated hero is not permanently lost and there is no death fee. It leaves
+  combat and returns to its owner's roster after the quest resolves. PvE defeat
+  removes a level-scaled share of total XP and each skill's cumulative points,
+  possibly lowering hero and skill levels. See the proposed formula in
+  [`PROGRESSION.md`](PROGRESSION.md). Return resources remain to be defined.
 
 ## Combat
 
@@ -235,7 +322,7 @@ meaningful without becoming excessively grindy.
   in the encounter. When combat reaches a terminal result, Hero Victory changes
   the quest to `COMPLETED` and Creature Victory changes it to `FAILED`; both
   record `finishedAt`, release the party, and return its heroes to Training.
-  Stamina costs, rewards, and permanent death resolution remain to be
+  Stamina costs, rewards, and non-permanent hero-defeat penalties remain to be
   implemented.
 
 ### Initial hero combat attributes
@@ -290,6 +377,9 @@ Heroes begin at Level 1. The initial health and mana values are:
 - Cancelling an open order returns its remaining reserved gold or items.
 - The initial implementation trades Magic Crystals and Iron Ingots. More item
   categories and market history will be added later.
+- The planned ownership model allows personal and agency market accounts,
+  each reserving gold or items from its own inventory. Agency trades require
+  leadership or a future explicit permission.
 
 ## Social feed
 
@@ -315,7 +405,13 @@ Heroes begin at Level 1. The initial health and mana values are:
 
 The following details are intentionally not defined yet:
 
-- The exact formula and recipient for the hero death fee.
+- Which gold inflows count toward the agency share, especially personal market
+  sales, transfers, and refunds; when a changed share takes effect; and how to
+  protect Managers from a surprise increase during an active quest or order.
+- The agency-hero borrowing fee and its charge/refund timing.
+- The hero's health, mana, and stamina on return after PvE defeat.
+- Creature-specific XP and skill-point balance.
+- Starter-hero names.
 - Invitations, permissions, and shared agency-management rules.
 - Detailed abilities, equipment, strengths, and weaknesses for each hero
   class.

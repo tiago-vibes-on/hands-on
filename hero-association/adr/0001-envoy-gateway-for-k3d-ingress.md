@@ -1,7 +1,7 @@
 # ADR 0001: Envoy Gateway for k3d ingress
 
 - Date: 2026-09-27
-- Status: Accepted for k3d ingress; market rate limit not implemented
+- Status: Accepted for k3d ingress; market limiting covered by ADR 0002
 
 ## Context
 
@@ -12,9 +12,9 @@ authenticated user**, shared across that user's sessions and across all
 gateway and BFF replicas. This is not 5 requests per second for all players
 combined.
 
-The existing POST /api/v1/agencies/{agencyId}/market-orders accepts either BUY
-or SELL. Both sides consume the same per-user budget, even if a manager belongs
-to multiple agencies. Order-book reads and order cancellation are outside this
+The market-order POST `/api/v1/market/orders` accepts either BUY or SELL.
+Both sides consume the same per-user budget, even if a manager belongs to
+multiple agencies. Order-book reads and order cancellation are outside this
 particular limit. Rate limiting does not replace Core's market authorization,
 transaction rules, or safeguards against duplicate orders.
 
@@ -27,19 +27,9 @@ ADR does not require changing the normal local edge.
 
 Envoy Gateway suits the Kubernetes lab because its Gateway API HTTPRoute and
 BackendTrafficPolicy resources support distributed global rate limits across
-Envoy proxy replicas. For market order placement, the intended bucket is
-**per authenticated user across the deployment**: not per proxy, session, IP,
-agency, or all users together. An over-limit request should receive HTTP 429.
-
-The market policy is **planned, not deployed**. The current public route sends
-/api to the BFF, which authenticates an opaque browser session cookie. Envoy
-cannot safely infer a user ID merely by reading that cookie, and must never
-trust a browser-supplied user-ID header. Before selecting users at the gateway,
-provide a verified, stable identity there (for example, through a trusted
-external-authorization integration). Strip any client-supplied identity header
-and set it only in trusted infrastructure. If that proves disproportionate,
-enforce the same per-user budget in the BFF with shared Redis state; keep the
-k3d ingress decision and record the limiter-location change in a later ADR.
+Envoy proxy replicas. Market order placement is instead limited by the BFF,
+which knows the authenticated user and shares Redis state across replicas;
+see [ADR 0002](0002-market-order-rate-limit-in-bff.md).
 
 ## Alternatives considered
 
@@ -50,24 +40,15 @@ k3d ingress decision and record the limiter-location change in a later ADR.
 - **Caddy for both environments:** familiar from the first local stack, but
   its documented rate-limit module is non-standard and would add plugin or
   custom-build maintenance for this Kubernetes use case.
-- **Only a BFF limiter:** it can read the authenticated user directly and may
-  be simpler for this rule, but needs shared state across BFF replicas. It
-  remains the fallback if trusted identity at the edge is too costly.
+- **Gateway market limiter:** would require a trusted identity handoff because
+  Envoy cannot infer the user from an opaque BFF cookie. ADR 0002 selects the
+  shared BFF limiter for this rule.
 
 ## Consequences and follow-up
 
-- Envoy Gateway's global rate-limit service needs shared state (Redis).
-  Decide isolation from the existing BFF session Redis, availability, and
-  fail-open/fail-closed behavior before enabling enforcement.
-- Configure a market-order-specific route/policy; do not throttle other /api
-  calls or Keycloak. Confirm BUY and SELL share one user bucket. Envoy's
-  default policy bucket can be per route, so check the shared rule semantics
-  if order placement spans multiple routes.
-- Define the precise one-second window and burst behavior. Test HTTP 429 with
-  two users and concurrent requests across multiple gateway and BFF replicas:
-  one user's limit must not throttle another user.
-- Keep the [roadmap](../ROADMAP.md) task open until identity, policy, Redis,
-  and multi-replica tests are complete.
+- Envoy remains the k3d ingress and does not inspect browser identity for the
+  market limit. The BFF's implementation and availability behavior are recorded
+  in [ADR 0002](0002-market-order-rate-limit-in-bff.md).
 
 ## References
 

@@ -88,20 +88,79 @@ resulting state.
   recovery, critical hits, and defeats. The scene does not replay history that
   happened before it was opened.
 
-## Milestone 5 — Rewards, progression, and recovery
+## Milestone 5 — Combat progression and recovery
 
-- [ ] Award shared party loot immediately after a creature is defeated while
-  respecting party Capacity.
-- [ ] Award individual hero experience using the stamina thresholds in
-  `GAME.md`, and implement level-ups.
-- [x] Synchronize current health and mana from authoritative combat snapshots
-  to quest heroes.
-- [x] Recover agency hero health and mana over time at the base Training rate
-  and twice that rate while Resting.
-- [ ] Apply quest stamina costs and stamina recovery over time.
-- [ ] Implement permanent hero death and the agency fee. The fee formula needs
-  a game-design decision before implementation.
-- [ ] Transfer completed-quest rewards from party capacity to agency inventory.
+Track this ordered Core work here. Check a step only when its code, API contract
+tests, and deterministic seed coverage are complete. The rules and formulas are
+in [`PROGRESSION.md`](PROGRESSION.md). Gold, item loot, and payout settlement
+stay deferred until domain separation; combat progression does not need them.
+
+Already available:
+
+- [x] Persist and synchronize combat snapshots, including attacks, mana spent,
+  and defeated-target hits.
+- [x] Recover agency hero health and mana at the class base rate in Training
+  and twice that rate in Resting.
+
+Decisions to settle before the affected step, not before starting Step 1:
+
+- [x] Initial Troll base XP is 100; only living party heroes receive XP
+  from each kill. Calculate XP separately from the full creature base; never
+  split by party size or damage dealt.
+- [ ] Choose a practice-action cadence and Magic mana cost; confirm Shield
+  aptitude rates and a block rule before Shield combat progression.
+- [ ] Choose health, mana, and stamina on return after defeat, and whether a
+  level-up refills current resources, before Step 4.
+
+Ordered implementation:
+
+1. [x] Persistence and pure rules: replace percentage stamina with up to
+   48 hours of precise time; store cumulative hero XP and fractional Melee,
+   Distance, Magic, and Shield progress. Start all four skills at Level 10,
+   replacing the current Magic Level 0 seed. Derive levels and max resources
+   from the documented formulas. Reset deterministic local data; no Flyway
+   migration or compatibility layer is needed at this stage.
+2. [ ] Combat progression: advance each living hero stamina by actual active
+   battle time (one minute per minute), stopping at the real terminal event,
+   not the later sync target. Apply Melee/Distance progress per attack and
+   Magic progress for mana spent; add Shield combat points after a block
+   rule exists. Once per defeat, calculate XP separately for each eligible
+   party hero from the full creature base using individual stamina at the
+   kill timestamp. Never split XP by party size or damage dealt. Consume
+   the complete new event stream inside the locked combat transaction,
+   before truncating the latest-100 UI history. A retry or competing Pod
+   must not award or drain twice.
+
+   Progress:
+
+   - [x] Time-based drain for living heroes, including no-hit intervals and
+     terminal mid-sync cases; repeated syncs do not drain twice.
+   - [x] Melee/Distance attack and mana-spent Magic points, including the
+     below-15-hour penalty; process all events before the 100-event UI cap.
+   - [x] Per-creature XP awards from the 100-XP provisional creature base,
+     for each living hero only; repeated syncs do not award twice.
+   - [ ] Shield combat points after a block rule is defined.
+
+3. [ ] Agency recovery and practice: recover one stamina minute per real
+   minute in Training or two at Rest Level 1, plus 10% of the Level 1 Rest
+   rate per additional level. Add selected-skill practice at 2x at Training
+   Level 1, plus 5% of that baseline per later level. Magic practice spends
+   real mana; below 15 hours, skill progress is halved even in Training.
+   Test higher levels with fixtures; player upgrade commands remain Milestone 6.
+4. [ ] Event rates and defeat: add Core-owned, shared XP and skill rates
+   defaulting to `1x`, with scheduled overrides evaluated at the action or
+   kill timestamp. Above 40 hours, add 50 percentage points to hero XP only;
+   below 15 hours, multiply the active XP and skill rates by 0.5. Apply the
+   level-scaled, once-per-defeat XP/skill loss and chosen return resources.
+5. [ ] API and frontend: expose stamina as time, hero XP/level, all skill
+   levels/progress, and agency Rest/Training levels. Replace the current
+   80%/30% color bands with >40h and <15h; clearly mark or hide advertised
+   quest gold until economic payouts exist.
+6. [ ] Verify: unit-test boundaries (exactly 40h and 15h), `1x`/`2x`
+   stacking, fractional points, class/agency rates, level-up and defeat.
+   Integration-test no-kill battles, multi-kill and terminal mid-sync cases,
+   delayed/repeated syncs, agency activity changes, and two Core replicas.
+   Add an API/UI flow that shows progression without granting gold or items.
 
 ## Milestone 6 — Agency progression
 
@@ -120,9 +179,21 @@ resulting state.
   matching.
 - [x] Apply the 10% market fee atomically when an order matches.
 - [x] Update the frontend market screen to use the live order book.
-- [ ] Limit buy/sell order placement to 5 requests per second per authenticated
-  user across sessions and replicas. Resolve trusted identity at the edge or
-  use a shared BFF limiter; see [ADR 0001](adr/0001-envoy-gateway-for-k3d-ingress.md).
+- [x] Limit buy/sell order placement to 5 requests per second per authenticated
+  user across sessions and replicas with shared Redis in the BFF; see
+  [ADR 0002](adr/0002-market-order-rate-limit-in-bff.md).
+- [x] Verify the deployed limit with a k6 burst and sustained authenticated
+  traffic through the k3d gateway.
+- [x] Move the public market contract to `GET/POST /api/v1/market/orders`
+  and `DELETE /api/v1/market/orders/{orderId}`; market mutations return order
+  state, while clients refresh agency state separately. See
+  [ADR 0003](adr/0003-market-service-boundary.md).
+- [ ] Extract Market as an independently buildable and deployable service with
+  its own order data store. Keep Core authoritative for agency membership,
+  gold, and inventory; define idempotent reservation/settlement and failure
+  recovery before moving matching out of Core. Route `/api/v1/market/**` from
+  BFF to Market while retaining the per-user BFF rate limit. Follow the
+  [Market service extraction plan](MARKET_ARCHITECTURE.md).
 - [ ] Add market history.
 
 ## Milestone 8 — Social feed and multiplayer
@@ -200,21 +271,78 @@ resulting state.
 - [x] Install a disposable k3d observability stack with OpenTelemetry,
   Prometheus, Loki, Tempo, and Grafana. App instrumentation and dashboards
   remain in [`DEPLOYMENT.md`](DEPLOYMENT.md).
-- [ ] Test independent BFF and Game Core autoscaling from 2 to 8 Pods in k3d,
+- [x] Test independent BFF and Game Core autoscaling from 2 to 8 Pods in k3d,
   after making shared database initialization and Core jobs safe across Pods.
+
+## Milestone 11 — Build once, deploy to local targets
+
+- [x] Add a local build stage with separate Core, BFF, and frontend lanes and
+  an all-in-one run. Run backend tests and frontend lint/build, create
+  version-tagged images, and export a checksummed archive with source and
+  image IDs. See
+  [`pipeline/README.md`](pipeline/README.md).
+- [ ] Make the isolated browser E2E lane consume the exact archived images,
+  without rebuilding them, before an artifact is eligible for deployment.
+- [ ] Import and deploy the verified archive to k3d without rebuilding it;
+  keep the current local development environment and Core data untouched.
+- [ ] Add a separate Floci/AWS lab deployment consuming the same build
+  artifact. Defer real AWS and production rollout.
+
+## Milestone 12 — Personal progression and shared agencies
+
+Implement and validate these ownership rules inside Game Core first. Core is
+temporary; separate game domains after their rules and cross-domain contracts
+are established. See [ADR 0004](adr/0004-core-as-temporary-modular-monolith.md).
+
+- [x] Add manager1 through manager10 as deterministic local test identities and
+  distribute them across three multi-Manager agencies. See [TEST_DATA.md](TEST_DATA.md).
+- [ ] Give each Manager a personal hero roster, gold wallet, item inventory,
+  and rune inventory that survive agency changes. Keep agency assets separate.
+- [ ] Start every new Manager with no gold, items, or runes and one personal
+  Level 1 Warrior, Mage, and Archer, with starting skills at Level 10 per
+  `PROGRESSION.md`. Keep provisioning idempotent.
+- [ ] Make personal recruitment the default; allow an agency-owned recruit
+  only when the Manager has agency recruitment permission and selects it.
+- [ ] Give each party a Manager owner; allow only that Manager's heroes and
+  available borrowed agency heroes, without transferring hero ownership.
+- [ ] Define and implement the agency-hero borrowing fee and charge timing.
+- [ ] Support Manager-owned and agency-owned market orders, reserving from the
+  correct wallet/inventory and enforcing agency trading permissions. Revise
+  the current agency-only market request and extraction plan before splitting
+  the Market service.
+
+## Deferred until domain separation — Economic quest rewards
+
+- [ ] Define the reward-owning domain and its reliable creature-defeat and
+  quest-completion contracts before enabling economic payouts.
+- [ ] Roll each defeated creature gold and item entries once at
+  `min(100%, baseChance * dropRate) * lowStaminaLootFactor`, preserve
+  amount ranges, and respect party Capacity. Halve final drop chance below
+  15 hours of stamina. Decide the factor for mixed-stamina parties and add
+  the authoritative loot-chance event rate there.
+- [ ] Transfer quest items to the party Manager and split gold between the
+  Manager and agency at the applicable share. Define covered inflows and when
+  a changed share takes effect.
 
 ## Post-MVP
 
 - [ ] Add Google sign-in through Keycloak. Keep native email/password sign-in
   for the MVP and preserve existing account links when social sign-in arrives.
 
-## Open decisions that block implementation
+## Open decisions before their respective implementations
 
-- [ ] Define the hero-death fee formula and who receives it.
+These do not all block the current combat-progression slice.
+
+- [ ] Decide the hero's health, mana, and stamina on return after PvE defeat.
+- [ ] Balance creature XP, participation, training cadence, and skill costs
+  after gameplay tests.
+- [ ] Define creature loot tables, gold/item amounts, and party Capacity
+  behavior; test chance caps and precision for ultra-rare drops.
 - [ ] Define quest duration, difficulty, failure, and cancellation rules.
 - [ ] Define armor and attack-speed formulas, plus initial persistent creature
   attributes.
-- [ ] Define agency revenue sharing between participating managers and the
-  agency.
+- [ ] Define agency-share treatment of market proceeds, transfers, and refunds,
+  and how rate changes affect already-started quests and open orders.
+- [ ] Define the agency-hero borrowing fee and its charge/refund timing.
 - [ ] Define additional tradable item categories.
 - [ ] Define agency invitation, ownership transfer, and permission rules.
