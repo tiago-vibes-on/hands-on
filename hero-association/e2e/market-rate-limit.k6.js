@@ -2,11 +2,11 @@ import http from 'k6/http'
 import { Counter } from 'k6/metrics'
 
 const { appUrl, sessions } = JSON.parse(open('/session/session.json'))
-const burstAllowed = new Counter('market_burst_allowed')
-const burstLimited = new Counter('market_burst_limited')
-const otherUserAllowed = new Counter('market_other_user_allowed')
-const sustainedAllowed = new Counter('market_sustained_allowed')
-const sustainedLimited = new Counter('market_sustained_limited')
+const burstNotLimited = new Counter('market_burst_not_limited')
+const burstRateLimited = new Counter('market_burst_rate_limited')
+const otherUserNotLimited = new Counter('market_other_user_not_limited')
+const sustainedNotLimited = new Counter('market_sustained_not_limited')
+const sustainedRateLimited = new Counter('market_sustained_rate_limited')
 const unexpected = new Counter('market_unexpected')
 
 http.setResponseCallback(http.expectedStatuses(400, 429))
@@ -35,11 +35,12 @@ export const options = {
     },
   },
   thresholds: {
-    market_burst_allowed: ['count==5'],
-    market_burst_limited: ['count==1'],
-    market_other_user_allowed: ['count==1'],
-    market_sustained_allowed: ['count>0', 'count<=55'],
-    market_sustained_limited: ['count>0'],
+    market_burst_not_limited: ['count==5'],
+    market_burst_rate_limited: ['count==1'],
+    market_other_user_not_limited: ['count==1'],
+    'iterations{scenario:sustained}': ['count>=198', 'count<=202'],
+    market_sustained_not_limited: ['count>0', 'count<=55'],
+    market_sustained_rate_limited: ['count>=143'],
     market_unexpected: ['count==0'],
     dropped_iterations: ['count==0'],
   },
@@ -62,11 +63,11 @@ function orderRequest(session) {
   }
 }
 
-function count(response, allowed, limited) {
+function count(response, notLimited, rateLimited) {
   if (response.status === 400) {
-    allowed.add(1)
-  } else if (response.status === 429 && response.headers['Retry-After'] === '1') {
-    limited.add(1)
+    notLimited.add(1)
+  } else if (response.status === 429 && response.headers['Retry-After'] === '1' && response.headers['X-Hero-Association-Rate-Limit-Layer'] === 'envoy') {
+    rateLimited.add(1)
   } else {
     unexpected.add(1)
     console.error(`Unexpected market response: HTTP ${response.status}`)
@@ -76,12 +77,12 @@ function count(response, allowed, limited) {
 export function burst() {
   const requests = Array.from({ length: 6 }, (_, index) => orderRequest(sessions[index % 2]))
   for (const response of http.batch(requests)) {
-    count(response, burstAllowed, burstLimited)
+    count(response, burstNotLimited, burstRateLimited)
   }
   const otherUserOrder = orderRequest(sessions[2])
   const otherUserResponse = http.post(otherUserOrder.url, otherUserOrder.body, otherUserOrder.params)
   if (otherUserResponse.status === 400) {
-    otherUserAllowed.add(1)
+    otherUserNotLimited.add(1)
   } else {
     unexpected.add(1)
     console.error(`Unexpected second-user response: HTTP ${otherUserResponse.status}`)
@@ -90,5 +91,5 @@ export function burst() {
 
 export function sustained() {
   const request = orderRequest(sessions[__VU % 2])
-  count(http.post(request.url, request.body, request.params), sustainedAllowed, sustainedLimited)
+  count(http.post(request.url, request.body, request.params), sustainedNotLimited, sustainedRateLimited)
 }

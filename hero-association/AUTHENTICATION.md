@@ -21,6 +21,7 @@ CSRF protection; Game Core owns Account provisioning and Manager onboarding.
 | Agency authorization | Complete | `AgencyMember` binds Managers to agencies; every agency read and command requires membership, financial market commands require `LEADER`, and a Manager without a membership can create its first agency. |
 | Google sign-in | Deferred (post-MVP) | Keep native email/password sign-in for the MVP; configure Google as a Keycloak identity provider later. |
 | Service split | Complete | `backend/hero-association-core` owns game state and `backend/hero-association-bff` is the public proxy boundary. |
+| k3d identity-aware gateway limit | Complete | Envoy validates the browser session through the BFF and solely enforces five placements per second per user. Rate-limit service failure is fail-closed; normal local Traefik has no market limit. BFF Redis remains for OIDC sessions. See [k3d edge-auth runbook](deploy/k3d/EDGE_AUTH.md). |
 
 The actionable checklist is in the [roadmap](ROADMAP.md): Milestone 9 covers
 authentication work in the MVP, and Google sign-in is listed under Post-MVP.
@@ -54,10 +55,11 @@ Browser --HTTPS--> Traefik --app route--> React
 Traefik is the edge gateway in local Compose; Envoy Gateway is the
 browser-facing ingress in the isolated k3d lab. Istio secures BFF-to-Core
 traffic inside k3d. Both gateways serve React, proxy `/api` and `/auth` to
-the BFF, and expose Keycloak on its own authentication hostname. Neither
-gateway makes authentication decisions: the BFF owns the browser session
-and Keycloak owns identity. Game Core, Keycloak PostgreSQL, and Redis remain
-private.
+the BFF, and expose Keycloak on its own authentication hostname. The BFF
+owns browser sessions and Keycloak owns identity. In k3d, only market-order
+placement has an additional Envoy external-authorization check and global
+per-user limit keyed by the BFF-returned Keycloak subject, not a browser
+header. Game Core, Keycloak PostgreSQL, and Redis remain private.
 
 The BFF owns the browser session, login, logout, callback, and CSRF handling.
 It uses the OpenID Connect Authorization Code flow as a confidential server

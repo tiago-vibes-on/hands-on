@@ -21,7 +21,9 @@ The backend is split into independently buildable services:
 - `backend/hero-association-bff`: the public API boundary on port `8080`; it
   protects browser requests with a session and CSRF, then forwards its
   server-held Keycloak access token with the current `/api/...` contract. In
-  the containerized edge topology, Traefik is its only public ingress.
+  normal Compose development, Traefik is its public ingress. In k3d, Envoy
+  Gateway is the public ingress and externally authorizes market placement
+  against the BFF before enforcing the sole per-user gateway limit.
 - `backend/hero-association-core`: the private game-state service on port
   `8081`; it validates the access token's issuer, signature, expiry, subject,
   and `hero-association-core` audience, owns PostgreSQL, and separates
@@ -89,11 +91,16 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
   `quantity`, and `priceGoldPerItem` in the JSON body. It creates and attempts
   to match a buy or sell order and returns the resulting market order, including
   its status. The authenticated user must lead the selected agency.
-  The BFF admits at most five order-placement attempts per authenticated
-  Keycloak user in any rolling one-second window, shared across sessions,
-  agencies, buy/sell sides, and BFF replicas. Excess attempts return `429`
-  with `Retry-After: 1`; if the shared limiter is unavailable, the BFF returns
-  `503` without forwarding the order. Reads and cancellations are not limited.
+  In k3d, Envoy Gateway asks the BFF to validate the opaque browser session
+  and CSRF token, then enforces a Redis-backed limit of five placement
+  attempts per second per validated Keycloak subject across sessions,
+  agencies, buy/sell sides, and gateway replicas. Excess attempts return
+  `429` with `Retry-After: 1` and
+  `X-Hero-Association-Rate-Limit-Layer: envoy`. If the gateway rate-limit
+  service or its Redis is unavailable, Envoy fails closed with `500` and
+  does not forward placement. The BFF does not apply a second market limit.
+  Normal local Traefik development has no market rate limit. Reads and
+  cancellations are not limited.
 - `DELETE /api/v1/market/orders/{orderId}` cancels an open order owned by
   an agency led by the authenticated user, releases its remaining reservation,
   and returns the cancelled market order. Clients refresh agency state

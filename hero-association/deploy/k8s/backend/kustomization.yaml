@@ -11,3 +11,4 @@ resources:
   - bff.yaml
   - hpa.yaml
   - routes.yaml
+  - market-order-edge.yaml

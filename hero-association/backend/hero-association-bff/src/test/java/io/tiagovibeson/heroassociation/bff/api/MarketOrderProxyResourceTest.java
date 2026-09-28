@@ -14,10 +14,10 @@ import io.tiagovibeson.heroassociation.bff.testsupport.GameCoreStubResource;
 @QuarkusTest
 @QuarkusTestResource(GameCoreStubResource.class)
 @TestSecurity(user = "market-test-player")
-class MarketOrderRateLimitResourceTest {
+class MarketOrderProxyResourceTest {
 
     @Test
-    void shouldLimitPlacementAcrossAgenciesWithoutLimitingReadsOrCancellation() {
+    void shouldProxyPlacementAcrossAgenciesWithoutLimitingReadsOrCancellation() {
         Response session = given()
                 .when().get("/api/v1/session")
                 .then().statusCode(200)
@@ -26,7 +26,7 @@ class MarketOrderRateLimitResourceTest {
         String csrfCookie = session.getCookie("hero-association-csrf");
         String path = "/api/v1/market/orders";
 
-        for (int attempt = 0; attempt < 5; attempt++) {
+        for (int attempt = 0; attempt < 6; attempt++) {
             given()
                     .cookie("hero-association-csrf", csrfCookie)
                     .header("X-CSRF-TOKEN", csrfToken)
@@ -43,8 +43,8 @@ class MarketOrderRateLimitResourceTest {
                 .contentType("application/json")
                 .body("{\"agencyId\":\"agency-b\",\"side\":\"SELL\"}")
                 .when().post(path)
-                .then().statusCode(429)
-                .header("Retry-After", equalTo("1"));
+                .then().statusCode(200)
+                .body("method", equalTo("POST"));
 
         given().when().get(path).then().statusCode(200);
         given()

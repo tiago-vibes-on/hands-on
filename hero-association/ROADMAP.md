@@ -180,8 +180,8 @@ Ordered implementation:
 - [x] Apply the 10% market fee atomically when an order matches.
 - [x] Update the frontend market screen to use the live order book.
 - [x] Limit buy/sell order placement to 5 requests per second per authenticated
-  user across sessions and replicas with shared Redis in the BFF; see
-  [ADR 0002](adr/0002-market-order-rate-limit-in-bff.md).
+  user across sessions and Envoy proxy replicas in k3d; see
+  [ADR 0005](adr/0005-k3d-market-order-edge-auth.md).
 - [x] Verify the deployed limit with a k6 burst and sustained authenticated
   traffic through the k3d gateway.
 - [x] Move the public market contract to `GET/POST /api/v1/market/orders`
@@ -192,7 +192,7 @@ Ordered implementation:
   its own order data store. Keep Core authoritative for agency membership,
   gold, and inventory; define idempotent reservation/settlement and failure
   recovery before moving matching out of Core. Route `/api/v1/market/**` from
-  BFF to Market while retaining the per-user BFF rate limit. Follow the
+  BFF to Market while retaining the k3d Envoy per-user rate limit. Follow the
   [Market service extraction plan](MARKET_ARCHITECTURE.md).
 - [ ] Add market history.
 
@@ -260,6 +260,18 @@ Ordered implementation:
   new feed posts.
 
 ## Milestone 10 — Delivery topology
+
+- [x] Add identity-aware market limiting at the k3d Envoy Gateway. The BFF
+  validates the opaque session for Envoy but applies no market rate limit.
+  Normal local Traefik development has no market limit. Auth and k6
+  regressions pass. See
+  [`deploy/k3d/EDGE_AUTH.md`](deploy/k3d/EDGE_AUTH.md).
+- [x] Test gateway Redis failure and two Envoy proxy replicas in k3d. Redis
+  outage makes Envoy fail closed with HTTP 500 without forwarding the order.
+  The two proxies share the gateway limit. See the
+  [resilience runbook](deploy/k3d/EDGE_AUTH.md).
+- [ ] Before adopting the gateway policy outside this lab, provide highly
+  available gateway Redis and an operational plan for fail-closed outages.
 
 - [x] Add an initial local Caddy edge stack with HTTPS, a packaged frontend,
   same-origin BFF routing, and a separate Keycloak hostname.

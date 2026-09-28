@@ -26,6 +26,12 @@ Market endpoints now share `/api/v1/market/orders`, but Market still runs inside
 Core. [ADR 0003](../adr/0003-market-service-boundary.md) records the planned
 separate service and the reservation/settlement work required before extraction.
 
+Normal Compose development keeps Traefik and has no market-order rate limit.
+The isolated k3d deployment uses Envoy Gateway external authorization and a
+Redis-backed global per-user limit for `POST /api/v1/market/orders`; see the
+[k3d edge-auth runbook](../deploy/k3d/EDGE_AUTH.md). The BFF Redis still holds
+OIDC session state, not market rate-limit state.
+
 ## Local development
 
 Copy the environment template and replace every placeholder. The local
@@ -192,8 +198,8 @@ explicitly intend to reset the local Keycloak and Core databases.
 
 The repository-level [`../e2e`](../e2e) Playwright project verifies browser
 registration, logout, relogin, and other authentication flows through the
-frontend, BFF, Keycloak, and Core. It also checks that market order placement
-shares a per-user rate limit across two BFF instances and separate sessions.
+frontend, BFF, Keycloak, and Core. The k3d browser suite separately checks
+the Envoy market-order limit across two BFF instances and separate sessions.
 It starts an isolated Docker Compose project with its own ports and volumes,
 so it does not share state with the development workflow above:
 

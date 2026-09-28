@@ -40,12 +40,13 @@ and Manager onboarding. The Account response lists authorized agency
 memberships. Agency creation and invitations are intentionally not part of this
 stage.
 
-The BFF limits `POST /api/v1/market/orders` to five attempts
-per authenticated Keycloak user in a rolling second. BUY and SELL, all
-agencies, sessions, and BFF replicas share that user's Redis-backed budget.
-Excess requests return `429` with `Retry-After: 1`; a Redis failure returns
-`503` and does not forward the order. Market reads and cancellations are not
-limited by this rule. Core still validates order data and permissions.
+The BFF does not rate-limit `POST /api/v1/market/orders`. In k3d, Envoy
+Gateway limits placement to five attempts per second per authenticated
+Keycloak subject across sessions and gateway replicas. It returns `429` with
+`Retry-After: 1` on excess requests and fails closed if gateway rate-limit
+state is unavailable. Normal local Traefik development has no market limit.
+BFF Redis continues to store OIDC session state. Core validates order data
+and permissions.
 
 In the k3d lab, BFF exports OTLP traces, HTTP/JVM metrics, and structured
 logs. Its Core proxy creates a client span and forwards W3C trace context

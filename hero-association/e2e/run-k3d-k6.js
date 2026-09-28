@@ -43,6 +43,7 @@ try {
     throw new Error(`The k6 test requires at least two ready BFF Pods; found ${readyReplicas || 0}`)
   }
   console.log(`Testing ${readyReplicas} ready BFF Pods in ${context}.`)
+  console.log('Target: market-order limit enforced solely by k3d Envoy. Core HTTP 400 only marks a forwarded invalid order.')
   const common = [
     'run', '--rm', '--init', '--network', 'host',
     ...hostMappings,

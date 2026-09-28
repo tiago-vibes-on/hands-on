@@ -26,9 +26,9 @@ Expose all market operations under one public route family:
 The current agency-only placement and cancellation require leadership of the
 order's agency. The planned Manager-owned trading account needs a revised
 owner selector and personal authorization rules before extraction.
-The BFF retains the five-placement-attempts-per-second limit per authenticated
-user, regardless of agency. The frontend refreshes agency state separately
-after an order mutation. The old agency-scoped market URLs are removed while
+In k3d, Envoy retains the five-placement-attempts-per-second limit per
+authenticated user, regardless of agency. Normal local Traefik has no
+limit. The frontend refreshes agency state separately after an order mutation. The old agency-scoped market URLs are removed while
 the product is still in its resettable pre-production stage.
 
 The target ownership is: Market owns the order book, matching, and trade
@@ -57,6 +57,6 @@ The API and frontend no longer require Market to return a Core agency-state
 snapshot. This prepares the external contract, not the internal transaction
 boundary. Implement the separate Market service, its own data store, BFF
 routing, and settlement protocol as the roadmap's next market architecture
-task. Preserve the existing BFF rate limit when routing changes. The proposed
-order lifecycle and failure-recovery checks are in the
+task. Preserve the k3d Envoy market rate limit when routing changes.
+The proposed order lifecycle and failure-recovery checks are in the
 [Market service extraction plan](../MARKET_ARCHITECTURE.md).

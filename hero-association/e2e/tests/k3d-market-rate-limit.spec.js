@@ -21,11 +21,11 @@ async function csrfToken(page) {
   return (await response.json()).csrfToken
 }
 
-function placeInvalidOrder(page, agencyId, token) {
+function placeInvalidOrder(page, agencyId, token, extraHeaders = {}) {
   // Core rejects this missing order data; the rate test does not change game state.
   return page.request.post(`/api/v1/market/orders`, {
     data: { agencyId },
-    headers: { 'X-CSRF-TOKEN': token },
+    headers: { 'X-CSRF-TOKEN': token, ...extraHeaders },
     maxRedirects: 0,
   })
 }
@@ -43,6 +43,7 @@ test('k3d gateway enforces a shared market limit while BFF has two Pods', async 
     await signIn(secondPage, 'user1@mail.com', 'user1')
     await signIn(otherUserPage, 'user2@mail.com', 'user2')
 
+    const user1Subject = (await (await firstPage.request.get('/api/v1/session')).json()).identity.subject
     const firstToken = await csrfToken(firstPage)
     const secondToken = await csrfToken(secondPage)
     const otherUserToken = await csrfToken(otherUserPage)
@@ -52,11 +53,27 @@ test('k3d gateway enforces a shared market limit while BFF has two Pods', async 
       ...Array.from({ length: 3 }, () => placeInvalidOrder(secondPage, dawnwatchAgencyId, secondToken)),
     ])
     expect(responses.map((response) => response.status()).sort()).toEqual([400, 400, 400, 400, 400, 429])
-    expect(responses.find((response) => response.status() === 429).headers()['retry-after']).toBe('1')
+    const limitedResponse = responses.find((response) => response.status() === 429)
+    expect(limitedResponse.headers()['retry-after']).toBe('1')
+    expect(limitedResponse.headers()['x-hero-association-rate-limit-layer']).toBe('envoy')
 
-    const otherUserResponse = await placeInvalidOrder(otherUserPage, ironridgeAgencyId, otherUserToken)
+    const otherUserResponse = await placeInvalidOrder(otherUserPage, ironridgeAgencyId, otherUserToken, {
+      'X-Hero-Association-Subject': user1Subject,
+    })
     expect(otherUserResponse.status()).toBe(400)
   } finally {
     await Promise.all([firstContext.close(), secondContext.close(), otherUserContext.close()])
   }
+})
+
+test('an anonymous market placement cannot forge a user identity', async ({ request }) => {
+  const sessionResponse = await request.get('/api/v1/session')
+  expect(sessionResponse.status()).toBe(200)
+  const token = (await sessionResponse.json()).csrfToken
+  const response = await request.post('/api/v1/market/orders', {
+    data: { agencyId: dawnwatchAgencyId },
+    headers: { 'X-CSRF-TOKEN': token, 'X-Hero-Association-Subject': 'forged-subject' },
+    maxRedirects: 0,
+  })
+  expect(response.status()).toBe(401)
 })

@@ -1,7 +1,11 @@
 # ADR 0002: Shared BFF rate limit for market order placement
 
 - Date: 2026-09-27
-- Status: Accepted and implemented
+- Status: Superseded by ADR 0005 on 2026-09-28
+
+This records the earlier BFF limiter. It has been removed; the current k3d
+market limit is enforced only by Envoy Gateway. Normal local Traefik has no
+market rate limit. See [ADR 0005](0005-k3d-market-order-edge-auth.md).
 
 ## Context
 
@@ -13,7 +17,7 @@ browser-supplied identity header would group unrelated players or permit
 spoofing. [ADR 0001](0001-envoy-gateway-for-k3d-ingress.md) still governs the
 k3d browser-facing gateway.
 
-## Decision
+## Original decision (superseded)
 
 Enforce the limit in the BFF before forwarding
 `POST /api/v1/market/orders` to Game Core. The BFF uses the
@@ -31,10 +35,11 @@ subject to this rule. A failed or invalid order attempt still consumes an
 admitted slot; the BFF does not need to inspect a Core response to enforce the
 limit. Core retains authorization, validation, and transactional safeguards.
 
-## Consequences
+## Historical consequences
 
-- No trusted identity handoff to Envoy is required for this rule. The same
-  behavior applies in Compose development and k3d.
+- This BFF guard applies in Compose development and k3d. k3d additionally
+  uses the trusted Envoy handoff in [ADR 0005](0005-k3d-market-order-edge-auth.md);
+  this rolling-window guard remains in place behind it.
 - Redis availability is required to place orders. It already holds BFF token
   state, but this limiter must not change or flush session keys.
 - BFF tests use a temporary Redis container to check the rolling window,

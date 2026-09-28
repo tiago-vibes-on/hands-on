@@ -14,9 +14,9 @@ Today, Game Core owns market orders, agency gold, and inventory in one
 PostgreSQL database and updates them in one transaction. Manager-owned gold,
 heroes, and inventory are planned but not yet implemented. The BFF already
 exposes `GET/POST /api/v1/market/orders` and
-`DELETE /api/v1/market/orders/{orderId}`. Its Redis-backed limit allows five
-order-placement attempts per second per authenticated user, across sessions
-and BFF replicas. Envoy Gateway is the k3d ingress, not the per-user limiter.
+`DELETE /api/v1/market/orders/{orderId}`. In k3d, Envoy Gateway uses
+the BFF-validated subject to allow five order-placement attempts per
+second per authenticated user across sessions and gateway replicas. Normal local Traefik has no market rate limit.
 
 The proposed service boundary is:
 
@@ -56,8 +56,8 @@ trades must be stable and unique so retries refer to the same operation.
 
 ### Place an order
 
-1. BFF admits `POST /api/v1/market/orders` under the user's shared rate limit
-   and forwards it to Market.
+1. In k3d, Envoy admits `POST /api/v1/market/orders` under the per-user
+   rate limit. The BFF forwards admitted requests to Market.
 2. Market durably records a `PENDING_RESERVATION` placement intent with the
    trading owner (Manager or agency), requester, side, item, quantity, price,
    and reservation ID. It does **not** create an open order or expose one in
@@ -138,7 +138,7 @@ open decisions.
 - Authenticate Market-to-Core calls and preserve the initiating user identity
   for personal ownership and agency permission checks; do not trust
   browser-supplied headers or owner IDs.
-- Make the BFF route market paths to Market while retaining its existing
+- Make the BFF route market paths to Market while retaining the k3d Envoy
   five-per-user-per-second placement limit. Do not expose Market directly to
   the browser.
 - Add separate Market build, configuration, database bootstrap/seed, Compose

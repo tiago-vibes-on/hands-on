@@ -26,3 +26,9 @@ printf '%s  %s\n' \
 kubectl apply --server-side --field-manager=hero-association-envoy-gateway \
   -f "$manifest_path"
 kubectl -n envoy-gateway-system rollout status deployment/envoy-gateway --timeout=180s
+
+kubectl apply -f "$script_dir/../k8s/local/redis-gateway.yaml"
+kubectl -n envoy-gateway-system rollout status deployment/redis-gateway --timeout=180s
+kubectl apply -f "$script_dir/../k8s/local/envoy-gateway-config.yaml"
+kubectl -n envoy-gateway-system rollout restart deployment/envoy-gateway
+kubectl -n envoy-gateway-system rollout status deployment/envoy-gateway --timeout=180s

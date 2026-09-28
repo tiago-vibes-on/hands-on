@@ -1,7 +1,7 @@
 # ADR 0001: Envoy Gateway for k3d ingress
 
 - Date: 2026-09-27
-- Status: Accepted for k3d ingress; market limiting covered by ADR 0002
+- Status: Accepted for k3d ingress; market limiting covered by ADR 0005
 
 ## Context
 
@@ -27,9 +27,9 @@ ADR does not require changing the normal local edge.
 
 Envoy Gateway suits the Kubernetes lab because its Gateway API HTTPRoute and
 BackendTrafficPolicy resources support distributed global rate limits across
-Envoy proxy replicas. Market order placement is instead limited by the BFF,
-which knows the authenticated user and shares Redis state across replicas;
-see [ADR 0002](0002-market-order-rate-limit-in-bff.md).
+Envoy proxy replicas. The current market-order limit is enforced by Envoy
+Gateway after BFF session validation; see
+[ADR 0005](0005-k3d-market-order-edge-auth.md).
 
 ## Alternatives considered
 
@@ -40,15 +40,14 @@ see [ADR 0002](0002-market-order-rate-limit-in-bff.md).
 - **Caddy for both environments:** familiar from the first local stack, but
   its documented rate-limit module is non-standard and would add plugin or
   custom-build maintenance for this Kubernetes use case.
-- **Gateway market limiter:** would require a trusted identity handoff because
-  Envoy cannot infer the user from an opaque BFF cookie. ADR 0002 selects the
-  shared BFF limiter for this rule.
+- **BFF market limiter:** initially selected in ADR 0002. It was superseded
+  after adding a trusted identity handoff for Envoy in ADR 0005.
 
 ## Consequences and follow-up
 
-- Envoy remains the k3d ingress and does not inspect browser identity for the
-  market limit. The BFF's implementation and availability behavior are recorded
-  in [ADR 0002](0002-market-order-rate-limit-in-bff.md).
+- Envoy remains the k3d ingress and enforces the per-user market limit using
+  a BFF-validated subject. Its outage behavior is recorded in
+  [ADR 0005](0005-k3d-market-order-edge-auth.md).
 
 ## References
 

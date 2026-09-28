@@ -181,12 +181,14 @@ BFF and Core now emit traces, metrics, and logs to it in the k3d lab.
   workload- and warm-up-dependent lab observations, not a universal maximum.
   All k3d nodes share one computer, so this does not prove physical-node or
   multi-AZ resilience. See `deploy/k3d/CAPACITY.md` for method and caveats.
-- [x] Roll the Redis-backed market limiter into the running k3d BFF without
+- [x] Previously rolled a Redis-backed market limiter into the k3d BFF without
   restarting Core or resetting its database. Both BFF Pods started from the
   imported image, and five k3d browser tests passed through Envoy Gateway.
   The new test sent six concurrent invalid market-order attempts from two
   sessions of one user: five reached Core validation, one received `429`,
-  while another user's request remained independent.
+  while another user's request remained independent. This BFF limiter was
+  subsequently removed; [ADR 0005](adr/0005-k3d-market-order-edge-auth.md)
+  records current Envoy-only enforcement.
 - [x] Move k3d browser ingress to host ports 80/443, exclusive with local
   Compose. Recreated only the disposable k3d lab and restored Istio, Envoy,
   observability, and seeded application data on 2026-09-28. Windows HTTP to

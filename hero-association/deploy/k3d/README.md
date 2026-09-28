@@ -106,6 +106,12 @@ gateway, and the namespace is not globally labeled for injection. Core mTLS
 is enforced after probe and identity checks; separate CPU HPAs now manage
 two to eight BFF and Core Pods.
 
+In k3d, Envoy Gateway asks the BFF to validate each market-placement request
+and solely enforces a five-per-second global limit by Keycloak subject.
+The BFF does not rate-limit market orders; local Traefik does not either. See
+[EDGE_AUTH.md](EDGE_AUTH.md) for the policy, gateway Redis dependency,
+tests, and failure behavior. This does not change local Traefik.
+
 Install the pinned Istio 1.30.5 `istioctl` binary, then install only its
 control plane using the isolated kubeconfig:
 
@@ -423,15 +429,24 @@ a 5m / 47Mi sidecar. This idle snapshot is not an HPA target.
 
 ## Market order rate-limit load check
 
+An Envoy-generated market-limit `429` includes
+`X-Hero-Association-Rate-Limit-Layer: envoy`. The BFF has no market limiter;
+its Redis is only for OIDC session state. Gateway Redis is separate.
+
 From `hero-association/e2e`, run `npm run test:market:k6` after the JVM
 backend and frontend are deployed. It signs in with three local-only browser
 sessions, then uses the pinned k6 Docker image to verify that user 1 gets
 five forwarded requests and one HTTP 429 in a burst, while user 2 keeps a
 separate budget. A ten-second, 20-attempts-per-second scenario checks that
-the same per-user limit continues to hold through Envoy Gateway and the BFF
+the same per-user limit continues to hold across Envoy Gateway and BFF
 replicas. Requests are intentionally invalid, so they cannot place orders.
 See [the E2E README](../../e2e/README.md#measure-the-market-order-rate-limit-with-k6)
 for prerequisites and expected results.
+
+To reproduce the gateway Redis-outage and two-Envoy-proxy checks, run
+`./test-market-edge-resilience.sh` from this directory. It guards the k3d
+context and restores the normal one-replica deployments on exit. See
+[EDGE_AUTH.md](EDGE_AUTH.md) for the fail-closed outage result and lab limitations.
 
 ## Sustained read-load baseline
 

@@ -60,8 +60,8 @@ npm run test:k3d
 It uses the seeded local-only `user1@mail.com` / `user1` and
 `user2@mail.com` / `user2` accounts to verify login, logout, login again,
 account identity, repeated authenticated agency-state reads, and rejection
-of a cross-agency read. It also checks the shared market-order limit with two
-BFF Pods, two sessions for one user, and a second user's separate budget.
+of a cross-agency read. It also checks the Envoy market-order limit with two
+BFF Pods, two sessions for one user, and a second user with a separate budget.
 Unlike `npm test`, it does not start Compose, flush Redis, or delete volumes.
 The Playwright container uses Docker host networking and maps both k3d
 hostnames to `127.0.0.1`, reaching the cluster's HTTPS port `443`. It ignores
@@ -80,18 +80,35 @@ The runner needs Docker, `kubectl`, Node.js 24, and `npm ci` completed in this
 directory. It uses the pinned Playwright browser image to sign in two separate
 sessions for `user1@mail.com` and one for `user2@mail.com`, then runs the pinned
 `grafana/k6:2.3.0` image against the k3d HTTPS gateway. A six-request burst
-must yield exactly five requests forwarded to Core (HTTP 400 for intentionally
-incomplete orders) and one HTTP 429 with `Retry-After: 1`. User 2 must still
-reach Core independently. A second scenario sends 20 order attempts per second
-for ten seconds; it expects both forwarded and limited responses, no unexpected
-status, no dropped iterations, and at most 55 forwarded attempts. The threshold
-allows for the boundaries of the ten-second sliding-window observation.
+from user 1 must produce exactly five requests not rate-limited (HTTP 400 from
+Core) and one HTTP 429 from Envoy with `Retry-After: 1` and the
+Envoy layer header. User 2 must have one request not rate-limited,
+independently of user 1's two sessions.
+
+The sustained scenario targets 200 attempts at 20 per second for ten
+seconds. Its arrival scheduler and the one-second gateway window boundaries
+make exact iteration and 400/429 counts timing-dependent. Thresholds require
+198–202 completed attempts, at most 55 not rate-limited, at least 143
+rate-limited, no unexpected responses, and no dropped iterations. At least one
+request must not be rate-limited.
+
+k6's native `THRESHOLDS` section prints the expected expression and observed
+count for each metric and sets a nonzero exit status if a threshold fails.
+HTTP 400 is only the marker for an intentionally incomplete request that was
+not rate-limited by Envoy. Core order validation is not under test.
+Because 400 and 429 are designated expected HTTP statuses here, a 0%
+`http_req_failed` value does not mean any market order was created.
 
 These requests cannot create market orders because they omit required order
 fields. The runner uses the existing k3d data, does not reset Redis or the
 database, and removes its temporary session file after k6 exits. It does not
 print session cookies or CSRF tokens. Run it without other tests using user 1's
 market-order endpoint, since that traffic shares the same per-user budget.
+
+For the opt-in Redis-outage and two-Envoy-proxy check, run
+`../deploy/k3d/test-market-edge-resilience.sh`. It runs a browser
+outage check, then this k6 test across two Envoy proxies. It verifies Envoy
+responses and restores the lab replica counts on failure.
 
 ## Measure k3d read load
 
