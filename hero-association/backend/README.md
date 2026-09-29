@@ -31,6 +31,9 @@ The isolated k3d deployment uses Envoy Gateway external authorization and a
 Redis-backed global per-user limit for `POST /api/v1/market/orders`; see the
 [k3d edge-auth runbook](../deploy/k3d/EDGE_AUTH.md). The BFF Redis still holds
 OIDC session state, not market rate-limit state.
+The [local Jenkins pipeline](../ci/jenkins/README.md) runs the existing
+Core/BFF/frontend build and k3d promotion on trusted `main` commits; normal
+Quarkus dev mode remains independent.
 
 ## Local development
 

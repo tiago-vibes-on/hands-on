@@ -3,7 +3,7 @@ set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$script_dir/.."
-kubeconfig="$project_dir/deploy/k3d/.kubeconfig"
+kubeconfig="${HERO_ASSOCIATION_K3D_KUBECONFIG:-$project_dir/deploy/k3d/.kubeconfig}"
 
 if [[ $# -gt 1 ]]; then
   printf 'Usage: %s [build-id]\n' "$0" >&2

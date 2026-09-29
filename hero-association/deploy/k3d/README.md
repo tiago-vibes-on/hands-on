@@ -5,6 +5,8 @@ K3s installation, and the later Floci/AWS lab. The first versioned cluster
 and Istio control-plane configurations are in `cluster.yaml` and
 `istio-operator.yaml`. Application deployment is tracked in
 [`../../DEPLOYMENT.md`](../../DEPLOYMENT.md).
+For automatic builds and promotions of trusted `main` commits, see the
+[local Jenkins runbook](../../ci/jenkins/README.md).
 
 ## Requirements
 

@@ -1,0 +1,50 @@
+pipeline {
+    agent { label 'wsl-local' }
+
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        timeout(time: 3, unit: 'HOURS')
+    }
+
+    stages {
+        stage('Checkout trusted main') {
+            steps {
+                checkout scm
+                sh 'test -z "$(git status --porcelain --untracked-files=normal)"'
+                script {
+                    def revision = sh(script: 'git rev-parse --short=8 HEAD', returnStdout: true).trim()
+                    env.HERO_ASSOCIATION_BUILD_ID = "jenkins-${env.BUILD_NUMBER}-${revision}"
+                }
+            }
+        }
+
+        stage('Local k3d preflight') {
+            steps {
+                sh 'test -r "$HERO_ASSOCIATION_K3D_KUBECONFIG"'
+                sh 'test -x "$K3D_BIN"'
+                sh 'kubectl --kubeconfig "$HERO_ASSOCIATION_K3D_KUBECONFIG" config current-context | grep -Fx k3d-hero-association'
+                sh 'docker info >/dev/null'
+            }
+        }
+
+        stage('Build, verify, and promote') {
+            steps {
+                sh './hero-association/pipeline/run-k3d-pipeline.sh "$HERO_ASSOCIATION_BUILD_ID"'
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                if (env.HERO_ASSOCIATION_BUILD_ID) {
+                    archiveArtifacts(
+                        artifacts: "hero-association/pipeline/artifacts/${env.HERO_ASSOCIATION_BUILD_ID}/all/manifest.txt,hero-association/pipeline/artifacts/${env.HERO_ASSOCIATION_BUILD_ID}/all/e2e-verification.json,hero-association/pipeline/artifacts/${env.HERO_ASSOCIATION_BUILD_ID}/all/k3d-promotion.json",
+                        allowEmptyArchive: true
+                    )
+                }
+            }
+        }
+    }
+}

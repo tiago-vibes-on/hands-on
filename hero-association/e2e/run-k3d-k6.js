@@ -27,7 +27,7 @@ function run(command, args, environment = process.env) {
 
 const sessionDirectory = await mkdtemp(path.join(tmpdir(), 'hero-association-k6-'))
 try {
-  const kubeconfig = path.join(e2eDirectory, '../deploy/k3d/.kubeconfig')
+  const kubeconfig = process.env.HERO_ASSOCIATION_K3D_KUBECONFIG || path.join(e2eDirectory, '../deploy/k3d/.kubeconfig')
   const kubectlEnvironment = { ...process.env, KUBECONFIG: kubeconfig }
   const context = execFileSync('kubectl', ['config', 'current-context'], {
     env: kubectlEnvironment,

@@ -9,7 +9,7 @@ import { inspectArchive, prepareArchive, requirePassingE2EVerification } from '.
 import { restorePreviousImages } from './rollback-k3d.mjs'
 
 const projectDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const kubeconfig = path.join(projectDirectory, 'deploy/k3d/.kubeconfig')
+const kubeconfig = process.env.HERO_ASSOCIATION_K3D_KUBECONFIG || path.join(projectDirectory, 'deploy/k3d/.kubeconfig')
 const cachedK3d = path.join(projectDirectory, 'deploy/k3d/.tools/k3d')
 const k3d = process.env.K3D_BIN || (existsSync(cachedK3d) ? cachedK3d : 'k3d')
 const namespace = 'hero-association'

@@ -304,6 +304,12 @@ Ordered implementation:
   keep the current local development environment and Core data untouched.
 - [x] Add one local command that runs build, archived-image E2E verification,
   and k3d promotion in order, stopping at the first failed gate.
+- [ ] Run that command automatically for trusted `main` commits with a local
+  Docker-hosted Jenkins controller and WSL build agent. The controller and
+  agent connected on 2026-09-29; the first complete Jenkins build awaits a
+  commit containing its Jenkinsfile on GitHub `main`. Do not run unreviewed
+  pull requests on the Docker/k3d-capable agent. See
+  [the local Jenkins runbook](ci/jenkins/README.md).
 - [x] Include the containerized market k6 rate-limit test in the k3d
   promotion gate after browser E2E. A failure restores previous application
   image references; the isolated lab passed both suites on 2026-09-28.

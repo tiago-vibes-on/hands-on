@@ -1,0 +1,20 @@
+name: hero-association-ci
+
+services:
+  jenkins:
+    build: .
+    image: hero-association-jenkins:local
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:15180:8080"
+    env_file:
+      - .env
+    environment:
+      CASC_JENKINS_CONFIG: /var/jenkins_config/jenkins.yaml
+      JAVA_OPTS: -Djenkins.install.runSetupWizard=false
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - ./jenkins.yaml:/var/jenkins_config/jenkins.yaml:ro
+
+volumes:
+  jenkins_home:

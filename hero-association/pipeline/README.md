@@ -4,6 +4,10 @@ This local pipeline builds once, verifies the archived images, and can deploy
 them to k3d or store them in Floci S3 for a later AWS-lab deployment. The normal
 Vite/Quarkus development workflow remains separate.
 
+To run this same gated k3d pipeline automatically from trusted GitHub `main`
+commits, see the [local Jenkins runbook](../ci/jenkins/README.md). Jenkins builds
+on the existing WSL machine; it does not use GitHub-hosted runners.
+
 ## Run the complete k3d pipeline
 
 With Docker, Java 25, Node.js 24/npm, `kubectl`, and the isolated k3d lab
@@ -95,6 +99,10 @@ This command checks the archive and its passing E2E record before loading
 any of its images into local Docker. It checks the isolated Kubernetes context
 and healthy deployments, imports the same three image tags to k3d, and rolls
 out Core, BFF, and frontend.
+For a clean automation checkout, set `HERO_ASSOCIATION_K3D_KUBECONFIG` to the
+absolute path of the original ignored `deploy/k3d/.kubeconfig` and `K3D_BIN`
+to the local k3d binary. The default manual workflow still uses the
+checkout's ignored kubeconfig.
 It resolves each platform image from the verified archive and checks that
 every running application Pod reports a linked OCI image digest, not merely
 the expected tag. It then runs the k3d Playwright and containerized market

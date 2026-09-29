@@ -1,0 +1,49 @@
+jenkins:
+  systemMessage: "Hero Association local k3d CI/CD. Builds only trusted main on the WSL agent."
+  numExecutors: 0
+  slaveAgentPort: -1
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: admin
+          password: "${JENKINS_ADMIN_PASSWORD}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  nodes:
+    - permanent:
+        name: wsl-local
+        labelString: wsl-local
+        numExecutors: 1
+        remoteFS: "${JENKINS_AGENT_WORKDIR}"
+        launcher:
+          inbound:
+            workDirSettings:
+              disabled: false
+              failIfWorkDirIsMissing: false
+              internalDir: remoting
+              workDirPath: "${JENKINS_AGENT_WORKDIR}"
+
+jobs:
+  - script: |
+      pipelineJob('hero-association-k3d') {
+        description('Trusted main only: build and verify once, then promote to local k3d.')
+        triggers {
+          scm('H/5 * * * *')
+        }
+        definition {
+          cpsScm {
+            scm {
+              git {
+                remote {
+                  url('https://github.com/tiago-vibes-on/hands-on.git')
+                }
+                branch('*/main')
+              }
+            }
+            scriptPath('hero-association/ci/jenkins/Jenkinsfile')
+            lightweight()
+          }
+        }
+      }
