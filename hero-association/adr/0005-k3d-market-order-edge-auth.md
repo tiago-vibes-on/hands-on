@@ -52,9 +52,11 @@ does not mean the edge limit failed. Only Envoy emits market-limit 429 responses
 The gateway rate-limit Redis and BFF session Redis remain separate. Core keeps
 its own bearer-token validation, agency authorization, and transactional rules.
 
-The k3d resilience check verifies that gateway Redis loss causes local Envoy
-500 responses with rate_limiter_error and no upstream market request. Two
-Envoy proxies share a per-user budget through gateway Redis. A single ephemeral
-gateway Redis Pod is acceptable for this lab, not for production availability;
-provide high availability, observability, and an outage runbook before expanding
-this topology. Local Traefik remains without a market rate limit.
+The k3d resilience check verifies that complete gateway Redis loss causes
+local Envoy 500 responses with rate_limiter_error and no upstream market
+request. Two Envoy proxies share a per-user budget through gateway Redis.
+The lab now uses three Redis/Sentinel Pods with quorum and Pod anti-affinity;
+a single primary failure can briefly cause fail-closed 500s during election
+and client reconnection. This is not production availability on one computer.
+See [ADR 0006](0006-k3d-gateway-redis-sentinel.md) for the lab HA choice and
+remaining hardening. Local Traefik remains without a market rate limit.

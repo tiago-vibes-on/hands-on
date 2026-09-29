@@ -30,6 +30,8 @@ data:
                         env:
                           - name: REDIS_HEALTH_CHECK_ACTIVE_CONNECTION
                             value: "true"
+                          - name: REDIS_TYPE
+                            value: sentinel
         shutdownManager:
           image: envoyproxy/gateway:v1.9.1
     rateLimit:
@@ -38,4 +40,4 @@ data:
       backend:
         type: Redis
         redis:
-          url: redis-gateway.envoy-gateway-system.svc.cluster.local:6379
+          url: gateway,redis-gateway-ha-0.redis-gateway-ha.envoy-gateway-system.svc.cluster.local:26379,redis-gateway-ha-1.redis-gateway-ha.envoy-gateway-system.svc.cluster.local:26379,redis-gateway-ha-2.redis-gateway-ha.envoy-gateway-system.svc.cluster.local:26379

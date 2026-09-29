@@ -31,7 +31,7 @@ function placeInvalidOrder(page, baseUrl, agencyId, token) {
   })
 }
 
-test('shares the five-order budget across BFFs and sessions, but not users', async ({ browser }) => {
+test('forwards market placements through both local BFFs without rate limiting', async ({ browser }) => {
   const firstContext = await browser.newContext({ ignoreHTTPSErrors: true })
   const secondContext = await browser.newContext({ ignoreHTTPSErrors: true })
   const otherUserContext = await browser.newContext({ ignoreHTTPSErrors: true })
@@ -54,9 +54,7 @@ test('shares the five-order budget across BFFs and sessions, but not users', asy
       ...Array.from({ length: 3 }, () =>
         placeInvalidOrder(secondPage, secondaryBffUrl, dawnwatchAgencyId, secondToken)),
     ])
-    expect(responses.map((response) => response.status()).sort()).toEqual([400, 400, 400, 400, 400, 429])
-    const limitedResponse = responses.find((response) => response.status() === 429)
-    expect(limitedResponse.headers()['retry-after']).toBe('1')
+    expect(responses.map((response) => response.status()).sort()).toEqual([400, 400, 400, 400, 400, 400])
 
     const otherUserResponse = await placeInvalidOrder(
       otherUserPage, primaryBffUrl, ironridgeAgencyId, otherUserToken,

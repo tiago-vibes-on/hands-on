@@ -209,6 +209,13 @@ npm install
 npm test
 ```
 
+For a build-once candidate, first create the complete image archive from
+[`../pipeline`](../pipeline/README.md). From `e2e/`, run:
+
+`npm run test:archive -- ../pipeline/artifacts/<build-id>/all`
+
+The regular `npm test` above remains the source-building development check.
+
 See [`../e2e/README.md`](../e2e/README.md) for the ports, cleanup behavior,
 current coverage, and the k6 check of the deployed k3d market-order limit.
 
@@ -260,6 +267,14 @@ credentials, and Gateway verification, see
 [`../deploy/k3d/README.md`](../deploy/k3d/README.md#build-and-deploy-the-jvm-backend).
 That workflow supports rebuilding and rolling only BFF when Core has not
 changed, without resetting the lab database.
+
+For build-once deployment of an E2E-verified Core/BFF/frontend archive, use
+the [pipeline promotion command](../pipeline/README.md#promote-the-verified-archive-to-k3d).
+It rolls the isolated k3d app Deployments without database bootstrap or
+changing this host-run development workflow. The
+[complete local pipeline](../pipeline/README.md#run-the-complete-k3d-pipeline)
+also runs the build and both browser test gates in one command.
+
 The `quarkus-smallrye-health` extension exposes `/q/health/started`,
 `/q/health/ready`, and `/q/health/live` for Kubernetes probes in both services.
 The k3d Core validates its schema on startup; a separate one-shot Job seeds a

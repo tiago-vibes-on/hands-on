@@ -1,0 +1,18 @@
+# Opt-in container-backed ECS/RDS/ElastiCache lab. This grants Floci control over the shared Docker
+# daemon; never include this override in the normal development Compose stack.
+services:
+  floci:
+    environment:
+      FLOCI_RUN_AS_ROOT: "true"
+      FLOCI_HOSTNAME: floci
+      FLOCI_SERVICES_DOCKER_NETWORK: hero-association-floci_default
+      FLOCI_SERVICES_ECS_MOCK: "false"
+      FLOCI_SERVICES_ECS_DOCKER_NETWORK: hero-association-floci_default
+      FLOCI_SERVICES_RDS_ENDPOINT_HOST: floci
+      FLOCI_SERVICES_RDS_DEFAULT_POSTGRES_IMAGE: postgres:18.6-alpine3.24
+      FLOCI_SERVICES_RDS_PROXY_BASE_PORT: "7001"
+      FLOCI_SERVICES_RDS_PROXY_MAX_PORT: "7002"
+      FLOCI_SERVICES_ELASTICACHE_PROXY_BASE_PORT: "6379"
+      FLOCI_SERVICES_ELASTICACHE_PROXY_MAX_PORT: "6379"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

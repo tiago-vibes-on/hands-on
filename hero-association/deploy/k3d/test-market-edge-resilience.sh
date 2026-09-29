@@ -18,10 +18,10 @@ if [[ ${#proxy_deployments[@]} -ne 1 ]]; then
 fi
 proxy_deployment="${proxy_deployments[0]}"
 
-redis_replicas="$(kubectl -n "$gateway_namespace" get deployment/redis-gateway -o jsonpath='{.spec.replicas}')"
+redis_replicas="$(kubectl -n "$gateway_namespace" get statefulset/redis-gateway-ha -o jsonpath='{.spec.replicas}')"
 proxy_replicas="$(kubectl -n "$gateway_namespace" get deployment/"$proxy_deployment" -o jsonpath='{.spec.replicas}')"
-if [[ "$redis_replicas" != 1 || "$proxy_replicas" != 1 ]]; then
-  printf 'Expected the normal one-Redis, one-proxy lab; found Redis=%s, proxy=%s.\n' "$redis_replicas" "$proxy_replicas" >&2
+if [[ "$redis_replicas" != 3 || "$proxy_replicas" != 1 ]]; then
+  printf 'Expected the normal three-Redis, one-proxy lab; found Redis=%s, proxy=%s.\n' "$redis_replicas" "$proxy_replicas" >&2
   exit 1
 fi
 
@@ -36,8 +36,8 @@ restore() {
     kubectl -n "$gateway_namespace" rollout status deployment/"$proxy_deployment" --timeout=180s || result=1
   fi
   if [[ "$redis_changed" == true ]]; then
-    kubectl -n "$gateway_namespace" scale deployment/redis-gateway --replicas="$redis_replicas" || result=1
-    kubectl -n "$gateway_namespace" rollout status deployment/redis-gateway --timeout=180s || result=1
+    kubectl -n "$gateway_namespace" scale statefulset/redis-gateway-ha --replicas="$redis_replicas" || result=1
+    kubectl -n "$gateway_namespace" rollout status statefulset/redis-gateway-ha --timeout=180s || result=1
   fi
   exit "$result"
 }
@@ -46,7 +46,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 run_market_load() {
-  (cd "$script_dir/../../e2e" && npm run test:market:k6)
+  (cd "$script_dir/../../e2e" && HERO_ASSOCIATION_K6_NO_CONNECTION_REUSE=true npm run test:market:k6)
 }
 
 run_outage_check() {
@@ -90,10 +90,56 @@ assert_market_logs() {
   return 1
 }
 
+printf 'Testing Sentinel failover of the current Redis primary.\n'
+old_master_ip="$(kubectl -n "$gateway_namespace" exec redis-gateway-ha-0 -c sentinel -- \
+  redis-cli -p 26379 --raw sentinel get-master-addr-by-name gateway | head -1)"
+if [[ "$old_master_ip" == redis-gateway-ha-[0-2].redis-gateway-ha.* ]]; then
+  master_pod="${old_master_ip%%.*}"
+else
+  master_pod="$(kubectl -n "$gateway_namespace" get pods -l app=redis-gateway-ha \
+    -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.podIP}{"\n"}{end}' |
+    awk -v ip="$old_master_ip" '$2 == ip { print $1 }')"
+fi
+if [[ -z "$master_pod" ]]; then
+  printf 'Could not map Sentinel primary %s to a Redis Pod.\n' "$old_master_ip" >&2
+  exit 1
+fi
+kubectl -n "$gateway_namespace" exec "$master_pod" -c redis -- redis-cli client pause 15000 all
+new_master_ip=''
+for attempt in {1..30}; do
+  current_master_ip="$(kubectl -n "$gateway_namespace" exec redis-gateway-ha-1 -c sentinel -- \
+    redis-cli -p 26379 --raw sentinel get-master-addr-by-name gateway | head -1)"
+  if [[ -n "$current_master_ip" && "$current_master_ip" != "$old_master_ip" ]]; then
+    new_master_ip="$current_master_ip"
+    break
+  fi
+  sleep 1
+done
+if [[ -z "$new_master_ip" ]]; then
+  printf 'Sentinel did not promote a new primary within 30 seconds.\n' >&2
+  exit 1
+fi
+old_role=''
+for attempt in {1..30}; do
+  old_role="$(kubectl -n "$gateway_namespace" exec "$master_pod" -c redis -- \
+    redis-cli --raw info replication | tr -d '\r' | sed -n 's/^role://p')"
+  if [[ "$old_role" == slave ]]; then break; fi
+  sleep 1
+done
+if [[ "$old_role" != slave ]]; then
+  printf 'The previous Redis primary did not rejoin as a replica.\n' >&2
+  exit 1
+fi
+kubectl -n "$gateway_namespace" rollout status statefulset/redis-gateway-ha --timeout=180s
+kubectl -n "$gateway_namespace" rollout status deployment/envoy-ratelimit --timeout=180s
+sleep 2
+run_market_load
+printf 'Sentinel promoted a new primary and the market limit still works.\n'
+
 printf 'Testing gateway Redis outage; Envoy must reject market orders before BFF.\n'
-kubectl -n "$gateway_namespace" scale deployment/redis-gateway --replicas=0
+kubectl -n "$gateway_namespace" scale statefulset/redis-gateway-ha --replicas=0
 redis_changed=true
-kubectl -n "$gateway_namespace" wait --for=delete pod -l app=redis-gateway --timeout=120s
+kubectl -n "$gateway_namespace" wait --for=delete pod -l app=redis-gateway-ha --timeout=120s
 outage_since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 for attempt in {1..30}; do
   rate_limit_ready="$(kubectl -n "$gateway_namespace" get deployment/envoy-ratelimit -o jsonpath='{.status.readyReplicas}')"
@@ -111,8 +157,8 @@ if [[ ${#proxy_pods[@]} -ne 1 ]]; then
   exit 1
 fi
 assert_market_logs "${proxy_pods[0]}" "$outage_since" outage
-kubectl -n "$gateway_namespace" scale deployment/redis-gateway --replicas="$redis_replicas"
-kubectl -n "$gateway_namespace" rollout status deployment/redis-gateway --timeout=180s
+kubectl -n "$gateway_namespace" scale statefulset/redis-gateway-ha --replicas="$redis_replicas"
+kubectl -n "$gateway_namespace" rollout status statefulset/redis-gateway-ha --timeout=180s
 kubectl -n "$gateway_namespace" rollout status deployment/envoy-ratelimit --timeout=180s
 redis_changed=false
 
@@ -135,4 +181,4 @@ run_market_load
 for proxy_pod in "${proxy_pods[@]}"; do
   assert_market_logs "$proxy_pod" "$shared_since" two-proxies
 done
-printf 'Both resilience checks passed; restoring the normal one-proxy lab.\n'
+printf 'All three resilience checks passed; restoring the normal one-proxy lab.\n'

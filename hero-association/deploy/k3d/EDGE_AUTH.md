@@ -28,7 +28,8 @@ trusted result sets `X-Hero-Association-Subject` for the rate-limit key;
 a browser-supplied copy cannot choose a bucket. The BFF identity endpoint is
 enabled only by the k3d Deployment setting and has no public HTTPRoute.
 External authorization is fail-closed. Its request has a two-second timeout.
-The dedicated gateway Redis is not the BFF OIDC session Redis.
+The dedicated gateway Redis is a three-Pod Redis/Sentinel group on separate
+k3d nodes; it is not the BFF OIDC session Redis.
 Gateway rate-limit errors fail closed with HTTP 500 before BFF forwarding.
 
 Only `POST /api/v1/market/orders` and its trailing-slash form have this
@@ -53,7 +54,7 @@ deploy as described in [README.md](README.md):
 ./deploy-backend.sh
 ```
 
-The installer applies `../k8s/local/redis-gateway.yaml` and
+The installer applies `../k8s/local/redis-gateway-ha.yaml` and
 `../k8s/local/envoy-gateway-config.yaml`. The backend Kustomize overlay
 installs `../k8s/backend/market-order-edge.yaml`, and the BFF Deployment
 enables its private identity endpoint. When importing a rebuilt image with
@@ -85,20 +86,39 @@ Run the opt-in resilience check from `hero-association/deploy/k3d`:
 ./test-market-edge-resilience.sh
 ```
 
-The command verifies the isolated kubeconfig, briefly stops only gateway
-Redis, runs a browser test expecting a local Envoy `500` without BFF forwarding,
-restores Redis, then scales Envoy to two proxies and checks that both receive
-market requests and emit local `429`s. It restores the original replicas on
-exit, including after a failed check. Do not run concurrent user 1 market tests.
+The command verifies the isolated kubeconfig, pauses the current Redis primary
+to test Sentinel election, waits for the old primary to rejoin as a replica,
+and checks the steady-state market limit. It then briefly stops all three
+gateway Redis Pods to verify a local Envoy `500` without BFF forwarding,
+restores the group, and scales Envoy to two proxies. The two-proxy load test
+disables connection reuse so both proxies must receive market requests and
+emit local `429`s. It restores replica counts even after a failed check. Do
+not run concurrent user 1 market tests.
 
-On 2026-09-28, the resilience command passed both checks. Gateway Redis
-outage produced a local Envoy `500` with `rate_limiter_error` before the BFF
-was reached; with two proxies, each emitted local `429`s and neither emitted
-an upstream market-limit `429`. The gateway
-Redis is a single ephemeral Pod and the resulting unavailability is a lab
-tradeoff, not a production-ready high-availability design. Add gateway Redis
-redundancy, monitoring, and an outage runbook before using this topology
-outside k3d. Do not reset either database for this test.
+On 2026-09-28, all three checks passed. Sentinel promoted a replacement
+primary and steady-state k6 again admitted five burst attempts and limited
+the sixth. A complete gateway Redis outage produced a local Envoy `500` with
+`rate_limiter_error` before the BFF was reached. With two proxies, each
+emitted local `429`s and neither emitted an upstream market-limit `429`.
+During primary election and client reconnection, fail-closed `500`s can
+briefly occur; the test waits for the old primary to rejoin before checking
+the steady-state limit. The counters and Sentinel configuration are ephemeral
+and all three k3d nodes run on one computer. This is Pod redundancy, not a
+production multi-AZ design. Do not reset either database for this test.
+
+To inspect quorum and the primary from `deploy/k3d`:
+
+```bash
+KUBECONFIG="$PWD/.kubeconfig" kubectl -n envoy-gateway-system get pods -l app=redis-gateway-ha -o wide
+KUBECONFIG="$PWD/.kubeconfig" kubectl -n envoy-gateway-system exec redis-gateway-ha-0 -c sentinel -- redis-cli -p 26379 sentinel ckquorum gateway
+KUBECONFIG="$PWD/.kubeconfig" kubectl -n envoy-gateway-system exec redis-gateway-ha-0 -c sentinel -- redis-cli -p 26379 sentinel get-master-addr-by-name gateway
+```
+
+For this lab, investigate a missing quorum or unhealthy `envoy-ratelimit`
+Pod before restarting anything; a full Redis outage blocks only market
+placement, not the BFF session store. Outside k3d, require authenticated and
+TLS-protected Redis, durable operator-managed failover, alerts, and a reviewed
+outage runbook. See [ADR 0006](../../adr/0006-k3d-gateway-redis-sentinel.md).
 
 ## References
 

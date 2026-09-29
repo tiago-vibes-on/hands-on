@@ -13,6 +13,7 @@ http.setResponseCallback(http.expectedStatuses(400, 429))
 
 export const options = {
   insecureSkipTLSVerify: true, // The isolated k3d lab uses a local development CA.
+  noConnectionReuse: __ENV.HERO_ASSOCIATION_K6_NO_CONNECTION_REUSE === 'true',
   batchPerHost: 20,
   scenarios: {
     burst: {

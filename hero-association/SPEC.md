@@ -43,6 +43,22 @@ The backend is split into independently buildable services:
 translated to `404 Not Found` at the Core API boundary. The BFF preserves that
 status and response body for the browser.
 
+## Local build validation
+
+The local pipeline packages Core, BFF, and frontend images in one checksummed
+archive. Before that archive is eligible for deployment, the isolated browser
+E2E suite must load those exact images without rebuilding them and verify the
+running container image IDs against the archive manifest. Only a complete
+successful run records passing verification beside the archive. Source-building
+development E2E remains available separately. Verified archives can be
+promoted to k3d. A one-command local pipeline runs the build, archive-backed
+E2E gate, and k3d promotion in that order, stopping before deployment if
+verification fails. K3d promotion checks the archive and its passing E2E
+record before loading its images into local Docker or importing them into the
+cluster. Only after Pod-image verification, k3d browser E2E, and market k6
+pass does promotion write a local result beside the archive. See
+[the pipeline guide](pipeline/README.md).
+
 ## API contract
 
 Game Core exposes agency game state and persisted rune loadouts at
@@ -96,9 +112,11 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
   attempts per second per validated Keycloak subject across sessions,
   agencies, buy/sell sides, and gateway replicas. Excess attempts return
   `429` with `Retry-After: 1` and
-  `X-Hero-Association-Rate-Limit-Layer: envoy`. If the gateway rate-limit
-  service or its Redis is unavailable, Envoy fails closed with `500` and
-  does not forward placement. The BFF does not apply a second market limit.
+  `X-Hero-Association-Rate-Limit-Layer: envoy`. Gateway Redis uses three
+  Sentinel-managed Pods on separate k3d nodes. A primary failure may briefly
+  produce fail-closed `500`s during election; a complete Redis outage keeps
+  placement unavailable until recovery. Envoy never forwards those failures.
+  The BFF does not apply a second market limit.
   Normal local Traefik development has no market rate limit. Reads and
   cancellations are not limited.
 - `DELETE /api/v1/market/orders/{orderId}` cancels an open order owned by
@@ -517,3 +535,11 @@ diagnostic messages can still contain arbitrary text. The lab provisions
 traffic and scaling dashboards, retains Prometheus, Loki, and
 Tempo data for up to 24 hours, and uses ephemeral storage that is cleared
 when the observability Pod is replaced.
+
+A build-once local delivery lane packages tested Core and BFF JVM images
+plus the frontend image in a checksummed archive. The archive-backed browser E2E
+suite records a matching passing result before k3d promotion is allowed.
+Promotion imports those exact images, updates only the three k3d application
+Deployments, waits for rollouts, and runs k3d browser tests. A failed rollout
+or test restores prior image references; it does not bootstrap or reset Core
+data, or change the normal development stack.

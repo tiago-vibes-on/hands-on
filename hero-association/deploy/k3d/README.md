@@ -276,6 +276,59 @@ cd ../../frontend && npm ci && npm run lint && npm run build
 The two Maven packages run service tests, including Core's Testcontainers
 checks, so Docker must be available.
 
+## Promote a verified archive
+
+For a fresh build through archived-image E2E, k3d browser, and market k6
+gates, run `../../pipeline/run-k3d-pipeline.sh` from this directory. It
+creates a new archive and prints its path. The commands below promote an archive that has
+already passed the separate E2E gate.
+
+After `pipeline/build-local.sh all` and the archive-backed browser E2E gate
+have passed, deploy those exact JVM and frontend images without rebuilding:
+
+```bash
+cd ../../pipeline
+node deploy-k3d.mjs artifacts/<build-id>/all
+```
+
+Run this from `hero-association/pipeline` with Docker, Node.js 24, `kubectl`,
+and the running k3d cluster available. The command uses only
+`deploy/k3d/.kubeconfig`, requires context `k3d-hero-association`, and
+uses the cached `.tools/k3d` or `K3D_BIN`. It checks the archive checksum,
+manifest image IDs, and matching `result: passed` E2E record before loading
+images into local Docker or importing them into k3d. It updates only the three
+application Deployment image fields,
+waits for each rollout, and compares every running application Pod's image ID
+with the verified archive's platform image before running `npm run test:k3d`
+and `npm run test:market:k6`. If rollout or either suite fails, it restores the
+previous image references and reports any rollback failure. It does not reset
+Core or Keycloak databases, alter HPAs or the Gateway, or touch normal
+Compose development. Both suites create temporary login sessions in the lab;
+k6 verifies the five-per-second Envoy market limit and another user's
+independent budget. Keep the previous image tags available on the k3d nodes
+for a rollback.
+
+After all promotion checks pass, the command writes ignored
+`artifacts/<build-id>/all/k3d-promotion.json` with the archive checksum,
+verified Pod image IDs, and passing browser/k6 gate results. It is a local
+snapshot, not proof that the deployment remains healthy; use `--verify-only`
+for a current audit. Failed promotions do not write a new passing result.
+
+To check the running deployment later without importing images or changing
+the cluster, run from `hero-association/pipeline`:
+
+```bash
+node deploy-k3d.mjs --verify-only artifacts/<build-id>/all
+```
+
+This read-only audit requires the same passing archive E2E record and checks
+the Deployment references and every running Core, BFF, and frontend Pod image
+digest against the archive. It does not rerun browser or k6 tests.
+
+The direct-build commands below still use fixed `:k3d` tags. Reapplying
+their base Deployment manifests later can replace a promoted archive tag;
+rerun this promotion command to return to the verified build.
+
 ## Build and deploy the JVM backend
 
 From `hero-association/deploy/k3d`, run these commands after installing Istio,
@@ -443,10 +496,11 @@ replicas. Requests are intentionally invalid, so they cannot place orders.
 See [the E2E README](../../e2e/README.md#measure-the-market-order-rate-limit-with-k6)
 for prerequisites and expected results.
 
-To reproduce the gateway Redis-outage and two-Envoy-proxy checks, run
-`./test-market-edge-resilience.sh` from this directory. It guards the k3d
-context and restores the normal one-replica deployments on exit. See
-[EDGE_AUTH.md](EDGE_AUTH.md) for the fail-closed outage result and lab limitations.
+To reproduce Sentinel primary failover, total gateway Redis outage, and
+two-Envoy-proxy checks, run `./test-market-edge-resilience.sh` from this
+directory. It guards the k3d context and restores the normal three-Redis,
+one-proxy replica counts on exit. See [EDGE_AUTH.md](EDGE_AUTH.md) for the
+transient fail-closed failover window and lab limitations.
 
 ## Sustained read-load baseline
 

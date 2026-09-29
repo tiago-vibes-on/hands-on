@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node run-playwright.js",
+    "test:archive": "node run-playwright.js --archive",
     "test:auth": "node run-playwright.js tests/authentication.spec.js",
     "test:k3d": "node run-k3d-playwright.js",
     "test:market:k6": "node run-k3d-k6.js",

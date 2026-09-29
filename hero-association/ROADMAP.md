@@ -270,8 +270,12 @@ Ordered implementation:
   outage makes Envoy fail closed with HTTP 500 without forwarding the order.
   The two proxies share the gateway limit. See the
   [resilience runbook](deploy/k3d/EDGE_AUTH.md).
-- [ ] Before adopting the gateway policy outside this lab, provide highly
-  available gateway Redis and an operational plan for fail-closed outages.
+- [x] Add three Sentinel-managed gateway Redis Pods in k3d, on separate nodes,
+  and test primary failover, complete fail-closed outage, and shared limits
+  across two Envoy proxies. See [ADR 0006](adr/0006-k3d-gateway-redis-sentinel.md).
+- [ ] Before adopting the gateway policy outside this lab, provide durable,
+  authenticated, TLS-protected Redis with multi-fault-domain availability,
+  monitoring/alerts, and a reviewed fail-closed outage plan.
 
 - [x] Add an initial local Caddy edge stack with HTTPS, a packaged frontend,
   same-origin BFF routing, and a separate Keycloak hostname.
@@ -293,12 +297,40 @@ Ordered implementation:
   version-tagged images, and export a checksummed archive with source and
   image IDs. See
   [`pipeline/README.md`](pipeline/README.md).
-- [ ] Make the isolated browser E2E lane consume the exact archived images,
+- [x] Make the isolated browser E2E lane consume the exact archived images,
   without rebuilding them, before an artifact is eligible for deployment.
-- [ ] Import and deploy the verified archive to k3d without rebuilding it;
+  It records passing evidence beside the verified archive.
+- [x] Import and deploy the verified archive to k3d without rebuilding it;
   keep the current local development environment and Core data untouched.
-- [ ] Add a separate Floci/AWS lab deployment consuming the same build
-  artifact. Defer real AWS and production rollout.
+- [x] Add one local command that runs build, archived-image E2E verification,
+  and k3d promotion in order, stopping at the first failed gate.
+- [x] Include the containerized market k6 rate-limit test in the k3d
+  promotion gate after browser E2E. A failure restores previous application
+  image references; the isolated lab passed both suites on 2026-09-28.
+- [x] Verify the actual Core, BFF, and frontend Pod image IDs against the
+  archived OCI platform manifests during k3d promotion, not only the tags.
+- [x] Add a read-only audit for an already-running k3d deployment against an
+  E2E-verified archive, without importing images or changing Pods.
+- [x] Reject an unverified archive before k3d promotion loads any images into
+  local Docker or imports them into the cluster.
+- [x] Save a local k3d promotion result only after Pod-image, browser, and
+  market k6 checks pass; retain a separate read-only live audit.
+- [x] Store the same E2E-verified image archive and evidence in the isolated
+  Floci S3 lab, verifying uploaded bytes without rebuilding images.
+- [x] Download the Floci-stored archive to a new location and verify its
+  checksum, image identities, and E2E gate before deployment.
+- [x] Launch and verify the archived frontend image as one real Floci ECS EC2
+  task using an explicit Docker-socket override and no published host port.
+- [x] Provision independent private PostgreSQL 18.6 RDS instances for Core
+  and Keycloak in the Floci lab. Verify SQL connectivity to each from its
+  Docker network without publishing database host ports.
+- [x] Provision a separate single-node, Redis-compatible Floci ElastiCache
+  group for BFF sessions. Verify actual cache reads and writes from the lab
+  Docker network without publishing a host port.
+- [ ] Deploy Core, BFF, and frontend as a functional application in the
+  separate Floci/AWS lab, with independent Keycloak, database, Redis, and
+  ingress at the reserved AWS-lab hostnames. Defer real AWS and production
+  rollout.
 
 ## Milestone 12 — Personal progression and shared agencies
 

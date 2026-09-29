@@ -11,6 +11,8 @@ const composeFiles = [
   path.join(backendDirectory, 'compose.yaml'),
   path.join(e2eDirectory, 'compose.e2e.yaml'),
 ]
+const archiveComposeFile = path.join(e2eDirectory, 'compose.archive.yaml')
+let activeArchive = null
 
 const e2eEnvironment = {
   ...process.env,
@@ -32,16 +34,68 @@ function composeArguments(...argumentsAfterCompose) {
     '--project-directory', backendDirectory,
     '-f', composeFiles[0],
     '-f', composeFiles[1],
+    ...(activeArchive ? ['-f', archiveComposeFile] : []),
     ...argumentsAfterCompose,
   ]
 }
 
-async function compose(...argumentsAfterCompose) {
-  await executeFile('docker', composeArguments(...argumentsAfterCompose), {
+function composeEnvironment() {
+  if (!activeArchive) {
+    return e2eEnvironment
+  }
+  return {
+    ...e2eEnvironment,
+    HERO_ASSOCIATION_E2E_CORE_IMAGE: activeArchive.images.core.ref,
+    HERO_ASSOCIATION_E2E_BFF_IMAGE: activeArchive.images.bff.ref,
+    HERO_ASSOCIATION_E2E_FRONTEND_IMAGE: activeArchive.images.frontend.ref,
+  }
+}
+
+function compose(...argumentsAfterCompose) {
+  return executeFile('docker', composeArguments(...argumentsAfterCompose), {
     cwd: projectDirectory,
-    env: e2eEnvironment,
+    env: composeEnvironment(),
     maxBuffer: 10 * 1024 * 1024,
   })
+}
+
+async function verifyArchiveCompose() {
+  const { stdout } = await compose('config', '--format', 'json')
+  const services = JSON.parse(stdout).services
+  for (const [service, component] of Object.entries({
+    core: 'core',
+    bff: 'bff',
+    'bff-secondary': 'bff',
+    frontend: 'frontend',
+  })) {
+    const definition = services[service]
+    if (definition?.build !== undefined ||
+        definition?.image !== activeArchive.images[component].ref ||
+        definition?.pull_policy !== 'never') {
+      throw new Error(`Archive E2E Compose service ${service} must use its archived image without a build`)
+    }
+  }
+}
+
+async function verifyRunningImages() {
+  for (const [service, component] of Object.entries({
+    core: 'core',
+    bff: 'bff',
+    'bff-secondary': 'bff',
+    frontend: 'frontend',
+  })) {
+    const { stdout } = await compose('ps', '-q', service)
+    const containerId = stdout.trim()
+    if (!containerId || containerId.includes('\n')) {
+      throw new Error(`Expected exactly one running ${service} container`)
+    }
+    const inspected = await executeFile('docker', [
+      'inspect', '--format', '{{.Image}}', containerId,
+    ])
+    if (inspected.stdout.trim() !== activeArchive.images[component].id) {
+      throw new Error(`Running ${service} container does not match the archived image ID`)
+    }
+  }
 }
 
 async function waitForService(url, description) {
@@ -107,18 +161,25 @@ async function configureShortLivedE2ETokens() {
     throw new Error(`Unable to set the E2E token lifespan: HTTP ${updateResponse.status}`)
   }
 }
-export default async function globalSetup() {
+export default async function globalSetup({ archive } = {}) {
+  activeArchive = archive ?? null
+  if (activeArchive) {
+    await verifyArchiveCompose()
+  }
   await executeFile(path.join(projectDirectory, 'traefik', 'generate-local-certs.sh'))
   await compose('down', '--volumes')
 
   try {
-    await compose('up', '--build', '--detach')
+    await compose('up', activeArchive ? '--no-build' : '--build', '--detach')
     await waitForService('http://localhost:18180/realms/hero-association/.well-known/openid-configuration', 'Keycloak')
     await configureShortLivedE2ETokens()
     await Promise.all([
       waitForService('http://localhost:18081/api/v1/account', 'Game Core'),
       waitForService('http://localhost:18080/api/v1/session', 'BFF'),
     ])
+    if (activeArchive) {
+      await verifyRunningImages()
+    }
   } catch (error) {
     await compose('down', '--volumes').catch(() => undefined)
     throw error

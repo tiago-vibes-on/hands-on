@@ -60,6 +60,8 @@ try {
   ])
   await run('docker', [
     ...common,
+    ...(process.env.HERO_ASSOCIATION_K6_NO_CONNECTION_REUSE === 'true'
+      ? ['--env', 'HERO_ASSOCIATION_K6_NO_CONNECTION_REUSE=true'] : []),
     '--volume', `${e2eDirectory}:/work:ro`,
     '--volume', `${sessionDirectory}:/session:ro`,
     k6Image,

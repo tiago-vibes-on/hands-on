@@ -14,8 +14,8 @@ npm test
 ```
 
 `npm test` runs the local Traefik suite and excludes k3d-only tests.
-`npm run test:auth` runs only `tests/authentication.spec.js` (currently the
-full local suite). The runner uses Playwright's official Chromium Docker image at
+`npm run test:auth` runs only `tests/authentication.spec.js`.
+The runner uses Playwright's official Chromium Docker image at
 the version pinned in `package-lock.json`, so no host browser installation is
 required. The frontend image runs `npm ci` during its Docker build; frontend
 `node_modules` on the host are not needed.
@@ -37,8 +37,8 @@ including after a failed setup. The normal development data is never reset.
 
 The suite covers registration, sign-out and sign-in again, token refresh,
 Redis session expiry, session sharing across BFF instances, Manager and
-agency onboarding, recruitment, cross-agency authorization, and a market
-order-placement limit shared across sessions and BFF instances. It uses the
+agency onboarding, recruitment, cross-agency authorization, and market-order
+proxying through both BFF instances without a local rate limit. It uses the
 versioned local Keycloak users `user1@mail.com` / `user1`,
 `user2@mail.com` / `user2`, and the initially unprovisioned
 `user3@mail.com` / `user3`. Access tokens last eight seconds only in this
@@ -46,6 +46,29 @@ isolated realm.
 
 Failure screenshots and traces are written to ignored `test-results/` and
 `playwright-report/` directories.
+
+## Test a build archive without rebuilding
+
+Build one complete archive, then pass its printed path to the separate
+archive-backed browser lane:
+
+```bash
+cd ../pipeline
+./build-local.sh all
+cd ../e2e
+npm ci
+npm run test:archive -- ../pipeline/artifacts/<build-id>/all
+```
+
+The runner verifies the archive checksum and all three manifest image IDs
+before changing the isolated E2E stack. It loads those images, disables
+Compose builds and pulls for Core, BFF, and frontend, and confirms the
+running containers use the recorded IDs. Keycloak, databases, Redis, and
+Traefik remain pinned Compose dependencies outside the application archive.
+Only a successful browser run followed by cleanup records `result: passed`
+in the ignored archive's `e2e-verification.json`. An invalid archive is
+rejected before setup; after validation, an interrupted or failed test run
+leaves `result: pending`. The regular `npm test` still builds from source.
 
 ## Verify the running k3d lab
 

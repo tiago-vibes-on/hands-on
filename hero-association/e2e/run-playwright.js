@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 import globalSetup from './global-setup.js'
+import { prepareArchive, recordE2EVerification } from './archive-images.js'
 
 const e2eDirectory = path.dirname(fileURLToPath(import.meta.url))
 const packageLock = JSON.parse(await readFile(path.join(e2eDirectory, 'package-lock.json'), 'utf8'))
@@ -28,7 +29,17 @@ function run(command, argumentsForCommand, options = {}) {
   })
 }
 
-const teardown = await globalSetup()
+const argumentsForPlaywright = process.argv.slice(2)
+let archive = null
+if (argumentsForPlaywright[0] === '--archive') {
+  if (argumentsForPlaywright.length !== 2) {
+    throw new Error('Usage: npm run test:archive -- ../pipeline/artifacts/<build-id>/all')
+  }
+  archive = await prepareArchive(argumentsForPlaywright[1])
+  await recordE2EVerification(archive, 'pending')
+  argumentsForPlaywright.length = 0
+}
+const teardown = await globalSetup({ archive })
 
 try {
   await run('docker', [
@@ -44,8 +55,12 @@ try {
     '--workdir', '/work',
     playwrightImage,
     'npx', 'playwright', 'test',
-    ...process.argv.slice(2),
+    ...argumentsForPlaywright,
   ])
 } finally {
   await teardown()
+}
+if (archive) {
+  await recordE2EVerification(archive, 'passed')
+  console.log(`Archive E2E verified: ${archive.buildId} (${archive.archiveSha256})`)
 }
