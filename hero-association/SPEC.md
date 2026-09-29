@@ -51,12 +51,12 @@ E2E suite must load those exact images without rebuilding them and verify the
 running container image IDs against the archive manifest. Only a complete
 successful run records passing verification beside the archive. Source-building
 development E2E remains available separately. Verified archives can be
-promoted to k3d. A one-command local pipeline runs the build, archive-backed
-E2E gate, and k3d promotion in that order, stopping before deployment if
-verification fails. K3d promotion checks the archive and its passing E2E
-record before loading its images into local Docker or importing them into the
-cluster. Only after Pod-image verification, k3d browser E2E, and market k6
-pass does promotion write a local result beside the archive. See
+promoted to k3d. A one-command local pipeline tests rollback logic before
+running the build, archive-backed E2E gate, and k3d promotion in that order.
+It stops before deployment if verification fails. K3d promotion checks the
+archive and its passing E2E record before loading images into local Docker or
+importing them into the cluster. Only after Pod-image verification, k3d browser
+E2E, and market k6 pass does promotion write a local result. See
 [the pipeline guide](pipeline/README.md).
 
 ## API contract

@@ -6,6 +6,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { inspectArchive, prepareArchive, requirePassingE2EVerification } from '../e2e/archive-images.js'
+import { restorePreviousImages } from './rollback-k3d.mjs'
 
 const projectDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const kubeconfig = path.join(projectDirectory, 'deploy/k3d/.kubeconfig')
@@ -207,6 +208,7 @@ async function main() {
   console.log('Promoting E2E-verified archive ' + archive.buildId + ' (' + archive.archiveSha256 + ')')
   await run(k3d, ['image', 'import', ...components.map((component) => archive.images[component].ref), '--cluster', 'hero-association'])
 
+  const targetImages = Object.fromEntries(components.map((component) => [component, archive.images[component].ref]))
   const changed = []
   try {
     for (const component of components) {
@@ -224,19 +226,11 @@ async function main() {
     await recordPromotion(archive, observedPods)
   } catch (error) {
     console.error('Promotion failed: ' + error.message)
-    const rollbackErrors = []
-    for (const component of changed.reverse()) {
-      try {
-        const { image } = await getDeployment(component)
-        if (image === archive.images[component].ref) {
-          await setImage(component, previous[component])
-        } else if (image !== previous[component]) {
-          throw new Error('image changed concurrently to ' + image)
-        }
-      } catch (rollbackError) {
-        rollbackErrors.push(component + ': ' + rollbackError.message)
-      }
-    }
+    const rollbackErrors = await restorePreviousImages(
+      changed, previous, targetImages,
+      async (component) => (await getDeployment(component)).image,
+      setImage,
+    )
     if (rollbackErrors.length) {
       throw new Error('Promotion failed; rollback incomplete: ' + rollbackErrors.join('; '), { cause: error })
     }

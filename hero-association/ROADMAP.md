@@ -315,6 +315,11 @@ Ordered implementation:
   local Docker or imports them into the cluster.
 - [x] Save a local k3d promotion result only after Pod-image, browser, and
   market k6 checks pass; retain a separate read-only live audit.
+- [x] Run rollback regression tests before the k3d pipeline builds images;
+  verify restored Deployment references and never overwrite concurrent changes.
+- [x] Rehearse a failed k3d browser gate after rolling out a different verified
+  archive; confirm rollback restores all application Pod digests and the normal
+  browser and market k6 suites still pass.
 - [x] Store the same E2E-verified image archive and evidence in the isolated
   Floci S3 lab, verifying uploaded bytes without rebuilding images.
 - [x] Download the Floci-stored archive to a new location and verify its

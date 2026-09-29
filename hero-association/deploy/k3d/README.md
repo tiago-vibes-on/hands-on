@@ -308,6 +308,19 @@ k6 verifies the five-per-second Envoy market limit and another user's
 independent budget. Keep the previous image tags available on the k3d nodes
 for a rollback.
 
+The pipeline runs `node --test rollback-k3d.test.mjs` before building. These
+tests cover reverse-order restoration, already-restored images, concurrent
+image changes, and failed or ineffective restores without changing live Pods.
+During an actual rollback, promotion verifies the restored Deployment image
+references and reports any incomplete rollback.
+
+A deliberate lab rehearsal on 2026-09-28 promoted a different E2E-verified
+archive and used a missing Playwright config to fail after rollout. All three
+Deployment images returned to the previous build. The read-only archive audit
+matched all five running Pods, and the normal six browser tests plus market
+k6 thresholds passed afterward. The failed archive got no passing promotion
+record. This exercise briefly rolls live k3d Pods; do not run it casually.
+
 After all promotion checks pass, the command writes ignored
 `artifacts/<build-id>/all/k3d-promotion.json` with the archive checksum,
 verified Pod image IDs, and passing browser/k6 gate results. It is a local

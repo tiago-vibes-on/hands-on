@@ -13,12 +13,13 @@ already running, run from `hero-association/pipeline`:
 ./run-k3d-pipeline.sh
 ```
 
-Optionally pass a unique build ID. The command checks the isolated cluster,
-builds and tests Core, BFF, and frontend once, archives those images, runs the
-archive-backed Playwright gate, then imports and deploys them to k3d and runs
-the k3d browser and containerized market k6 suites. If any stage fails,
-later stages do not run. The archive remains in ignored
-`artifacts/<build-id>/all/` for inspection or a later deployment target. It does not reset databases or modify the normal
+Optionally pass a unique build ID. The command checks the isolated cluster
+and runs rollback regression tests before building and testing Core, BFF, and
+frontend once. It archives those images, runs the archive-backed Playwright
+gate, then imports and deploys them to k3d and runs the k3d browser and
+containerized market k6 suites. If any stage fails, later stages do not run.
+The archive remains in ignored `artifacts/<build-id>/all/` for inspection or
+a later deployment target. It does not reset databases or modify the normal
 Compose development stack. On WSL, prefix the command with
 `TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal` if Testcontainers needs it.
 
@@ -97,9 +98,15 @@ out Core, BFF, and frontend.
 It resolves each platform image from the verified archive and checks that
 every running application Pod reports a linked OCI image digest, not merely
 the expected tag. It then runs the k3d Playwright and containerized market
-k6 suites. A failed rollout or suite restores the previous deployment image
-references. It does not build images, apply bootstrap manifests, reset Core
-data, or touch normal Compose development.
+k6 suites. A failed rollout or suite restores the previous Deployment image
+references, verifies them, and reports concurrent changes without overwriting
+them. Run `node --test rollback-k3d.test.mjs` to test this failure path without
+changing the cluster. Promotion does not build images, apply bootstrap
+manifests, reset Core data, or touch normal Compose development.
+The rollback path was also exercised in the disposable k3d lab on 2026-09-28:
+an older verified archive reached the browser gate, an intentionally missing
+Playwright config failed that gate, and all three previous images were restored.
+The read-only audit, six browser tests, and market k6 suite passed afterward.
 After all gates pass, it writes ignored `k3d-promotion.json` beside the
 archive with the archive checksum, image IDs, observed Pod image IDs, and
 passed gate names. This is a point-in-time local result, not a live health

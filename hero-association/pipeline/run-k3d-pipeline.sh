@@ -32,6 +32,9 @@ if [[ "$context" != 'k3d-hero-association' ]]; then
 fi
 kubectl --kubeconfig "$kubeconfig" -n hero-association get deployment core bff frontend >/dev/null
 
+stage='k3d rollback regression tests'
+node --test "$script_dir/rollback-k3d.test.mjs"
+
 stage='build and archive'
 printf 'Building Core, BFF, and frontend as %s\n' "$build_id"
 "$script_dir/build-local.sh" all "$build_id"
