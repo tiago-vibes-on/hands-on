@@ -19,6 +19,7 @@ public class GameCoreStubResource implements QuarkusTestResourceLifecycleManager
             server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
             server.createContext("/api/v1/echo", this::respondToEcho);
             server.createContext("/api/v1/agencies/", this::respondToEcho);
+            server.createContext("/api/v1/recruits/", this::respondToEcho);
             server.createContext("/api/v1/market/", this::respondToEcho);
             server.start();
             return java.util.Map.of(

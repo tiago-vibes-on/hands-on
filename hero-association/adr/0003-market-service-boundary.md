@@ -1,7 +1,7 @@
 # ADR 0003: Market service boundary
 
 - Date: 2026-09-28
-- Status: Accepted route family; owner payload under review before extraction
+- Status: Accepted route family and owner selector; service extraction pending
 
 ## Context
 
@@ -17,18 +17,21 @@ rename or deployment change.
 Expose all market operations under one public route family:
 
 - `GET /api/v1/market/orders` lists open orders.
-- `POST /api/v1/market/orders` accepts `agencyId`, `side`, `itemId`,
-  `quantity`, and `priceGoldPerItem`; it returns the created order and
-  its status.
-- `DELETE /api/v1/market/orders/{orderId}` derives the agency from the
+- `POST /api/v1/market/orders` accepts `ownerType`, `side`, `itemId`,
+  `quantity`, and `priceGoldPerItem`. `AGENCY` also requires `agencyId`;
+  `MANAGER` must omit it. The response carries owner type, ID, name, and
+  status.
+- `DELETE /api/v1/market/orders/{orderId}` derives the owner from the
   order and returns its cancelled status.
 
-The current agency-only placement and cancellation require leadership of the
-order's agency. The planned Manager-owned trading account needs a revised
-owner selector and personal authorization rules before extraction.
+A personal order belongs to the authenticated Manager, never a supplied
+Manager ID. Agency placement and cancellation require leadership of the
+selected agency. Reservations, refunds, and settlement use the selected
+owner's wallet and inventory. The same owner cannot match its own orders.
 In k3d, Envoy retains the five-placement-attempts-per-second limit per
 authenticated user, regardless of agency. Normal local Traefik has no
-limit. The frontend refreshes agency state separately after an order mutation. The old agency-scoped market URLs are removed while
+limit. The frontend refreshes personal account and agency state separately after an
+order mutation. The old agency-scoped market URLs are removed while
 the product is still in its resettable pre-production stage.
 
 The target ownership is: Market owns the order book, matching, and trade

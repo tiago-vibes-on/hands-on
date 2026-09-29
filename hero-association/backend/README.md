@@ -22,9 +22,11 @@ The BFF keeps Keycloak token state in Redis. See
 [`../AUTHENTICATION.md`](../AUTHENTICATION.md) for the implementation status
 and remaining Account, Manager, and authorization work.
 
-Market endpoints now share `/api/v1/market/orders`, but Market still runs inside
-Core. [ADR 0003](../adr/0003-market-service-boundary.md) records the planned
-separate service and the reservation/settlement work required before extraction.
+Market endpoints share `/api/v1/market/orders`, but Market still runs inside
+Core. Orders can belong to the authenticated Manager or an agency led by that
+Manager; each uses its own wallet and inventory. [ADR 0003](../adr/0003-market-service-boundary.md)
+records the public owner contract and the reservation/settlement work required
+before extracting Market as a separate service.
 
 Normal Compose development keeps Traefik and has no market-order rate limit.
 The isolated k3d deployment uses Envoy Gateway external authorization and a
@@ -120,8 +122,22 @@ the frontend and select **Sign in** for an existing account or **Create
 account** to open Keycloak's native registration form. Registration does not
 request first or last name; standard email and password inputs create the
 account. Google login is a post-MVP task. The first signed-in visit provisions an
-Account and asks for a unique Manager name. A Manager with no membership can
-create one empty Level 1 agency as its leader; invitations are a later task.
+Account and asks for a unique Manager name. Onboarding also creates a personal
+Level 1 Warrior, Mage, and Archer with Level 10 skills, zero personal gold, and
+empty personal inventories. These assets belong to the Manager, not the agency.
+A Manager with no membership can create one empty Level 1 agency as its leader;
+invitations are a later task. Parties belong to individual Managers inside
+their agency. A Manager can assign their own available heroes or available
+agency-owned heroes to a prepared party. The agency leader sets each agency
+hero's nonnegative per-quest borrowing fee (0 by default). Party assignment
+is free; quest start submits the expected total and atomically transfers it
+from the Manager's personal gold to the agency. Stale quotes and insufficient
+funds reject the start without charging. Any
+onboarded Manager can claim a globally available recruit into their personal
+roster through `POST /api/v1/recruits/{recruitId}/claim`, even before creating
+an agency. Agency leaders can explicitly claim a recruit for their agency
+through `POST /api/v1/agencies/{agencyId}/recruits/{recruitId}/claim`; all
+claims are exclusive across both ownership choices.
 The local Keycloak login page uses the versioned Hero Association theme in
 `keycloak/theme/hero-association`. It preserves Keycloak's standard login
 layout while matching the frontend's dark, gold-accented visual style.
@@ -275,17 +291,23 @@ changed, without resetting the lab database.
 
 For build-once deployment of an E2E-verified Core/BFF/frontend archive, use
 the [pipeline promotion command](../pipeline/README.md#promote-the-verified-archive-to-k3d).
-It rolls the isolated k3d app Deployments without database bootstrap or
-changing this host-run development workflow. The
+Its default mode rolls the isolated k3d app Deployments without database
+bootstrap. For an intentional schema/seed reset, the full verified archive
+can be promoted with `--reset-core-db`; only the isolated k3d Core data is
+recreated from the archived Core image. Neither mode changes this host-run
+development workflow. The
 [complete local pipeline](../pipeline/README.md#run-the-complete-k3d-pipeline)
 also runs the build and both browser test gates in one command.
 
 The `quarkus-smallrye-health` extension exposes `/q/health/started`,
 `/q/health/ready`, and `/q/health/live` for Kubernetes probes in both services.
 The k3d Core validates its schema on startup; a separate one-shot Job seeds a
-new lab database. After this progression schema change, an existing disposable
-k3d Core database needs `./deploy-backend.sh --reset-core-db` from
-`deploy/k3d/` before the new Core image can validate it. Its scheduled jobs use PostgreSQL advisory locks to avoid
+new lab database. For an existing disposable k3d Core database after a
+schema change, use `../pipeline/run-k3d-pipeline.sh --reset-core-db` to build,
+verify, recreate Core data from the exact archived Core image, and deploy.
+The older direct-build reset in `deploy/k3d/` uses the fixed `:k3d` image
+and must not be mixed with an archive promotion. Core's scheduled jobs use
+PostgreSQL advisory locks to avoid
 overlapping across Pods. An isolated concurrency test exercises two, four,
 and eight Core Pods, active combat and recovery, concurrent database reads,
 and Pod restarts without duplicate quest resolution. Separate CPU HPAs keep

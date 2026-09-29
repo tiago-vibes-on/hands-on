@@ -32,7 +32,7 @@ public class QuestController {
             @PathParam("agencyId") UUID agencyId,
             @PathParam("questId") UUID questId,
             @NotNull @Valid StartQuestRequest request) {
-        return questStartService.startQuest(agencyId, questId, request.partyId());
+        return questStartService.startQuest(agencyId, questId, request.partyId(), request.expectedBorrowingFeeGold());
     }
 
     @POST

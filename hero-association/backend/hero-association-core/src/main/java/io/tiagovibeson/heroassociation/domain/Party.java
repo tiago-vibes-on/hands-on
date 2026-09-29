@@ -10,7 +10,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 @Entity
-@Table(name = "party", uniqueConstraints = @UniqueConstraint(columnNames = { "agency_id", "name" }))
+@Table(name = "party", uniqueConstraints = @UniqueConstraint(columnNames = { "agency_id", "manager_id", "name" }))
 public class Party extends UuidEntity {
 
     @Column(nullable = false, length = 100)
@@ -19,6 +19,10 @@ public class Party extends UuidEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "agency_id", nullable = false)
     private Agency agency;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "manager_id", nullable = false)
+    private Manager ownerManager;
 
     @OneToOne(mappedBy = "party", fetch = FetchType.LAZY)
     private Quest quest;
@@ -30,8 +34,9 @@ public class Party extends UuidEntity {
         quest = null;
     }
 
-    public Party(Agency agency, String name) {
+    public Party(Agency agency, Manager ownerManager, String name) {
         this.agency = agency;
+        this.ownerManager = ownerManager;
         this.name = name;
     }
 
@@ -45,6 +50,10 @@ public class Party extends UuidEntity {
 
     public Agency getAgency() {
         return agency;
+    }
+
+    public Manager getOwnerManager() {
+        return ownerManager;
     }
 
     public void assignQuest(Quest newQuest) {

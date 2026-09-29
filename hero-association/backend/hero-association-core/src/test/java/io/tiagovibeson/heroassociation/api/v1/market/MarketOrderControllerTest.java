@@ -16,6 +16,7 @@ class MarketOrderControllerTest {
     private static final String DAWNWATCH_AGENCY_ID = "019c4c00-0001-7000-8000-000000000001";
     private static final String IRONRIDGE_AGENCY_ID = "019c4c00-0001-7000-8000-000000000002";
     private static final String MAGIC_CRYSTAL_ID = "019c4c00-0070-7000-8000-000000000001";
+    private static final String IRON_INGOT_ID = "019c4c00-0070-7000-8000-000000000002";
     private static final String IRONRIDGE_BUY_ORDER_ID = "019c4c00-0090-7000-8000-000000000001";
     private static final String IRONRIDGE_SELL_ORDER_ID = "019c4c00-0090-7000-8000-000000000002";
 
@@ -26,6 +27,7 @@ class MarketOrderControllerTest {
                 .body("""
                         {
                           "agencyId": "%s",
+                          "ownerType": "AGENCY",
                           "side": "SELL",
                           "itemId": "%s",
                           "quantity": 1,
@@ -67,6 +69,47 @@ class MarketOrderControllerTest {
                 .then()
                 .statusCode(200)
                 .body("itemInventory.find { it.item.code == 'iron-ingot' }.quantity", is(60));
+    }
+
+    @Test
+    @TestSecurity(user = "019c4c00-0100-7000-8000-000000000104")
+    void shouldPlaceAndCancelAPersonalOrderWithoutAnAgencyId() {
+        String orderId = given()
+                .contentType(ContentType.JSON)
+                .body("""
+                        {
+                          "ownerType": "MANAGER",
+                          "side": "BUY",
+                          "itemId": "%s",
+                          "quantity": 1,
+                          "priceGoldPerItem": 1
+                        }
+                        """.formatted(IRON_INGOT_ID))
+                .when().post("/api/v1/market/orders")
+                .then()
+                .statusCode(200)
+                .body("ownerType", is("MANAGER"))
+                .body("ownerId", is("019c4c00-0000-7000-8000-000000000204"))
+                .body("status", is("OPEN"))
+                .extract().path("id");
+
+        given()
+                .when().get("/api/v1/account")
+                .then()
+                .statusCode(200)
+                .body("manager.gold", is(199));
+
+        given()
+                .when().delete("/api/v1/market/orders/%s".formatted(orderId))
+                .then()
+                .statusCode(200)
+                .body("status", is("CANCELLED"));
+
+        given()
+                .when().get("/api/v1/account")
+                .then()
+                .statusCode(200)
+                .body("manager.gold", is(200));
     }
 
     @Test

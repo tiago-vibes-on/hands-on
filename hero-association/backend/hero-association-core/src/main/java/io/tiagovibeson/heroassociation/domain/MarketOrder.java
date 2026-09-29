@@ -10,14 +10,20 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.Check;
 
 @Entity
 @Table(name = "market_order")
+@Check(constraints = "(agency_id IS NOT NULL AND owner_manager_id IS NULL) OR (agency_id IS NULL AND owner_manager_id IS NOT NULL)")
 public class MarketOrder extends UuidEntity {
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "agency_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "agency_id")
     private Agency agency;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_manager_id")
+    private Manager ownerManager;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "item_id", nullable = false)
@@ -45,6 +51,15 @@ public class MarketOrder extends UuidEntity {
 
     public MarketOrder(Agency agency, Item item, MarketOrderSide side, int quantity, long priceGoldPerItem) {
         this.agency = agency;
+        initialize(item, side, quantity, priceGoldPerItem);
+    }
+
+    public MarketOrder(Manager ownerManager, Item item, MarketOrderSide side, int quantity, long priceGoldPerItem) {
+        this.ownerManager = ownerManager;
+        initialize(item, side, quantity, priceGoldPerItem);
+    }
+
+    private void initialize(Item item, MarketOrderSide side, int quantity, long priceGoldPerItem) {
         this.item = item;
         this.side = side;
         status = MarketOrderStatus.OPEN;
@@ -55,6 +70,26 @@ public class MarketOrder extends UuidEntity {
 
     public Agency getAgency() {
         return agency;
+    }
+
+    public Manager getOwnerManager() {
+        return ownerManager;
+    }
+
+    public MarketOwnerType getOwnerType() {
+        return ownerManager == null ? MarketOwnerType.AGENCY : MarketOwnerType.MANAGER;
+    }
+
+    public java.util.UUID getOwnerId() {
+        return ownerManager == null ? agency.getId() : ownerManager.getId();
+    }
+
+    public String getOwnerName() {
+        return ownerManager == null ? agency.getName() : ownerManager.getDisplayName();
+    }
+
+    public boolean hasSameOwner(MarketOrder other) {
+        return getOwnerType() == other.getOwnerType() && getOwnerId().equals(other.getOwnerId());
     }
 
     public Item getItem() {

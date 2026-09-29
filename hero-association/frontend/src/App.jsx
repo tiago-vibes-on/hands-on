@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { addHeroToParty, ApiRequestError, beginLogin, beginRegistration, cancelMarketOrder, changeHeroActivity, createAgency, createFeedPost, createManager, createMarketOrder, createParty, equipHeroRune, fetchAccount, fetchAgencyState, fetchMarketOrders, fetchRecruits, fetchSession, logout, recruitHero, removeHeroFromParty, startQuest, synchronizeQuestCombat, unequipHeroRune } from './api/agency'
+import { addHeroToParty, ApiRequestError, beginLogin, beginRegistration, cancelMarketOrder, changeHeroActivity, createAgency, createFeedPost, createManager, createMarketOrder, createParty, equipHeroRune, fetchAccount, fetchAgencyState, fetchMarketOrders, fetchRecruits, fetchSession, logout, recruitHero, recruitHeroForAgency, removeHeroFromParty, setHeroBorrowingFee, startQuest, synchronizeQuestCombat, unequipHeroRune } from './api/agency'
 import { initialEquippedRunes, initialRunes } from './data/inventory'
 import { mageSpells } from './data/spells'
 import './App.css'
@@ -19,9 +19,9 @@ const fallbackHeroes = [
   { name: 'Brom Ironwall', alias: 'Ironwall', role: 'Warrior', level: 1, currentHealth: 300, maxHealth: 300, currentMana: 50, maxMana: 50, healthRecovery: 10, manaRecovery: 2, stamina: 58, color: 'gold', partyId: 'broken-pass-party', status: 'quest' },
   { name: 'Elara Moonweaver', alias: 'Moonweaver', role: 'Mage', level: 1, magicLevel: 15, currentHealth: 100, maxHealth: 100, currentMana: 500, maxMana: 500, healthRecovery: 2, manaRecovery: 10, spells: mageSpells, stamina: 24, color: 'violet', partyId: 'broken-pass-party', status: 'quest' },
   { name: 'Kael Swiftarrow', alias: 'Swiftarrow', role: 'Archer', level: 1, currentHealth: 200, maxHealth: 200, currentMana: 200, maxMana: 200, healthRecovery: 6, manaRecovery: 6, stamina: 91, color: 'teal', partyId: 'broken-pass-party', status: 'quest' },
-  { name: 'Dorian Oakshield', alias: 'Oakshield', role: 'Warrior', level: 1, currentHealth: 300, maxHealth: 300, currentMana: 50, maxMana: 50, healthRecovery: 10, manaRecovery: 2, color: 'gold', activity: 'Training', status: 'agency' },
-  { name: 'Runa Emberveil', alias: 'Emberveil', role: 'Mage', level: 1, currentHealth: 100, maxHealth: 100, currentMana: 500, maxMana: 500, healthRecovery: 2, manaRecovery: 10, color: 'violet', activity: 'Resting', status: 'agency' },
-  { name: 'Lyra Hawkeye', alias: 'Hawkeye', role: 'Archer', level: 1, currentHealth: 200, maxHealth: 200, currentMana: 200, maxMana: 200, healthRecovery: 6, manaRecovery: 6, color: 'teal', activity: 'Training', status: 'agency' },
+  { name: 'Dorian Oakshield', alias: 'Oakshield', role: 'Warrior', level: 1, borrowingFeeGold: 0, currentHealth: 300, maxHealth: 300, currentMana: 50, maxMana: 50, healthRecovery: 10, manaRecovery: 2, color: 'gold', activity: 'Training', status: 'agency' },
+  { name: 'Runa Emberveil', alias: 'Emberveil', role: 'Mage', level: 1, borrowingFeeGold: 25, currentHealth: 100, maxHealth: 100, currentMana: 500, maxMana: 500, healthRecovery: 2, manaRecovery: 10, color: 'violet', activity: 'Resting', status: 'agency' },
+  { name: 'Lyra Hawkeye', alias: 'Hawkeye', role: 'Archer', level: 1, borrowingFeeGold: 100, currentHealth: 200, maxHealth: 200, currentMana: 200, maxMana: 200, healthRecovery: 6, manaRecovery: 6, color: 'teal', activity: 'Training', status: 'agency' },
 ]
 
 const fallbackCombat = {
@@ -94,8 +94,8 @@ const fallbackItemInventory = [
 ]
 
 const fallbackMarketOrders = [
-  { id: 'ironridge-buy-magic', agencyId: 'ironridge-exchange', agencyName: 'Ironridge Exchange', itemId: 'magic-crystal', itemCode: 'magic-crystal', itemName: 'Magic Crystal', itemSymbol: '◇', side: 'BUY', quantityRemaining: 2, priceGoldPerItem: 100, createdAt: '2026-01-01T11:50:00Z' },
-  { id: 'ironridge-sell-iron', agencyId: 'ironridge-exchange', agencyName: 'Ironridge Exchange', itemId: 'iron-ingot', itemCode: 'iron-ingot', itemName: 'Iron Ingot', itemSymbol: '▰', side: 'SELL', quantityRemaining: 12, priceGoldPerItem: 16, createdAt: '2026-01-01T11:55:00Z' },
+  { id: 'ironridge-buy-magic', ownerType: 'AGENCY', ownerId: 'ironridge-exchange', ownerName: 'Ironridge Exchange', itemId: 'magic-crystal', itemCode: 'magic-crystal', itemName: 'Magic Crystal', itemSymbol: '◇', side: 'BUY', quantityRemaining: 2, priceGoldPerItem: 100, createdAt: '2026-01-01T11:50:00Z' },
+  { id: 'ironridge-sell-iron', ownerType: 'AGENCY', ownerId: 'ironridge-exchange', ownerName: 'Ironridge Exchange', itemId: 'iron-ingot', itemCode: 'iron-ingot', itemName: 'Iron Ingot', itemSymbol: '▰', side: 'SELL', quantityRemaining: 12, priceGoldPerItem: 16, createdAt: '2026-01-01T11:55:00Z' },
 ]
 
 const heroColors = {
@@ -176,13 +176,18 @@ function mapCombatSnapshot(combat, heroesById) {
 }
 
 function mapAgencyState(state) {
-  const heroes = state.heroes.map((hero) => ({
+  const heroes = [...state.heroes, ...(state.personalHeroes ?? [])].map((hero) => ({
     id: hero.id,
     name: hero.name,
     alias: hero.alias,
     role: titleCase(hero.heroClass),
     level: hero.level,
     magicLevel: hero.magicLevel,
+    meleeLevel: hero.meleeLevel,
+    distanceLevel: hero.distanceLevel,
+    shieldLevel: hero.shieldLevel,
+    ownerManagerId: hero.ownerManagerId,
+    borrowingFeeGold: hero.borrowingFeeGold ?? 0,
     currentHealth: hero.currentHealth,
     maxHealth: hero.maxHealth,
     currentMana: hero.currentMana,
@@ -192,7 +197,7 @@ function mapAgencyState(state) {
     stamina: hero.stamina,
     color: heroColors[hero.heroClass],
     partyId: hero.partyId,
-    status: hero.activity === 'ON_QUEST' ? 'quest' : 'agency',
+    status: hero.activity === 'ON_QUEST' ? 'quest' : hero.ownerManagerId ? 'personal' : 'agency',
     activity: titleCase(hero.activity),
     spells: hero.heroClass === 'MAGE' && hero.magicLevel >= 10 ? mageSpells : undefined,
     runeSlots: hero.runeSlots.map((slot) => slot.rune ? mapRune(slot.rune) : null),
@@ -441,7 +446,21 @@ function Overview({ agency, metrics, activeParty, questHeroes, onNavigate }) {
   )
 }
 
-function HeroCards({ roster, runes, onSelectRuneSlot, onChangeActivity, isUpdatingActivity, preparedParties, onAddToParty, onRemoveFromParty, partyId, isUpdatingParty }) {
+function BorrowingFeeEditor({ hero, onSetBorrowingFee, isUpdatingBorrowingFee }) {
+  const [feeGold, setFeeGold] = useState(String(hero.borrowingFeeGold ?? 0))
+
+  function handleSubmit(event) {
+    event.preventDefault()
+    const amount = Number(feeGold)
+    if (feeGold.trim() !== '' && Number.isSafeInteger(amount) && amount >= 0) {
+      onSetBorrowingFee(hero, amount)
+    }
+  }
+
+  return <form className="hero-card__fee-editor" onSubmit={handleSubmit}><label><span>Fee per quest (gold)</span><input type="number" min="0" step="1" value={feeGold} disabled={isUpdatingBorrowingFee} onChange={(event) => setFeeGold(event.target.value)} /></label><button className="button button--secondary" type="submit" disabled={isUpdatingBorrowingFee || feeGold.trim() === '' || !Number.isSafeInteger(Number(feeGold)) || Number(feeGold) < 0 || Number(feeGold) === hero.borrowingFeeGold}>Save fee</button></form>
+}
+
+function HeroCards({ roster, runes, onSelectRuneSlot, onChangeActivity, isUpdatingActivity, preparedParties, onAddToParty, onRemoveFromParty, partyId, isUpdatingParty, onSetBorrowingFee, isUpdatingBorrowingFee }) {
   return (
     <div className="hero-cards">
       {roster.map((hero) => (
@@ -453,22 +472,52 @@ function HeroCards({ roster, runes, onSelectRuneSlot, onChangeActivity, isUpdati
               <div className="hero-card__details"><span>Experience</span><strong>{experienceGain(hero.stamina)}% XP gain from creatures</strong></div>
               <StaminaBar value={hero.stamina} />
             </>
+          ) : hero.ownerManagerId ? (
+            <div className="hero-card__agency-activity">
+              <span>Personal hero</span><strong>{hero.activity}</strong>
+              <p>Only this hero's Manager can change the party.</p>
+              {partyId && <button className="text-button hero-card__party-action" type="button" disabled={isUpdatingParty} onClick={() => onRemoveFromParty(hero, partyId)}>Remove from party</button>}
+            </div>
           ) : <div className="hero-card__agency-activity"><span>At the agency</span><strong>{hero.activity}</strong><p>{hero.activity === 'Training' ? 'Recovering health and mana at the base class rate.' : 'Recovering health and mana at 2× the base class rate. Stamina recovery is not implemented yet.'}</p><div className="hero-card__activity-actions" role="group" aria-label={`${hero.alias} agency activity`}><button className={`activity-button ${hero.activity === 'Training' ? 'activity-button--active' : ''}`} type="button" disabled={isUpdatingActivity || hero.activity === 'Training'} onClick={() => onChangeActivity(hero, 'TRAINING')}>Training</button><button className={`activity-button ${hero.activity === 'Resting' ? 'activity-button--active' : ''}`} type="button" disabled={isUpdatingActivity || hero.activity === 'Resting'} onClick={() => onChangeActivity(hero, 'RESTING')}>Resting</button></div>{partyId ? <button className="text-button hero-card__party-action" type="button" disabled={isUpdatingParty} onClick={() => onRemoveFromParty(hero, partyId)}>Remove from party</button> : preparedParties?.length > 0 && <label className="hero-card__party-select"><span>Assign to party</span><select defaultValue="" disabled={isUpdatingParty} onChange={(event) => { const selectedPartyId = event.target.value; event.target.value = ''; if (selectedPartyId) { onAddToParty(hero, selectedPartyId) } }}><option value="" disabled>Select a party</option>{preparedParties.map((party) => <option value={party.id} key={party.id}>{party.name}</option>)}</select></label>}</div>}
-          <HeroLoadoutSlots hero={hero} runes={runes} onSelectRuneSlot={onSelectRuneSlot} />
+          {!hero.ownerManagerId && <div className="hero-card__fee"><span>Borrowing fee</span><strong>{hero.borrowingFeeGold ?? 0} gold per quest</strong>{onSetBorrowingFee && <BorrowingFeeEditor key={`${hero.id}:${hero.borrowingFeeGold}`} hero={hero} onSetBorrowingFee={onSetBorrowingFee} isUpdatingBorrowingFee={isUpdatingBorrowingFee} />}</div>}
+          {!hero.ownerManagerId && <HeroLoadoutSlots hero={hero} runes={runes} onSelectRuneSlot={onSelectRuneSlot} />}
         </article>
       ))}
     </div>
   )
 }
 
-function Heroes({ agency, heroes, activeParties, agencyHeroes, preparedParties, runes, availableRecruits, isRecruitingHero, recruitmentError, isUpdatingActivity, activityError, isUpdatingParty, partyError, isCreatingParty, partyName, onPartyNameChange, onCreateParty, onCancelCreateParty, onStartCreateParty, onRecruitHero, onSelectRuneSlot, onChangeActivity, onAddToParty, onRemoveFromParty }) {
+function Heroes({ agency, manager, heroes, activeParties, agencyHeroes, preparedParties, runes, availableRecruits, isRecruitingHero, recruitmentError, isUpdatingActivity, activityError, isUpdatingParty, partyError, isCreatingParty, partyName, onPartyNameChange, onCreateParty, onCancelCreateParty, onStartCreateParty, onRecruitHero, onSelectRuneSlot, onChangeActivity, onAddToParty, onRemoveFromParty, onSetBorrowingFee, isUpdatingBorrowingFee, borrowingFeeError }) {
+  const personalHeroes = heroes.filter((hero) => hero.ownerManagerId === manager?.id)
+
   return (
     <>
       <PageHeading eyebrow={agency.name} title="Heroes" description="Recruit heroes, prepare parties at the agency, then send one on a quest." action={<button className="button button--primary" type="button" disabled={heroes.length === 0} onClick={onStartCreateParty}>Create party</button>} />
+      <section className="hero-group personal-roster" aria-labelledby="personal-roster-heading">
+        <div className="hero-group__header"><div><p className="eyebrow">Your assets</p><h2 id="personal-roster-heading">Personal heroes</h2><p>These heroes belong to you, separately from the agency. Assign them to your prepared party to send them on a quest.</p></div><span className="status">{manager?.gold ?? 0} personal gold</span></div>
+        <div className="personal-roster__list">
+          {personalHeroes.map((hero) => (
+            <article className="panel personal-roster__hero" key={hero.id}>
+              <HeroAvatar hero={hero} />
+              <div>
+                <p className="eyebrow">{hero.role} · Level {hero.level}</p>
+                <h3>{hero.name}</h3>
+                <p>Health {hero.currentHealth} / {hero.maxHealth} · Mana {hero.currentMana} / {hero.maxMana} · Stamina {hero.stamina}%</p>
+                <small>Melee {hero.meleeLevel} · Distance {hero.distanceLevel} · Magic {hero.magicLevel} · Shield {hero.shieldLevel}</small>
+                {hero.status === 'quest' ? <span className="status status--progress">On quest</span>
+                  : hero.partyId ? <button className="text-button personal-roster__action" type="button" disabled={isUpdatingParty} onClick={() => onRemoveFromParty(hero, hero.partyId)}>Remove from party</button>
+                  : preparedParties.length > 0 ? <label className="personal-roster__assign"><span>Assign to party</span><select defaultValue="" disabled={isUpdatingParty} onChange={(event) => { const partyId = event.target.value; event.target.value = ''; if (partyId) { onAddToParty(hero, partyId) } }}><option value="" disabled>Select a party</option>{preparedParties.map((party) => <option key={party.id} value={party.id}>{party.name}</option>)}</select></label>
+                  : <small className="personal-roster__hint">Create a party to assign this hero.</small>}
+              </div>
+            </article>
+          ))}
+        </div>
+        <p className="personal-roster__inventory">Personal inventory: {manager?.items?.length ?? 0} item types · {manager?.runes?.length ?? 0} rune types</p>
+      </section>
       <section className="panel recruitment-board" aria-labelledby="recruitment-heading">
-        <div className="panel__header"><div><p className="eyebrow">Recruitment board</p><h2 id="recruitment-heading">Available heroes</h2><p className="recruitment-board__description">The initial recruits are free and each can join only one agency.</p></div><span className="status">{availableRecruits.length} available</span></div>
+        <div className="panel__header"><div><p className="eyebrow">Recruitment board</p><h2 id="recruitment-heading">Available heroes</h2><p className="recruitment-board__description">The initial recruits are free. Recruit for yourself by default, or for the agency if you lead it.</p></div><span className="status">{availableRecruits.length} available</span></div>
         {recruitmentError && <p className="inline-error recruitment-board__error" role="alert">{recruitmentError}</p>}
-        {availableRecruits.length > 0 ? <div className="recruitment-board__list">{availableRecruits.map((recruit) => <article className="recruitment-card" key={recruit.id}><HeroAvatar hero={{ ...recruit, color: heroColors[recruit.heroClass] }} /><div className="recruitment-card__identity"><p className="eyebrow">{titleCase(recruit.heroClass)}</p><h3>{recruit.alias}</h3><p>{recruit.name} · Level {recruit.level}</p></div><div className="recruitment-card__resources"><span>Health {recruit.health} · Mana {recruit.mana}</span><small>Recovery: +{recruit.healthRecoveryPerSecond} health/s · +{recruit.manaRecoveryPerSecond} mana/s</small></div><button className="button button--secondary" type="button" disabled={isRecruitingHero} aria-label={`Recruit ${recruit.alias}`} onClick={() => onRecruitHero(recruit.id)}>{isRecruitingHero ? 'Recruiting…' : 'Recruit'}</button></article>)}</div> : <p className="recruitment-board__empty">No recruits are currently available.</p>}
+        {availableRecruits.length > 0 ? <div className="recruitment-board__list">{availableRecruits.map((recruit) => <article className="recruitment-card" key={recruit.id}><HeroAvatar hero={{ ...recruit, color: heroColors[recruit.heroClass] }} /><div className="recruitment-card__identity"><p className="eyebrow">{titleCase(recruit.heroClass)}</p><h3>{recruit.alias}</h3><p>{recruit.name} · Level {recruit.level}</p></div><div className="recruitment-card__resources"><span>Health {recruit.health} · Mana {recruit.mana}</span><small>Recovery: +{recruit.healthRecoveryPerSecond} health/s · +{recruit.manaRecoveryPerSecond} mana/s</small></div><div className="recruitment-card__actions"><button className="button button--primary" type="button" disabled={isRecruitingHero} aria-label={`Recruit ${recruit.alias} for me`} onClick={() => onRecruitHero(recruit.id)}>{isRecruitingHero ? 'Recruiting…' : 'Recruit for me'}</button>{agency.leaderId === manager?.id && <button className="button button--secondary" type="button" disabled={isRecruitingHero} aria-label={`Recruit ${recruit.alias} for agency`} onClick={() => onRecruitHero(recruit.id, 'agency')}>{isRecruitingHero ? 'Recruiting…' : 'Recruit for agency'}</button>}</div></article>)}</div> : <p className="recruitment-board__empty">No recruits are currently available.</p>}
       </section>
       {activeParties.map((party) => {
         const partyHeroes = heroes.filter((hero) => hero.partyId === party.id)
@@ -476,23 +525,30 @@ function Heroes({ agency, heroes, activeParties, agencyHeroes, preparedParties, 
       })}
       {isCreatingParty && <form className="party-form" onSubmit={onCreateParty}><label><span>Party name</span><input value={partyName} maxLength="100" autoFocus disabled={isUpdatingParty} onChange={(event) => onPartyNameChange(event.target.value)} placeholder="Forest Scouts" /></label><div className="party-form__actions"><button className="button button--primary" type="submit" disabled={isUpdatingParty}>{isUpdatingParty ? 'Creating…' : 'Create party'}</button><button className="text-button" type="button" disabled={isUpdatingParty} onClick={onCancelCreateParty}>Cancel</button></div></form>}
       {partyError && <p className="inline-error" role="alert">{partyError}</p>}
+      {borrowingFeeError && <p className="inline-error" role="alert">{borrowingFeeError}</p>}
       {preparedParties.map((party) => {
         const partyHeroes = heroes.filter((hero) => hero.partyId === party.id)
         const heroCountLabel = partyHeroes.length === 1 ? 'hero is' : 'heroes are'
-        return <section className="hero-group" aria-labelledby={`party-${party.id}`} key={party.id}><div className="hero-group__header party-card"><div><p className="eyebrow">Prepared party</p><h2 id={`party-${party.id}`}>{party.name}</h2><p>{partyHeroes.length === 0 ? 'No heroes assigned yet.' : `${partyHeroes.length} ${heroCountLabel} ready at the agency.`}</p></div><span className="status">{partyHeroes.length} in party</span></div><HeroCards roster={partyHeroes} runes={runes} onSelectRuneSlot={onSelectRuneSlot} onChangeActivity={onChangeActivity} isUpdatingActivity={isUpdatingActivity} partyId={party.id} onRemoveFromParty={onRemoveFromParty} isUpdatingParty={isUpdatingParty} /></section>
+        return <section className="hero-group" aria-labelledby={`party-${party.id}`} key={party.id}><div className="hero-group__header party-card"><div><p className="eyebrow">Prepared party</p><h2 id={`party-${party.id}`}>{party.name}</h2><p>{partyHeroes.length === 0 ? 'No heroes assigned yet.' : `${partyHeroes.length} ${heroCountLabel} ready at the agency.`}</p></div><span className="status">{partyHeroes.length} in party</span></div><HeroCards roster={partyHeroes} runes={runes} onSelectRuneSlot={onSelectRuneSlot} onChangeActivity={onChangeActivity} isUpdatingActivity={isUpdatingActivity} partyId={party.id} onRemoveFromParty={onRemoveFromParty} isUpdatingParty={isUpdatingParty} onSetBorrowingFee={agency.leaderId === manager?.id ? onSetBorrowingFee : undefined} isUpdatingBorrowingFee={isUpdatingBorrowingFee} /></section>
       })}
       <section className="hero-group" aria-labelledby="agency-heroes-heading">
         <div className="hero-group__header"><div><p className="eyebrow">Agency roster</p><h2 id="agency-heroes-heading">Unassigned heroes</h2><p>Heroes can train or rest while they wait for a prepared party.</p></div><span className="status">{agencyHeroes.length} unassigned</span></div>
         {activityError && <p className="inline-error" role="alert">{activityError}</p>}
-        <HeroCards roster={agencyHeroes} runes={runes} onSelectRuneSlot={onSelectRuneSlot} onChangeActivity={onChangeActivity} isUpdatingActivity={isUpdatingActivity} preparedParties={preparedParties} onAddToParty={onAddToParty} isUpdatingParty={isUpdatingParty} />
+        <HeroCards roster={agencyHeroes} runes={runes} onSelectRuneSlot={onSelectRuneSlot} onChangeActivity={onChangeActivity} isUpdatingActivity={isUpdatingActivity} isUpdatingParty={isUpdatingParty} preparedParties={preparedParties} onAddToParty={onAddToParty} onSetBorrowingFee={agency.leaderId === manager?.id ? onSetBorrowingFee : undefined} isUpdatingBorrowingFee={isUpdatingBorrowingFee} />
       </section>
     </>
   )
 }
 
-function AvailableQuestCard({ quest, preparedParties, isStartingQuest, onStartQuest }) {
+function AvailableQuestCard({ quest, preparedParties, heroes, managerGold, isStartingQuest, onStartQuest }) {
   const [partyId, setPartyId] = useState('')
   const hasPreparedParty = preparedParties.length > 0
+  const selectedParty = preparedParties.find((party) => party.id === partyId)
+  const borrowingFeeGold = (selectedParty?.heroIds ?? []).reduce((total, heroId) => {
+    const hero = heroes.find((candidate) => candidate.id === heroId)
+    return total + (hero && !hero.ownerManagerId ? hero.borrowingFeeGold ?? 0 : 0)
+  }, 0)
+  const canAfford = managerGold >= borrowingFeeGold
 
   return (
     <article className="panel quest-card">
@@ -501,7 +557,7 @@ function AvailableQuestCard({ quest, preparedParties, isStartingQuest, onStartQu
         <div className="quest-card__facts"><span className="quest-card__fact"><b>{quest.minimumHeroes}–{quest.maximumHeroes}</b><small>heroes</small></span><span className="quest-card__fact"><b>{quest.durationMinutes}m</b><small>estimated</small></span><span className="quest-card__fact"><b>{quest.goldReward}</b><small>gold reward</small></span></div>
       </div>
       <div className="quest-card__start">
-        {hasPreparedParty ? <><label><span>Prepared party</span><select value={partyId} disabled={isStartingQuest} onChange={(event) => setPartyId(event.target.value)}><option value="" disabled>Select a party</option>{preparedParties.map((party) => <option value={party.id} key={party.id}>{party.name} · {party.heroIds.length} heroes</option>)}</select></label><button className="button button--primary" type="button" disabled={isStartingQuest || !partyId} onClick={() => onStartQuest(quest.id, partyId)}>{isStartingQuest ? 'Starting…' : 'Start quest'}</button></> : <p>Create a prepared party before starting this quest.</p>}
+        {hasPreparedParty ? <><label><span>Prepared party</span><select value={partyId} disabled={isStartingQuest} onChange={(event) => setPartyId(event.target.value)}><option value="" disabled>Select a party</option>{preparedParties.map((party) => <option value={party.id} key={party.id}>{party.name} · {party.heroIds.length} heroes</option>)}</select></label>{selectedParty && <p className="quest-card__borrowing-fee">Agency hero fee: <strong>{borrowingFeeGold} gold</strong> at quest start · Your gold: {managerGold}{!canAfford && <span className="inline-error"> · Insufficient personal gold</span>}</p>}<button className="button button--primary" type="button" disabled={isStartingQuest || !partyId || !canAfford} onClick={() => onStartQuest(quest.id, partyId, borrowingFeeGold)}>{isStartingQuest ? 'Starting…' : 'Start quest'}</button></> : <p>Create a prepared party before starting this quest.</p>}
       </div>
     </article>
   )
@@ -520,7 +576,7 @@ function ResolvedQuestCard({ quest }) {
   )
 }
 
-function Quests({ activeParty, activeParties, availableQuests, resolvedQuests, preparedParties, battle, isCombatExpanded, isSynchronizingCombat, isStartingQuest, questError, onStartQuest, onToggleCombat }) {
+function Quests({ activeParty, activeParties, availableQuests, resolvedQuests, preparedParties, heroes, managerGold, battle, isCombatExpanded, isSynchronizingCombat, isStartingQuest, questError, onStartQuest, onToggleCombat }) {
   const quest = activeParty?.questState
   const defeatedCreatures = battle
     ? battle.creatures.filter((creature) => !creature.alive).length
@@ -554,7 +610,7 @@ function Quests({ activeParty, activeParties, availableQuests, resolvedQuests, p
           </article>
         ) : <article className="panel quest-card empty-state"><div><p className="eyebrow">No active quest</p><h2>Your agency has no party in the field</h2><p>Recruit heroes before preparing a party and starting a quest.</p></div></article>}
         {activeParties.slice(1).map((party) => <article className="panel quest-card" key={party.id}><div className="quest-card__content"><div><span className="status status--progress">In progress</span><h2>{party.quest}</h2><p>{party.questState.description}</p></div><div className="quest-card__facts"><span className="quest-card__fact"><b>{party.questState.creaturesDefeated} / {party.questState.creaturesRequired}</b><small>defeated</small></span><span className="quest-card__fact"><b>{party.heroIds.length}</b><small>heroes</small></span></div></div></article>)}
-        {availableQuests.map((availableQuest) => <AvailableQuestCard quest={availableQuest} preparedParties={preparedParties} isStartingQuest={isStartingQuest} onStartQuest={onStartQuest} key={availableQuest.id} />)}
+        {availableQuests.map((availableQuest) => <AvailableQuestCard quest={availableQuest} preparedParties={preparedParties} heroes={heroes} managerGold={managerGold} isStartingQuest={isStartingQuest} onStartQuest={onStartQuest} key={availableQuest.id} />)}
         {resolvedQuests.map((resolvedQuest) => <ResolvedQuestCard quest={resolvedQuest} key={resolvedQuest.id} />)}
       </section>
     </>
@@ -604,17 +660,33 @@ function Agency({ agency, upgrades, runeInventory, itemInventory }) {
   )
 }
 
-function Market({ agency, itemInventory, marketOrders, isSubmittingOrder, marketError, onCreateOrder, onCancelOrder }) {
+function Market({ agency, manager, canTradeAgency, itemInventory, marketOrders, isSubmittingOrder, marketError, onCreateOrder, onCancelOrder }) {
+  const [ownerType, setOwnerType] = useState('MANAGER')
   const [side, setSide] = useState('BUY')
-  const [itemId, setItemId] = useState(itemInventory[0]?.id ?? '')
+  const [itemId, setItemId] = useState('')
   const [quantity, setQuantity] = useState(1)
   const [priceGoldPerItem, setPriceGoldPerItem] = useState(100)
   const buyOrders = marketOrders.filter((order) => order.side === 'BUY')
   const sellOrders = marketOrders.filter((order) => order.side === 'SELL')
+  const effectiveOwnerType = canTradeAgency ? ownerType : 'MANAGER'
+  const knownItems = new Map()
+  for (const item of itemInventory) knownItems.set(item.id, { id: item.id, name: item.name })
+  for (const order of marketOrders) {
+    if (!knownItems.has(order.itemId)) knownItems.set(order.itemId, { id: order.itemId, name: order.itemName })
+  }
+  for (const item of manager?.items ?? []) {
+    if (!knownItems.has(item.id)) knownItems.set(item.id, { id: item.id, name: item.code })
+  }
+  const ownerInventory = effectiveOwnerType === 'AGENCY' ? itemInventory : (manager?.items ?? [])
+  const availableItems = side === 'SELL'
+    ? ownerInventory.filter((item) => item.quantity > 0).map((item) => ({ id: item.id, name: knownItems.get(item.id)?.name ?? item.code, quantity: item.quantity }))
+    : [...knownItems.values()]
+  const selectedItemId = availableItems.some((item) => item.id === itemId) ? itemId : (availableItems[0]?.id ?? '')
 
   async function submitOrder(event) {
     event.preventDefault()
-    const wasCreated = await onCreateOrder({ side, itemId, quantity, priceGoldPerItem })
+    if (!selectedItemId) return
+    const wasCreated = await onCreateOrder({ ownerType: effectiveOwnerType, side, itemId: selectedItemId, quantity, priceGoldPerItem })
     if (wasCreated) {
       setQuantity(1)
       setPriceGoldPerItem(100)
@@ -626,18 +698,23 @@ function Market({ agency, itemInventory, marketOrders, isSubmittingOrder, market
       return <p className="offer-panel__empty">{emptyMessage}</p>
     }
 
-    return orders.map((order) => <div className="offer-row" key={order.id}><span><b>{order.itemSymbol}</b>{order.itemName}<small>{order.agencyName}</small></span><strong>{order.priceGoldPerItem} gold</strong><small>{order.quantityRemaining} available</small>{order.agencyId === agency.id && <button className="text-button" type="button" disabled={isSubmittingOrder} onClick={() => onCancelOrder(order.id)}>Cancel</button>}</div>)
+    return orders.map((order) => {
+      const canCancel = (order.ownerType === 'MANAGER' && order.ownerId === manager?.id)
+        || (order.ownerType === 'AGENCY' && canTradeAgency && order.ownerId === agency.id)
+      return <div className="offer-row" key={order.id}><span><b>{order.itemSymbol}</b>{order.itemName}<small>{order.ownerName} · {order.ownerType === 'MANAGER' ? 'Manager' : 'Agency'}</small></span><strong>{order.priceGoldPerItem} gold</strong><small>{order.quantityRemaining} available</small>{canCancel && <button className="text-button" type="button" disabled={isSubmittingOrder} onClick={() => onCancelOrder(order.id)}>Cancel</button>}</div>
+    })
   }
 
   return (
     <>
       <PageHeading eyebrow="Community exchange" title="Market" description="Place buy and sell offers. When an offer matches, the seller pays a 10% fee." />
       <form className="panel market-form" onSubmit={submitOrder}>
+        <label><span>Trading as</span><select value={effectiveOwnerType} disabled={isSubmittingOrder} onChange={(event) => setOwnerType(event.target.value)}><option value="MANAGER">{manager?.displayName ?? 'Your Manager'} · {manager?.gold ?? 0} gold</option>{canTradeAgency && <option value="AGENCY">{agency.name} · {agency.gold} gold</option>}</select></label>
         <label><span>Order type</span><select value={side} disabled={isSubmittingOrder} onChange={(event) => setSide(event.target.value)}><option value="BUY">Buy</option><option value="SELL">Sell</option></select></label>
-        <label><span>Item</span><select value={itemId} disabled={isSubmittingOrder} onChange={(event) => setItemId(event.target.value)}>{itemInventory.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.quantity} available</option>)}</select></label>
+        <label><span>Item</span><select value={selectedItemId} disabled={isSubmittingOrder} onChange={(event) => setItemId(event.target.value)}>{availableItems.map((item) => <option key={item.id} value={item.id}>{item.name}{side === 'SELL' ? ` · ${item.quantity} available` : ''}</option>)}</select></label>
         <label><span>Quantity</span><input type="number" min="1" value={quantity} disabled={isSubmittingOrder} onChange={(event) => setQuantity(Math.max(1, Number(event.target.value) || 1))} /></label>
         <label><span>Gold per item</span><input type="number" min="1" value={priceGoldPerItem} disabled={isSubmittingOrder} onChange={(event) => setPriceGoldPerItem(Math.max(1, Number(event.target.value) || 1))} /></label>
-        <button className="button button--primary" type="submit" disabled={isSubmittingOrder || !itemId}>{isSubmittingOrder ? 'Placing…' : 'Place order'}</button>
+        <button className="button button--primary" type="submit" disabled={isSubmittingOrder || !selectedItemId}>{isSubmittingOrder ? 'Placing…' : 'Place order'}</button>
       </form>
       {marketError && <p className="inline-error" role="alert">{marketError}</p>}
       <section className="market-grid">
@@ -750,6 +827,8 @@ function App() {
   const [activityError, setActivityError] = useState(null)
   const [isUpdatingParty, setIsUpdatingParty] = useState(false)
   const [partyError, setPartyError] = useState(null)
+  const [isUpdatingBorrowingFee, setIsUpdatingBorrowingFee] = useState(false)
+  const [borrowingFeeError, setBorrowingFeeError] = useState(null)
   const [isCreatingParty, setIsCreatingParty] = useState(false)
   const [partyName, setPartyName] = useState('')
   const [isStartingQuest, setIsStartingQuest] = useState(false)
@@ -783,12 +862,13 @@ function App() {
           return
         }
 
-        const [rawState, orders, recruits] = await Promise.all([fetchAgencyState(activeAgencyId), fetchMarketOrders(), fetchRecruits()])
+        const [rawState, orders, recruits, currentAccount] = await Promise.all([fetchAgencyState(activeAgencyId), fetchMarketOrders(), fetchRecruits(), fetchAccount()])
         const state = mapAgencyState(rawState)
         if (cancelled) {
           return
         }
 
+        setAccount(currentAccount)
         setGameState(state)
         setRuneInventory(state.runeInventory)
         setEquippedRunes(state.equippedRunes)
@@ -1138,7 +1218,7 @@ function App() {
     }
   }
 
-  async function handleRecruitHero(recruitId) {
+  async function handleRecruitHero(recruitId, owner = 'personal') {
     if (apiStatus !== 'ready') {
       setRecruitmentError('Recruiting heroes requires the backend connection.')
       return
@@ -1147,9 +1227,18 @@ function App() {
     setIsRecruitingHero(true)
     setRecruitmentError(null)
     try {
-      const state = await recruitHero({ agencyId: gameState.agency.id, recruitId })
-      applyRemoteAgencyState(state)
+      if (owner === 'agency') {
+        await recruitHeroForAgency({ agencyId: gameState.agency.id, recruitId })
+      } else {
+        await recruitHero(recruitId)
+      }
       setAvailableRecruits((recruits) => recruits.filter((recruit) => recruit.id !== recruitId))
+      const [state, updatedAccount] = await Promise.all([
+        fetchAgencyState(gameState.agency.id),
+        fetchAccount(),
+      ])
+      applyRemoteAgencyState(state)
+      setAccount(updatedAccount)
     } catch (error) {
       setRecruitmentError(error.message)
     } finally {
@@ -1157,7 +1246,29 @@ function App() {
     }
   }
 
-  async function handleStartQuest(questId, partyId) {
+  async function updateHeroBorrowingFee(hero, feeGold) {
+    if (apiStatus !== 'ready') {
+      setBorrowingFeeError('Changing borrowing fees requires the backend connection.')
+      return
+    }
+
+    setIsUpdatingBorrowingFee(true)
+    setBorrowingFeeError(null)
+    try {
+      const state = await setHeroBorrowingFee({
+        agencyId: gameState.agency.id,
+        heroId: hero.id,
+        feeGold,
+      })
+      applyRemoteAgencyState(state)
+    } catch (error) {
+      setBorrowingFeeError(error.message)
+    } finally {
+      setIsUpdatingBorrowingFee(false)
+    }
+  }
+
+  async function handleStartQuest(questId, partyId, expectedBorrowingFeeGold) {
     if (apiStatus !== 'ready') {
       setQuestError('Starting a quest requires the backend connection.')
       return
@@ -1170,9 +1281,24 @@ function App() {
         agencyId: gameState.agency.id,
         questId,
         partyId,
+        expectedBorrowingFeeGold,
       })
       applyRemoteAgencyState(state)
+      try {
+        setAccount(await fetchAccount())
+      } catch {
+        setQuestError('Quest started, but your wallet could not be refreshed. Reload to see its current balance.')
+      }
     } catch (error) {
+      if (error.status === 409) {
+        try {
+          const [state, updatedAccount] = await Promise.all([fetchAgencyState(gameState.agency.id), fetchAccount()])
+          applyRemoteAgencyState(state)
+          setAccount(updatedAccount)
+        } catch {
+          // Keep the original rejection visible even if refreshing fails.
+        }
+      }
       setQuestError(error.message)
     } finally {
       setIsStartingQuest(false)
@@ -1221,8 +1347,10 @@ function App() {
     setIsSubmittingMarketOrder(true)
     setMarketError(null)
     try {
-      await createMarketOrder({ agencyId: gameState.agency.id, ...order })
-      applyRemoteAgencyState(await fetchAgencyState(gameState.agency.id))
+      await createMarketOrder({ ...order, agencyId: order.ownerType === 'AGENCY' ? gameState.agency.id : null })
+      const [state, updatedAccount] = await Promise.all([fetchAgencyState(gameState.agency.id), fetchAccount()])
+      applyRemoteAgencyState(state)
+      setAccount(updatedAccount)
       await refreshMarketOrders()
       return true
     } catch (error) {
@@ -1242,7 +1370,9 @@ function App() {
     setMarketError(null)
     try {
       await cancelMarketOrder({ orderId })
-      applyRemoteAgencyState(await fetchAgencyState(gameState.agency.id))
+      const [state, updatedAccount] = await Promise.all([fetchAgencyState(gameState.agency.id), fetchAccount()])
+      applyRemoteAgencyState(state)
+      setAccount(updatedAccount)
       await refreshMarketOrders()
     } catch (error) {
       setMarketError(error.message)
@@ -1337,11 +1467,11 @@ function App() {
   const battle = gameState.activeParty?.questState?.combat
   const pages = {
     overview: <Overview agency={gameState.agency} metrics={gameState.metrics} activeParty={gameState.activeParty} questHeroes={gameState.questHeroes} onNavigate={setActivePage} />,
-    heroes: <Heroes agency={gameState.agency} heroes={gameState.heroes} activeParties={gameState.activeParties} agencyHeroes={gameState.agencyHeroes} preparedParties={gameState.preparedParties} runes={equippedRunes} availableRecruits={availableRecruits} isRecruitingHero={isRecruitingHero} recruitmentError={recruitmentError} isUpdatingActivity={isUpdatingActivity} activityError={activityError} isUpdatingParty={isUpdatingParty} partyError={partyError} isCreatingParty={isCreatingParty} partyName={partyName} onPartyNameChange={setPartyName} onCreateParty={handleCreateParty} onCancelCreateParty={cancelCreatingParty} onStartCreateParty={startCreatingParty} onRecruitHero={handleRecruitHero} onSelectRuneSlot={(hero, slotIndex) => { setLoadoutError(null); setSelectedSlot({ hero, slotIndex }) }} onChangeActivity={updateHeroActivity} onAddToParty={assignHeroToParty} onRemoveFromParty={removeHeroFromPreparedParty} />,
-    quests: <Quests activeParty={gameState.activeParty} activeParties={gameState.activeParties} availableQuests={gameState.availableQuests} resolvedQuests={gameState.resolvedQuests} preparedParties={gameState.preparedParties} battle={battle} isCombatExpanded={isCombatExpanded} isSynchronizingCombat={isSynchronizingCombat} isStartingQuest={isStartingQuest} questError={questError} onStartQuest={handleStartQuest} onToggleCombat={() => setIsCombatExpanded((expanded) => !expanded)} />,
+    heroes: <Heroes agency={gameState.agency} manager={account?.manager} heroes={gameState.heroes} activeParties={gameState.activeParties} agencyHeroes={gameState.agencyHeroes} preparedParties={gameState.preparedParties.filter((party) => party.ownerManagerId === account?.manager?.id)} runes={equippedRunes} availableRecruits={availableRecruits} isRecruitingHero={isRecruitingHero} recruitmentError={recruitmentError} isUpdatingActivity={isUpdatingActivity} activityError={activityError} isUpdatingParty={isUpdatingParty} partyError={partyError} isCreatingParty={isCreatingParty} partyName={partyName} onPartyNameChange={setPartyName} onCreateParty={handleCreateParty} onCancelCreateParty={cancelCreatingParty} onStartCreateParty={startCreatingParty} onRecruitHero={handleRecruitHero} onSelectRuneSlot={(hero, slotIndex) => { setLoadoutError(null); setSelectedSlot({ hero, slotIndex }) }} onChangeActivity={updateHeroActivity} onAddToParty={assignHeroToParty} onRemoveFromParty={removeHeroFromPreparedParty} onSetBorrowingFee={updateHeroBorrowingFee} isUpdatingBorrowingFee={isUpdatingBorrowingFee} borrowingFeeError={borrowingFeeError} />,
+    quests: <Quests activeParty={gameState.activeParty} activeParties={gameState.activeParties} availableQuests={gameState.availableQuests} resolvedQuests={gameState.resolvedQuests} preparedParties={gameState.preparedParties.filter((party) => party.ownerManagerId === account?.manager?.id)} heroes={gameState.heroes} managerGold={account?.manager?.gold ?? 0} battle={battle} isCombatExpanded={isCombatExpanded} isSynchronizingCombat={isSynchronizingCombat} isStartingQuest={isStartingQuest} questError={questError} onStartQuest={handleStartQuest} onToggleCombat={() => setIsCombatExpanded((expanded) => !expanded)} />,
     agency: <Agency agency={gameState.agency} upgrades={gameState.upgrades} runeInventory={runeInventory} itemInventory={gameState.itemInventory} />,
-    market: <Market agency={gameState.agency} itemInventory={gameState.itemInventory} marketOrders={marketOrders} isSubmittingOrder={isSubmittingMarketOrder} marketError={marketError} onCreateOrder={handleCreateMarketOrder} onCancelOrder={handleCancelMarketOrder} />,
-    feed: <Feed agency={gameState.agency} heroes={gameState.heroes} feedPosts={gameState.feedPosts} itemInventory={gameState.itemInventory} isPostingFeed={isPostingFeed} feedError={feedError} onCreatePost={handleCreateFeedPost} />,
+    market: <Market agency={gameState.agency} manager={account?.manager} canTradeAgency={account?.agencyMemberships?.some((membership) => membership.agencyId === gameState.agency.id && membership.role === 'LEADER')} itemInventory={gameState.itemInventory} marketOrders={marketOrders} isSubmittingOrder={isSubmittingMarketOrder} marketError={marketError} onCreateOrder={handleCreateMarketOrder} onCancelOrder={handleCancelMarketOrder} />,
+    feed: <Feed agency={gameState.agency} heroes={gameState.heroes.filter((hero) => !hero.ownerManagerId)} feedPosts={gameState.feedPosts} itemInventory={gameState.itemInventory} isPostingFeed={isPostingFeed} feedError={feedError} onCreatePost={handleCreateFeedPost} />,
   }
 
   return (
@@ -1406,7 +1536,7 @@ function AgencyAccessGate({ managerName, agencyName, error, isSubmitting, onAgen
         <span className="brand__mark" aria-hidden="true">H</span>
         <p className="eyebrow">Manager {managerName}</p>
         <h1>Create your agency</h1>
-        <p>Start with a Level 1 agency. It will be empty until you claim a hero from the recruitment board.</p>
+        <p>Start with a Level 1 agency. Your three starter heroes remain yours, not agency assets.</p>
         <form onSubmit={onSubmit}>
           <label className="manager-onboarding__field"><span>Agency name</span><input value={agencyName} minLength="3" maxLength="100" autoComplete="organization" autoFocus disabled={isSubmitting} onChange={(event) => onAgencyNameChange(event.target.value)} placeholder="Wayfinder Guild" /></label>
           {error && <p className="manager-onboarding__error" role="alert">{error}</p>}

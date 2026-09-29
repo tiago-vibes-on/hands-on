@@ -12,8 +12,12 @@ import io.tiagovibeson.heroassociation.domain.Account;
 import io.tiagovibeson.heroassociation.domain.AgencyMember;
 import io.tiagovibeson.heroassociation.domain.AgencyMemberRole;
 import io.tiagovibeson.heroassociation.domain.Manager;
+import io.tiagovibeson.heroassociation.domain.HeroSkill;
 import io.tiagovibeson.heroassociation.repository.AccountRepository;
 import io.tiagovibeson.heroassociation.repository.AgencyMemberRepository;
+import io.tiagovibeson.heroassociation.repository.HeroRepository;
+import io.tiagovibeson.heroassociation.repository.ManagerItemRepository;
+import io.tiagovibeson.heroassociation.repository.ManagerRuneRepository;
 import io.tiagovibeson.heroassociation.repository.ManagerRepository;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -35,6 +39,15 @@ class SeededManagerFixtureTest {
     @Inject
     AgencyMemberRepository agencyMemberRepository;
 
+    @Inject
+    HeroRepository heroRepository;
+
+    @Inject
+    ManagerItemRepository managerItemRepository;
+
+    @Inject
+    ManagerRuneRepository managerRuneRepository;
+
     @Test
     @Transactional
     void shouldSeedTenManagersAcrossThreeAgencies() {
@@ -47,6 +60,36 @@ class SeededManagerFixtureTest {
             Manager manager = managerRepository.findByAccountId(account.getId()).orElseThrow();
             assertEquals("Manager %d".formatted(number), manager.getDisplayName());
             assertEquals(7, manager.getId().version());
+            assertEquals(switch (number) {
+                case 2 -> 25;
+                case 3 -> 20;
+                case 4 -> 200;
+                default -> 0;
+            }, manager.getGold());
+            var personalHeroes = heroRepository.listByManagerId(manager.getId());
+            assertEquals(3, personalHeroes.size());
+            assertEquals(
+                    java.util.Set.of("WARRIOR", "MAGE", "ARCHER"),
+                    personalHeroes.stream().map(hero -> hero.getHeroClass().name()).collect(java.util.stream.Collectors.toSet()));
+            for (var hero : personalHeroes) {
+                assertEquals(manager.getId(), hero.getOwnerManager().getId());
+                assertEquals(1, hero.getLevel());
+                assertEquals(10, hero.getSkillLevel(HeroSkill.MELEE));
+                assertEquals(10, hero.getSkillLevel(HeroSkill.DISTANCE));
+                assertEquals(10, hero.getSkillLevel(HeroSkill.MAGIC));
+                assertEquals(10, hero.getSkillLevel(HeroSkill.SHIELD));
+                assertEquals(false, hero.isRecruitable());
+            }
+            var personalItems = managerItemRepository.listByManagerId(manager.getId());
+            assertEquals(number == 3 || number == 4 ? 1 : 0, personalItems.size());
+            if (number == 3) {
+                assertEquals("magic-crystal", personalItems.getFirst().getItem().getCode());
+                assertEquals(2, personalItems.getFirst().getQuantity());
+            } else if (number == 4) {
+                assertEquals("iron-ingot", personalItems.getFirst().getItem().getCode());
+                assertEquals(5, personalItems.getFirst().getQuantity());
+            }
+            assertEquals(0, managerRuneRepository.listByManagerId(manager.getId()).size());
 
             AgencyMember membership = agencyMemberRepository.listByManagerId(manager.getId()).getFirst();
             assertEquals(number <= 4 ? UUID.fromString(DAWNWATCH_ID)
@@ -59,6 +102,16 @@ class SeededManagerFixtureTest {
         assertEquals(6, agencyMemberRepository.count("agency.id", UUID.fromString(DAWNWATCH_ID)));
         assertEquals(4, agencyMemberRepository.count("agency.id", UUID.fromString(IRONRIDGE_ID)));
         assertEquals(3, agencyMemberRepository.count("agency.id", UUID.fromString(SILVERKEEP_ID)));
+        assertEquals(3, heroRepository.listRecruitable().size());
+    }
+
+    @Test
+    @TestSecurity(user = "019c4c00-0100-7000-8000-000000000001")
+    void shouldNotClaimAnAlreadyOwnedPersonalHero() {
+        given()
+                .when().post("/api/v1/recruits/019c4c00-0030-7001-8000-000000000001/claim")
+                .then()
+                .statusCode(409);
     }
 
     @Test

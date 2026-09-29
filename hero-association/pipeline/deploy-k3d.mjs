@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 import { inspectArchive, prepareArchive, requirePassingE2EVerification } from '../e2e/archive-images.js'
 import { restorePreviousImages } from './rollback-k3d.mjs'
+import { assertCoreDatabaseIdentity, prepareCoreBootstrapJob } from './core-bootstrap-job.mjs'
 
 const projectDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const kubeconfig = process.env.HERO_ASSOCIATION_K3D_KUBECONFIG || path.join(projectDirectory, 'deploy/k3d/.kubeconfig')
@@ -16,6 +17,8 @@ const namespace = 'hero-association'
 const components = ['core', 'bff', 'frontend']
 const kubectl = ['--kubeconfig', kubeconfig]
 const clusterEnvironment = { ...process.env, KUBECONFIG: kubeconfig }
+const bootstrapManifest = path.join(projectDirectory, 'deploy/k8s/backend/core-db-bootstrap.yaml')
+const hpaManifest = path.join(projectDirectory, 'deploy/k8s/backend/hpa.yaml')
 
 function commandString(command, args) {
   return [command, ...args].join(' ')
@@ -25,9 +28,10 @@ function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       env: clusterEnvironment,
-      stdio: options.capture ? ['ignore', 'pipe', 'inherit'] : 'inherit',
+      stdio: [options.input === undefined ? 'ignore' : 'pipe', options.capture ? 'pipe' : 'inherit', 'inherit'],
       cwd: options.cwd || projectDirectory,
     })
+    if (options.input !== undefined) child.stdin.end(options.input)
     let output = ''
     if (options.capture) {
       child.stdout.setEncoding('utf8')
@@ -57,6 +61,57 @@ async function getDeployment(component) {
 async function setImage(component, image) {
   await run('kubectl', [...kubectl, '-n', namespace, 'set', 'image', 'deployment/' + component, component + '=' + image])
   await run('kubectl', [...kubectl, '-n', namespace, 'rollout', 'status', 'deployment/' + component, '--timeout=5m'])
+}
+
+async function resetCoreDatabaseFromArchive(archive, onResetStarted) {
+  const databaseIdentity = await run('kubectl', [
+    ...kubectl, '-n', namespace, 'exec', 'deployment/postgres-core', '-c', 'postgres', '--',
+    'psql', '-U', 'hero_association', '-d', 'hero_association', '-At',
+    '-c', 'SELECT current_database(), current_user',
+  ], { capture: true })
+  assertCoreDatabaseIdentity(databaseIdentity)
+
+  const template = JSON.parse(await run('kubectl', [
+    ...kubectl, 'create', '-f', bootstrapManifest, '--dry-run=client', '-o', 'json',
+  ], { capture: true }))
+  const job = prepareCoreBootstrapJob(template, archive.images.core.ref)
+  console.log('Resetting only the k3d Core database with verified image ' + archive.images.core.ref)
+  onResetStarted()
+  await run('kubectl', [...kubectl, '-n', namespace, 'delete', 'hpa/core', '--ignore-not-found=true'])
+  await run('kubectl', [...kubectl, '-n', namespace, 'scale', 'deployment/core', '--replicas=0'])
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const pods = JSON.parse(await run('kubectl', [
+      ...kubectl, '-n', namespace, 'get', 'pods', '-l', 'app=core', '-o', 'json',
+    ], { capture: true }))
+    if (pods.items.length === 0) break
+    if (attempt === 59) throw new Error('Core Pods did not stop; database reset was not started')
+    await new Promise((resolve) => setTimeout(resolve, 5000))
+  }
+
+  const created = JSON.parse(await run('kubectl', [
+    ...kubectl, '-n', namespace, 'create', '-f', '-', '-o', 'json',
+  ], { capture: true, input: JSON.stringify(job) }))
+  const jobName = created.metadata?.name
+  if (!/^core-db-bootstrap-[a-z0-9]+$/.test(jobName ?? '')) {
+    throw new Error('Core bootstrap Job returned an unexpected name')
+  }
+  try {
+    await run('kubectl', [...kubectl, '-n', namespace, 'wait',
+      '--for=condition=complete', 'job/' + jobName, '--timeout=5m'])
+  } catch (error) {
+    await run('kubectl', [...kubectl, '-n', namespace, 'logs',
+      'job/' + jobName, '--all-containers=true']).catch(() => {})
+    throw new Error('Core database bootstrap failed; Core remains stopped', { cause: error })
+  }
+  await run('kubectl', [...kubectl, '-n', namespace, 'logs',
+    'job/' + jobName, '--all-containers=true'])
+  await run('kubectl', [...kubectl, '-n', namespace, 'set', 'image',
+    'deployment/core', 'core=' + archive.images.core.ref])
+  await run('kubectl', [...kubectl, '-n', namespace, 'scale', 'deployment/core', '--replicas=2'])
+  await run('kubectl', [...kubectl, '-n', namespace, 'rollout', 'status',
+    'deployment/core', '--timeout=5m'])
+  await run('kubectl', [...kubectl, 'apply', '-f', hpaManifest])
+  return jobName
 }
 
 async function readArchiveBlob(archive, digest) {
@@ -154,7 +209,7 @@ async function verifyDeploymentImageReferences(archive, selectedComponents = com
   }
 }
 
-async function recordPromotion(archive, observedPods) {
+async function recordPromotion(archive, observedPods, coreBootstrapJob) {
   const record = {
     version: 1,
     result: 'passed',
@@ -163,6 +218,8 @@ async function recordPromotion(archive, observedPods) {
     buildId: archive.buildId,
     promoteComponent: archive.promoteComponent || 'all',
     archiveSha256: archive.archiveSha256,
+    coreDatabaseReset: coreBootstrapJob !== null,
+    coreBootstrapJob,
     images: Object.fromEntries(components.map((component) => [component, {
       ref: archive.images[component].ref,
       id: archive.images[component].id,
@@ -186,9 +243,10 @@ async function recordPromotion(archive, observedPods) {
 
 async function main() {
   const mode = process.argv[2] === '--verify-only' ? 'verify-only'
-    : process.argv[2] === '--verify-baseline' ? 'verify-baseline' : 'promote'
+    : process.argv[2] === '--verify-baseline' ? 'verify-baseline'
+      : process.argv[2] === '--reset-core-db' ? 'reset-core-db' : 'promote'
   if (process.argv.length !== (mode === 'promote' ? 3 : 4)) {
-    throw new Error('Usage: node deploy-k3d.mjs [--verify-only|--verify-baseline] artifacts/<build-id>/all')
+    throw new Error('Usage: node deploy-k3d.mjs [--verify-only|--verify-baseline|--reset-core-db] artifacts/<build-id>/all')
   }
   if (!existsSync(kubeconfig)) {
     throw new Error('Missing isolated k3d kubeconfig: ' + kubeconfig)
@@ -211,6 +269,9 @@ async function main() {
   }
 
   const archive = await inspectArchive(process.argv[mode === 'promote' ? 2 : 3])
+  if (mode === 'reset-core-db' && archive.promoteComponent) {
+    throw new Error('A Core database reset requires a complete three-service archive')
+  }
   if (archive.promoteComponent) {
     const baselineComponents = components.filter((component) => component !== archive.promoteComponent)
     await verifyDeploymentImageReferences(archive, baselineComponents)
@@ -235,8 +296,14 @@ async function main() {
 
   const targetImages = Object.fromEntries(components.map((component) => [component, archive.images[component].ref]))
   const changed = []
+  let coreBootstrapJob = null
+  let resetStarted = false
   try {
+    if (mode === 'reset-core-db') {
+      coreBootstrapJob = await resetCoreDatabaseFromArchive(archive, () => { resetStarted = true })
+    }
     for (const component of promotedComponents) {
+      if (mode === 'reset-core-db' && component === 'core') continue
       const target = archive.images[component].ref
       if (previous[component] !== target) {
         changed.push(component)
@@ -251,9 +318,12 @@ async function main() {
       await run('kubectl', [...kubectl, '-n', namespace, 'rollout', 'status', 'deployment/' + component, '--timeout=5m'])
     }
     const observedPods = await verifyRunningPodImagesSettled(archive)
-    await recordPromotion(archive, observedPods)
+    await recordPromotion(archive, observedPods, coreBootstrapJob)
   } catch (error) {
     console.error('Promotion failed: ' + error.message)
+    if (resetStarted) {
+      throw new Error('Core reset began; automatic image rollback is unsafe. Inspect the k3d deployments and bootstrap Job before retrying.', { cause: error })
+    }
     const rollbackErrors = await restorePreviousImages(
       changed, previous, targetImages,
       async (component) => (await getDeployment(component)).image,

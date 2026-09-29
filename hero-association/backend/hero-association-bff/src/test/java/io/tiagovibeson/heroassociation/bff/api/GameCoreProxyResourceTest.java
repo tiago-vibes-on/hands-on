@@ -31,6 +31,25 @@ class GameCoreProxyResourceTest {
     }
 
     @Test
+    void shouldForwardBodylessRecruitClaimToGameCore() {
+        Response session = given()
+                .when().get("/api/v1/session")
+                .then()
+                .statusCode(200)
+                .extract().response();
+
+        given()
+                .cookie("hero-association-csrf", session.getCookie("hero-association-csrf"))
+                .header("X-CSRF-TOKEN", session.jsonPath().getString("csrfToken"))
+                .when().post("/api/v1/recruits/019c4c00-0010-7000-8000-000000000007/claim")
+                .then()
+                .statusCode(200)
+                .body("method", equalTo("POST"))
+                .body("authorization", equalTo("Bearer test-access-token"))
+                .body("body", equalTo(""));
+    }
+
+    @Test
     void shouldForwardWriteRequestsAndJsonBodiesToGameCore() {
         Response session = given()
                 .when().get("/api/v1/session")

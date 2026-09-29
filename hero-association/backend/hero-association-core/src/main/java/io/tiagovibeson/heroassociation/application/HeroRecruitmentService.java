@@ -10,6 +10,7 @@ import io.tiagovibeson.heroassociation.application.exception.RecruitNotFoundExce
 import io.tiagovibeson.heroassociation.application.exception.RecruitUnavailableException;
 import io.tiagovibeson.heroassociation.domain.Agency;
 import io.tiagovibeson.heroassociation.domain.Hero;
+import io.tiagovibeson.heroassociation.domain.Manager;
 import io.tiagovibeson.heroassociation.repository.AgencyRepository;
 import io.tiagovibeson.heroassociation.repository.HeroRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -26,10 +27,10 @@ public class HeroRecruitmentService {
     HeroRepository heroRepository;
 
     @Inject
-    AgencyStateService agencyStateService;
+    AgencyAccessService agencyAccessService;
 
     @Inject
-    AgencyAccessService agencyAccessService;
+    AgencyStateService agencyStateService;
 
     @Transactional
     public List<Hero> listRecruitable() {
@@ -38,16 +39,20 @@ public class HeroRecruitmentService {
     }
 
     @Transactional
-    public AgencyStateResponse recruit(UUID agencyId, UUID recruitId) {
+    public AgencyStateResponse.HeroResponse recruitPersonally(UUID recruitId) {
+        Manager manager = agencyAccessService.currentManager();
+
+        Hero recruit = availableRecruit(recruitId);
+        recruit.recruitTo(manager);
+        return AgencyStateResponse.HeroResponse.from(recruit);
+    }
+
+    @Transactional
+    public AgencyStateResponse recruitForAgency(UUID agencyId, UUID recruitId) {
         Agency agency = findAgency(agencyId);
-        agencyAccessService.requireMembership(agencyId);
+        agencyAccessService.requireLeadership(agencyId);
 
-        Hero recruit = heroRepository.findForUpdate(recruitId)
-                .orElseThrow(() -> new RecruitNotFoundException(recruitId));
-        if (!recruit.isRecruitable()) {
-            throw new RecruitUnavailableException(recruitId);
-        }
-
+        Hero recruit = availableRecruit(recruitId);
         recruit.recruitTo(agency);
         return agencyStateService.findState(agencyId);
     }
@@ -60,6 +65,15 @@ public class HeroRecruitmentService {
                 .firstResultOptional()
                 .orElseThrow(() -> new HeroNotFoundException(heroId));
         return AgencyStateResponse.HeroResponse.from(hero);
+    }
+
+    private Hero availableRecruit(UUID recruitId) {
+        Hero recruit = heroRepository.findForUpdate(recruitId)
+                .orElseThrow(() -> new RecruitNotFoundException(recruitId));
+        if (!recruit.isRecruitable()) {
+            throw new RecruitUnavailableException(recruitId);
+        }
+        return recruit;
     }
 
     private Agency findAgency(UUID agencyId) {

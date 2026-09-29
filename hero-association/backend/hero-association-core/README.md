@@ -68,8 +68,24 @@ Pass Party, an in-progress troll quest and its initial combat snapshot, seven
 rune definitions, Magic Crystals, Iron Ingots, agency rune inventory, the
 party's equipped runes, two feed posts, Ironridge Exchange, and its open market
 orders. It also seeds manager1 through manager10 across Dawnwatch, Ironridge,
-and Silverkeep Guild; see the [test-data map](../../TEST_DATA.md). Do not use
-this configuration with data that must be retained.
+and Silverkeep Guild. Every seeded Manager has three personal starter heroes,
+most have zero personal gold, and Manager 3 and Manager 4 have small personal
+item stacks for market tests. Agency assets remain separate. New Manager
+onboarding provisions the same three heroes once with zero gold and no items.
+`GET /api/v1/account` exposes these personal assets under `manager`.
+See the [test-data map](../../TEST_DATA.md). Do not use this configuration
+with data that must be retained.
+
+A party now belongs to the Manager who creates it, within their agency.
+That Manager can assign or remove their available personal heroes or available
+agency-owned heroes and start a quest with their prepared party; other
+Managers cannot change or launch it.
+`GET /api/v1/agencies/{agencyId}/state` keeps agency-owned heroes in
+`heroes` and returns the caller's personal heroes (plus personal heroes
+participating in agency parties) in `personalHeroes`. The seeded Broken
+Pass party belongs to User 1 and retains its older agency-hero members.
+Agency-hero assignment is free and does not transfer ownership. The agency
+leader can set each agency hero's per-quest fee, defaulting to 0 gold.
 
 The progression schema now stores cumulative XP, fractional Melee, Distance,
 Magic, and Shield points, and up to 48 hours of stamina in milliseconds.
@@ -91,8 +107,8 @@ explicitly. A packaged Core started without that override instead validates
 its schema and does not load seed data. In k3d, `deploy-backend.sh` runs a
 one-shot bootstrap Job only when the schema is absent; `--reset-core-db`
 requests a destructive lab reset. Ordinary Core Pod restarts preserve data.
-An existing k3d lab database using the earlier Hero schema needs an explicit
-`--reset-core-db` redeploy;
+An existing k3d lab database using the earlier Hero schema, including one
+without Manager-owned assets, needs an explicit `--reset-core-db` redeploy;
 normal Pod restarts cannot migrate it. Do not reset data you need to retain.
 Scheduled progression and recovery use separate PostgreSQL transaction locks,
 so concurrent Pods skip competing ticks. An isolated k3d concurrency test
@@ -214,20 +230,26 @@ frontend to call Core directly; use the BFF on port `8080` instead.
 The API provisions the authenticated Account and supports agency-state reads,
 recruitment, and persisted rune loadouts. A Manager without an `AgencyMember`
 record can create one empty Level 1 agency as its `LEADER`. `GET /api/v1/recruits`
-requires a Manager; claiming an NPC, agency state, and every other
-agency-specific command require membership. Only `LEADER` can create or cancel
-market orders.
+and `POST /api/v1/recruits/{recruitId}/claim` require an onboarded Manager
+but not agency membership. A claim assigns the NPC to the Manager's personal
+roster. An agency leader can instead explicitly claim a recruit for the agency
+through `POST /api/v1/agencies/{agencyId}/recruits/{recruitId}/claim`. A recruit
+can be claimed only once across both routes. Agency-specific commands require
+membership. Only `LEADER` can claim for an agency or create or cancel market
+orders.
 
 - `GET /api/v1/account`
 - `POST /api/v1/account/manager`
 - `POST /api/v1/agencies`
 - `GET /api/v1/recruits`
-- `POST /api/v1/agencies/{agencyId}/heroes`
+- `POST /api/v1/recruits/{recruitId}/claim`
+- `POST /api/v1/agencies/{agencyId}/recruits/{recruitId}/claim`
 - `GET /api/v1/agencies/{agencyId}/heroes/{heroId}`
 - `GET /api/v1/agencies/{agencyId}/state`
 - `PUT /api/v1/agencies/{agencyId}/heroes/{heroId}/rune-slots/{slotIndex}`
 - `DELETE /api/v1/agencies/{agencyId}/heroes/{heroId}/rune-slots/{slotIndex}`
 - `PUT /api/v1/agencies/{agencyId}/heroes/{heroId}/activity`
+- `PUT /api/v1/agencies/{agencyId}/heroes/{heroId}/borrowing-fee` (leader-only JSON body: `{ "feeGold": 0 }`)
 - `POST /api/v1/agencies/{agencyId}/parties`
 - `PUT /api/v1/agencies/{agencyId}/parties/{partyId}/heroes/{heroId}`
 - `DELETE /api/v1/agencies/{agencyId}/parties/{partyId}/heroes/{heroId}`
@@ -235,20 +257,26 @@ market orders.
 - `POST /api/v1/agencies/{agencyId}/quests/{questId}/combat/sync`
 - `POST /api/v1/agencies/{agencyId}/feed-posts`
 - `GET /api/v1/market/orders`
-- `POST /api/v1/market/orders` (JSON body includes `agencyId`, `side`, `itemId`, `quantity`, and `priceGoldPerItem`)
+- `POST /api/v1/market/orders` (JSON body includes `ownerType`, `side`, `itemId`, `quantity`, and `priceGoldPerItem`; include `agencyId` only when `ownerType` is `AGENCY`)
 - `DELETE /api/v1/market/orders/{orderId}`
 
-Market mutations return the market order and its status, not agency state.
-Refresh `GET /api/v1/agencies/{agencyId}/state` after placing or cancelling an
-order. Core still executes market matching and resource transfers in one
-PostgreSQL transaction until Market is extracted as its own service.
+Market mutations return the order's owner type, ID, name, and status, not
+account or agency state. `MANAGER` uses the authenticated Manager's personal
+wallet and inventory; `AGENCY` requires leadership and uses agency assets.
+Refresh both `GET /api/v1/account` and
+`GET /api/v1/agencies/{agencyId}/state` after placing or cancelling an order.
+Core still executes matching and resource transfers in one PostgreSQL
+transaction until Market is extracted as its own service.
 
 
 The initial global board contains free Level 1 NPCs. A candidate is globally
-unique, so a successful claim removes it from every agency's board. The claimed
-hero starts in `TRAINING` with full class health and mana and 100% stamina.
-It returns the agency and leader, Agency, Training, Rest, Size, Reputation, and
-Intelligence upgrade levels, all heroes and their class recovery values,
+unique, so a successful claim removes it from every Manager's board. The claim
+returns the personal hero, who starts in `TRAINING` with full class health,
+mana, and 100% stamina. Agency leaders can explicitly claim a recruit for the agency instead.
+
+Agency state returns the agency and leader, Agency, Training, Rest, Size,
+Reputation, and Intelligence upgrade levels, agency and personal heroes and
+class recovery values,
 parties with quests and member IDs, agency item and rune inventory, and each
 hero's five rune slots. The initial item inventory contains stackable
 materials; item equipment and quest loot are pending. Rest represents the
@@ -265,10 +293,15 @@ hero's loadout returns `409 Conflict`. Agency heroes can switch between
 or remove available agency heroes. Prepared members keep their activity until
 a quest starts. An in-progress quest party cannot have its membership changed,
 and a hero already on a quest cannot move to another party; both return `409
-Conflict`. Starting an `AVAILABLE` quest with an eligible prepared party moves
-all of its members to `ON_QUEST`; a party outside the quest's required size
-returns `400 Bad Request`. The resulting quest state includes its persisted
-start and expected-completion timestamps. The backend includes a deterministic,
+Conflict`. Starting an `AVAILABLE` quest requires JSON body
+`{ "partyId": "...", "expectedBorrowingFeeGold": 0 }`. Core sums the
+agency-owned party heroes' fees and, only when the quote matches and the
+Manager has enough personal gold, transfers that total to the agency and
+moves all members to `ON_QUEST` in the same transaction. The leader pays
+when borrowing too. A stale quote or insufficient funds returns `409 Conflict`
+without charging. A party outside the quest's required size returns `400 Bad
+Request`. The resulting quest state includes its persisted start and
+expected-completion timestamps. The backend includes a deterministic,
 unit-tested combat rules engine for independent attack timers, hero recovery,
 mage spells, critical hits, deaths, and battle completion. Every quest start
 creates an API-visible combat snapshot from its party's current resources,

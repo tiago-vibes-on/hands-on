@@ -32,50 +32,58 @@ a hero in combat.
   Manager gold earnings, but the treatment of market-sale proceeds, transfers,
   refunds, and the effective rate for work already in progress still needs an
   explicit rule before implementation.
-- The agency can also charge for borrowed agency heroes; the fee and when it
-  is charged are not defined yet.
+- An agency hero's per-quest borrowing fee starts at 0 gold. The agency leader
+  can set a nonnegative fee for each hero. Party assignment is free; on a
+  successful quest start, the total quoted fee moves atomically from the
+  party Manager's personal wallet to the agency treasury. Leaders pay too.
+  A stale quote or insufficient funds rejects the start without charging.
 - This treats the agency like a shared organization: Managers retain personal
   progression while its treasury funds shared heroes and upgrades.
 
-### Planned personal and agency ownership
+### Personal and agency ownership
 
-The current backend is agency-owned: heroes, gold, items, runes, parties, and
-market orders belong to the agency. The next ownership model is a design
-target, **not yet implemented**:
+Managers own their personal hero rosters, gold wallets, item and rune
+inventories, parties, and market orders. Agencies keep separate assets.
+Market ownership is implemented in Core; reward accounting and agency-change
+workflows remain planned:
 
-- Each Manager owns a personal hero roster, gold wallet, item and rune
-  inventory, and market orders. These assets stay with the Manager when they
-  leave or change agencies.
+- Each Manager owns a personal hero roster, gold wallet, and item and rune
+  inventory. Personal market orders use these assets; agency-change workflows
+  remain planned. Personal assets will remain with the Manager when changing
+  agencies.
 - Each agency separately owns its treasury, heroes, item and rune inventory,
   and market orders. Agency assets stay with the agency when a Manager leaves.
 - A new Manager starts with zero gold, no items or runes, and three personally
   owned Level 1 heroes: one Warrior, one Mage, and one Archer. These are starter
   heroes for each Manager, not three globally unique recruits.
-- Recruiting a hero normally makes that hero Manager-owned. A Manager with
-  agency recruitment permission may explicitly recruit for the agency instead.
-  The exact agency permission model is not defined yet.
-- A Manager owns their prepared parties and may use their own heroes plus
-  available agency heroes borrowed for a fee. Other Managers' personal heroes
-  cannot be added. Borrowing does not change hero ownership.
+- Personal recruitment is the default and works even before the Manager joins
+  an agency. An agency leader can explicitly choose to recruit a hero for their
+  agency instead. Both choices claim the same globally unique NPC once.
+- A Manager owns their prepared parties and can assign their own available
+  heroes or available agency-owned heroes. Other Managers cannot change or
+  launch the party. Borrowing does not transfer hero ownership. Agency-hero
+  fees are paid only when a quest successfully starts.
 - Quest items go to the party's Manager. The agency's configurable gold share
   applies to the Manager's eligible gold earnings; the exact accounting scope
   is still open as described above.
-- Managers can place personal market orders. Agency market orders require
-  agency leadership or an explicit trading permission; the initial rule can
-  remain leader-only.
+- Managers can place personal market orders without choosing an agency.
+  Agency market orders require leadership of the selected agency. Delegated
+  trading permission is a future rule. A market order reserves gold or items
+  from its owner, and refunds and trade settlement return to that same owner.
+  Both owner types pay the 10% market fee. No additional agency share is taken
+  from personal sale proceeds until that separate economic rule is decided.
 
-The expanded [local test fixtures](TEST_DATA.md) add multi-Manager agencies
-for developing this model, but do not create personal assets yet.
+The expanded [local test fixtures](TEST_DATA.md) include multi-Manager agencies
+and separate personal starter heroes, wallets, and inventories.
 
 ## Heroes
 
 - Heroes are recruitable non-player characters (NPCs).
 - The initial global recruitment board offers Alden Steelward (Warrior), Seris
   Dawnflame (Mage), and Tarin Windmark (Archer). They are free Level 1 NPCs;
-  each can currently join only one agency. This existing agency-only claim flow
-  will change under the planned Manager-default/agency-permission model. A
-  recruited hero starts in `TRAINING` with full class health and mana and 100%
-  stamina.
+  each can be claimed once for a Manager's personal roster or, by explicit
+  choice of its leader, for an agency. A recruited hero starts in `TRAINING` with
+  full class health and mana and 100% stamina.
 - Heroes can equip runes.
 - A hero's rune loadout is locked while that hero is on a quest.
 - Each hero has five rune slots. A hero who has learned spells also displays
@@ -83,9 +91,8 @@ for developing this model, but do not create personal assets yet.
 - Unequipped runes are currently stored in the agency rune inventory. During
   the initial prototype, any available agency rune can be equipped in any hero
   rune slot; compatibility rules will be added later.
-- Agency inventory also stores stackable materials. The initial Magic Crystal
-  and Iron Ingot stacks are visible but cannot yet be equipped, spent, looted,
-  or traded.
+- Agency and personal inventories store stackable materials. Magic Crystals
+  and Iron Ingots can be traded, but cannot yet be equipped, spent, or looted.
 - The initial hero classes are:
   - Warrior
   - Mage
@@ -408,7 +415,8 @@ The following details are intentionally not defined yet:
 - Which gold inflows count toward the agency share, especially personal market
   sales, transfers, and refunds; when a changed share takes effect; and how to
   protect Managers from a surprise increase during an active quest or order.
-- The agency-hero borrowing fee and its charge/refund timing.
+- Whether and how an already-paid agency-hero fee is refunded if quest
+  cancellation is introduced; later PvE defeat does not undo the start fee.
 - The hero's health, mana, and stamina on return after PvE defeat.
 - Creature-specific XP and skill-point balance.
 - Starter-hero names.

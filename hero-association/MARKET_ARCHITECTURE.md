@@ -2,17 +2,16 @@
 
 Status: design proposal. No separate Market service or RabbitMQ integration has
 been implemented yet. [ADR 0003](adr/0003-market-service-boundary.md) records
-the current market route family and original agency-only contract. The new
-[game ownership design](GAME.md#planned-personal-and-agency-ownership) also
-allows Manager-owned trades, so the order-owner payload and authorization
-rules must be revised before extraction. This document describes the target
+the market route family and the implemented owner selector. The
+[game ownership design](GAME.md#personal-and-agency-ownership) allows both
+Manager-owned and agency-owned trades; that public contract should survive
+the service extraction. This document describes the target
 flow without losing gold, items, or orders.
 
 ## Current and target architecture
 
-Today, Game Core owns market orders, agency gold, and inventory in one
-PostgreSQL database and updates them in one transaction. Manager-owned gold,
-heroes, and inventory are planned but not yet implemented. The BFF already
+Today, Game Core owns market orders plus Manager and agency wallets and
+inventories in one PostgreSQL database and updates trades in one transaction. The BFF already
 exposes `GET/POST /api/v1/market/orders` and
 `DELETE /api/v1/market/orders/{orderId}`. In k3d, Envoy Gateway uses
 the BFF-validated subject to allow five order-placement attempts per
@@ -38,12 +37,12 @@ database. Separate PostgreSQL instances can be considered later without
 changing these ownership rules.
 
 Market is private: the browser still calls the BFF. BFF authenticates the
-browser, enforces CSRF and the existing per-user placement limit, and routes
-market paths to Market. Core must authorize personal orders against the
-requesting Manager and agency orders against a leader or explicit trading
-permission. The current `agencyId`-only placement payload cannot express
-both owners; a revised owner selector and its authorization rules are needed
-before extraction. Browser-supplied owner IDs are not proof of ownership.
+browser, enforces CSRF, and routes market paths to Market. The k3d Envoy
+Gateway enforces the per-user placement limit before the BFF. Core currently
+authorizes personal orders using the authenticated Manager and agency orders
+using agency leadership. The public placement payload uses `ownerType` and
+requires `agencyId` only for agency orders. Browser-supplied owner IDs are
+not proof of ownership; Market-to-Core calls must carry a verifiable requester.
 The exact service-to-service authentication mechanism still needs to be
 specified.
 
@@ -149,9 +148,11 @@ open decisions.
   outages, restarts, and eventual reconciliation. Keep browser E2E and k6
   coverage for the public route and rate limit.
 
-Do not extract Market with the current agency-only order payload. First define
-how the request selects a personal or agency trading account and how Core
-validates that choice; see [ROADMAP.md](ROADMAP.md).
+Keep the existing `ownerType` contract when extracting Market: `MANAGER`
+selects the authenticated Manager's personal account, while `AGENCY` requires
+an `agencyId` and agency leadership. Delegated agency trading permission and
+an additional agency share on personal market-sale proceeds remain separate
+open decisions; do not silently add either during extraction.
 
 Local and pre-production data can be reset and reseeded while the project has
 no Flyway migrations. Once Flyway is introduced, service database changes

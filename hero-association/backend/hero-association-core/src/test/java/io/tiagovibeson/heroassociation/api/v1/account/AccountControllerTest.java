@@ -2,6 +2,8 @@ package io.tiagovibeson.heroassociation.api.v1.account;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.notNullValue;
 
 import io.quarkus.test.junit.QuarkusTest;
@@ -32,14 +34,25 @@ class AccountControllerTest {
                 .statusCode(200)
                 .body("id", is(accountId))
                 .body("manager.id", notNullValue())
-                .body("manager.displayName", is("Wayfinder"));
+                .body("manager.displayName", is("Wayfinder"))
+                .body("manager.gold", is(0))
+                .body("manager.heroes.size()", is(3))
+                .body("manager.heroes.heroClass", containsInAnyOrder("WARRIOR", "MAGE", "ARCHER"))
+                .body("manager.heroes.level", everyItem(is(1)))
+                .body("manager.heroes.meleeLevel", everyItem(is(10)))
+                .body("manager.heroes.distanceLevel", everyItem(is(10)))
+                .body("manager.heroes.magicLevel", everyItem(is(10)))
+                .body("manager.heroes.shieldLevel", everyItem(is(10)))
+                .body("manager.items.size()", is(0))
+                .body("manager.runes.size()", is(0));
 
         given()
                 .when().get("/api/v1/account")
                 .then()
                 .statusCode(200)
                 .body("id", is(accountId))
-                .body("manager.displayName", is("Wayfinder"));
+                .body("manager.displayName", is("Wayfinder"))
+                .body("manager.heroes.size()", is(3));
     }
 
     @Test

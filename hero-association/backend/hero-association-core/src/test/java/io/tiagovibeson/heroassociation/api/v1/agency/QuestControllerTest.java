@@ -12,14 +12,21 @@ import io.restassured.response.Response;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
-@TestSecurity(user = "019c4c00-0100-7000-8000-000000000001")
+@TestSecurity(user = "local-seed-soren")
 class QuestControllerTest {
 
     private static final String AGENCY_ID = "019c4c00-0001-7000-8000-000000000001";
     private static final String LOST_COURIER_QUEST_ID = "019c4c00-0004-7000-8000-000000000001";
-    private static final String OAKSHIELD_ID = "019c4c00-0010-7000-8000-000000000004";
-    private static final String EMBERVEIL_ID = "019c4c00-0010-7000-8000-000000000005";
-    private static final String HAWKEYE_ID = "019c4c00-0010-7000-8000-000000000006";
+    private static final String PERSONAL_WARRIOR_ID = "019c4c00-0030-7001-8000-000000000003";
+    private static final String PERSONAL_MAGE_ID = "019c4c00-0030-7002-8000-000000000003";
+    private static final String PERSONAL_ARCHER_ID = "019c4c00-0030-7003-8000-000000000003";
+
+    @Test
+    void shouldRejectStartingAnotherManagersParty() {
+        startQuest("019c4c00-0002-7000-8000-000000000001")
+                .then()
+                .statusCode(404);
+    }
 
     @Test
     void shouldStartAnAvailableQuestWithAnEligiblePreparedParty() {
@@ -28,9 +35,9 @@ class QuestControllerTest {
                 .statusCode(200)
                 .extract()
                 .path("parties.find { it.name == 'Forest Vanguard' }.id");
-        addHero(oversizedPartyId, OAKSHIELD_ID);
-        addHero(oversizedPartyId, EMBERVEIL_ID);
-        addHero(oversizedPartyId, HAWKEYE_ID);
+        addHero(oversizedPartyId, PERSONAL_WARRIOR_ID);
+        addHero(oversizedPartyId, PERSONAL_MAGE_ID);
+        addHero(oversizedPartyId, PERSONAL_ARCHER_ID);
 
         startQuest(oversizedPartyId)
                 .then()
@@ -39,7 +46,7 @@ class QuestControllerTest {
 
         given()
                 .when()
-                .delete("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, oversizedPartyId, OAKSHIELD_ID))
+                .delete("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, oversizedPartyId, PERSONAL_WARRIOR_ID))
                 .then()
                 .statusCode(200);
 
@@ -48,8 +55,7 @@ class QuestControllerTest {
                 .statusCode(200)
                 .extract()
                 .path("parties.find { it.name == 'Courier Scouts' }.id");
-        addHero(courierPartyId, OAKSHIELD_ID);
-
+        addHero(courierPartyId, PERSONAL_WARRIOR_ID);
         startQuest(courierPartyId)
                 .then()
                 .statusCode(200)
@@ -60,11 +66,11 @@ class QuestControllerTest {
                 .body("quests.find { it.id == '%s' }.combat.status".formatted(LOST_COURIER_QUEST_ID), is("IN_PROGRESS"))
                 .body("quests.find { it.id == '%s' }.combat.currentTimeMilliseconds".formatted(LOST_COURIER_QUEST_ID), is(0))
                 .body("quests.find { it.id == '%s' }.combat.combatants".formatted(LOST_COURIER_QUEST_ID), hasSize(5))
-                .body("quests.find { it.id == '%s' }.combat.combatants.find { it.team == 'HEROES' }.heroId".formatted(LOST_COURIER_QUEST_ID), is(OAKSHIELD_ID))
+                .body("quests.find { it.id == '%s' }.combat.combatants.find { it.team == 'HEROES' }.heroId".formatted(LOST_COURIER_QUEST_ID), is(PERSONAL_WARRIOR_ID))
                 .body("quests.find { it.id == '%s' }.combat.combatants.find { it.team == 'CREATURES' }.name".formatted(LOST_COURIER_QUEST_ID), is("Forest Wolf"))
                 .body("quests.find { it.id == '%s' }.combat.combatants.find { it.team == 'CREATURES' }.maxHealth".formatted(LOST_COURIER_QUEST_ID), is(120))
                 .body("quests.find { it.id == '%s' }.expectedCompletionAt".formatted(LOST_COURIER_QUEST_ID), notNullValue())
-                .body("heroes.find { it.id == '%s' }.activity".formatted(OAKSHIELD_ID), is("ON_QUEST"));
+                .body("personalHeroes.find { it.id == '%s' }.activity".formatted(PERSONAL_WARRIOR_ID), is("ON_QUEST"));
 
         startQuest(courierPartyId)
                 .then()
@@ -89,9 +95,14 @@ class QuestControllerTest {
     }
 
     private Response startQuest(String partyId) {
+        return startQuest(partyId, 0);
+    }
+
+    private Response startQuest(String partyId, long expectedBorrowingFeeGold) {
         return given()
                 .contentType(ContentType.JSON)
-                .body("{\"partyId\":\"%s\"}".formatted(partyId))
+                .body("{\"partyId\":\"%s\",\"expectedBorrowingFeeGold\":%d}"
+                        .formatted(partyId, expectedBorrowingFeeGold))
                 .when()
                 .put("/api/v1/agencies/%s/quests/%s/start".formatted(AGENCY_ID, LOST_COURIER_QUEST_ID));
     }

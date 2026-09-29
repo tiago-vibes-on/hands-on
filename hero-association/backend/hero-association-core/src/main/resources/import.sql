@@ -179,6 +179,12 @@ INSERT INTO manager (id, display_name, display_name_normalized, account_id) VALU
         'manager 10',
         '019c4c00-0000-7000-8000-000000000110');
 
+-- Disposable borrowing fixtures: no gold, below/exact price, and enough for multiple heroes.
+UPDATE manager SET gold = 25 WHERE id = '019c4c00-0000-7000-8000-000000000003';
+UPDATE manager SET gold = 25 WHERE id = '019c4c00-0000-7000-8000-000000000202';
+UPDATE manager SET gold = 20 WHERE id = '019c4c00-0000-7000-8000-000000000203';
+UPDATE manager SET gold = 200 WHERE id = '019c4c00-0000-7000-8000-000000000204';
+
 INSERT INTO agency (
     id,
     name,
@@ -340,8 +346,9 @@ INSERT INTO agency_member (id, agency_id, manager_id, role, joined_at) VALUES
         'MANAGER',
         CURRENT_TIMESTAMP);
 
-INSERT INTO party (id, name, agency_id) VALUES
-    ('019c4c00-0002-7000-8000-000000000001', 'Broken Pass Party', '019c4c00-0001-7000-8000-000000000001');
+INSERT INTO party (id, name, agency_id, manager_id) VALUES
+    ('019c4c00-0002-7000-8000-000000000001', 'Broken Pass Party',
+     '019c4c00-0001-7000-8000-000000000001', '019c4c00-0000-7000-8000-000000000001');
 
 INSERT INTO quest (
     id,
@@ -564,6 +571,10 @@ VALUES
         NULL,
         NULL);
 
+-- Oakshield remains free; Emberveil and Hawkeye exercise paid borrowing.
+UPDATE hero SET borrowing_fee_gold = 25 WHERE id = '019c4c00-0010-7000-8000-000000000005';
+UPDATE hero SET borrowing_fee_gold = 100 WHERE id = '019c4c00-0010-7000-8000-000000000006';
+
 INSERT INTO quest_combat (
     id,
     quest_id,
@@ -763,6 +774,10 @@ INSERT INTO agency_item (id, agency_id, item_id, quantity) VALUES
     ('019c4c00-0080-7000-8000-000000000002', '019c4c00-0001-7000-8000-000000000001', '019c4c00-0070-7000-8000-000000000002', 24),
     ('019c4c00-0080-7000-8000-000000000003', '019c4c00-0001-7000-8000-000000000002', '019c4c00-0070-7000-8000-000000000002', 48);
 
+INSERT INTO manager_item (id, manager_id, item_id, quantity) VALUES
+    ('019c4c00-0081-7000-8000-000000000001', '019c4c00-0000-7000-8000-000000000203', '019c4c00-0070-7000-8000-000000000001', 2),
+    ('019c4c00-0081-7000-8000-000000000002', '019c4c00-0000-7000-8000-000000000204', '019c4c00-0070-7000-8000-000000000002', 5);
+
 INSERT INTO market_order (
     id,
     agency_id,
@@ -837,3 +852,24 @@ VALUES
         'Elara Moonweaver',
         'Rested, prepared, and ready for whatever waits beyond the pass.',
         CURRENT_TIMESTAMP - INTERVAL '1 hour');
+
+-- Each Manager begins with a separate personal roster. Agency and recruitable
+-- heroes above remain untouched. UUIDs and aliases are deterministic per owner.
+INSERT INTO hero (
+    id, name, alias, hero_class, experience, melee_points, distance_points,
+    magic_points, shield_points, current_health, current_mana,
+    stamina_milliseconds, activity, last_resource_synchronized_at,
+    agency_id, manager_id, party_id)
+SELECT
+    ('019c4c00-0030-700' || starter.slot || '-8000-' || right(manager.id::text, 12))::uuid,
+    'Starter ' || starter.name,
+    'starter-' || right(manager.id::text, 12) || '-' || lower(starter.hero_class),
+    starter.hero_class, 0, 0, 0, 0, 0,
+    starter.health, starter.mana, 172800000, 'TRAINING', CURRENT_TIMESTAMP,
+    NULL, manager.id, NULL
+FROM manager
+CROSS JOIN (VALUES
+    (1, 'Warrior', 'WARRIOR', 300, 50),
+    (2, 'Mage', 'MAGE', 100, 500),
+    (3, 'Archer', 'ARCHER', 200, 200)
+) AS starter(slot, name, hero_class, health, mana);

@@ -297,6 +297,8 @@ have passed, deploy those exact JVM and frontend images without rebuilding:
 ```bash
 cd ../../pipeline
 node deploy-k3d.mjs artifacts/<build-id>/all
+# For a deliberate disposable Core schema/seed reset:
+node deploy-k3d.mjs --reset-core-db artifacts/<build-id>/all
 ```
 
 Run this from `hero-association/pipeline` with Docker, Node.js 24, `kubectl`,
@@ -309,9 +311,16 @@ application Deployment image fields,
 waits for each rollout, and compares every running application Pod's image ID
 with the verified archive's platform image before running `npm run test:k3d`
 and `npm run test:market:k6`. If rollout or either suite fails, it restores the
-previous image references and reports any rollback failure. It does not reset
-Core or Keycloak databases, alter HPAs or the Gateway, or touch normal
-Compose development. Both suites create temporary login sessions in the lab;
+previous image references and reports any rollback failure. The default
+command does not reset Core or Keycloak databases, alter HPAs or the Gateway,
+or touch normal Compose development. The explicit `--reset-core-db` command
+requires a complete E2E-verified archive. It verifies the isolated Core
+database, stops Core and its HPA, and recreates only Core data with a Job
+running the **same archived Core image**. It then resumes Core, restores its
+HPA, and runs the usual Pod-image, browser, and k6 gates. Keycloak and Redis
+are preserved. A reset cannot be undone by switching to an old Core image:
+if any later gate fails, promotion reports failure without automatic image
+rollback. Inspect the Job and Pods before retrying. Both suites create temporary login sessions in the lab;
 k6 verifies the five-per-second Envoy market limit and another user's
 independent budget. Keep the previous image tags available on the k3d nodes
 for a rollback.
@@ -372,9 +381,12 @@ private Services. If the Core schema is absent, the script first runs a
 one-shot bootstrap Job using the Core image to create the schema and load
 deterministic seed data. Normal Core Pods only validate the schema; redeploys
 and restarts preserve the database. To deliberately discard this lab's Core
-game data and reseed it, run `./deploy-backend.sh --reset-core-db`. The script
-stops Core before the reset and leaves it stopped if bootstrap fails. This
-flag does not reset Keycloak or Redis. The script temporarily removes the
+game data and reseed it through the older direct-build workflow, run
+`./deploy-backend.sh --reset-core-db` **only after importing the matching
+`hero-association-core:k3d` image**. For a verified pipeline archive, use
+`../../pipeline/run-k3d-pipeline.sh --reset-core-db` instead so the Job
+uses that archive's exact Core image. Either path stops Core before resetting
+and leaves it stopped if bootstrap fails. Neither resets Keycloak or Redis. The script temporarily removes the
 Core HPA before an explicit reset, then restores it afterward. BFF and Core
 use rolling updates and separate CPU HPAs with two to eight replicas. Both
 scheduled jobs use distinct transaction-scoped PostgreSQL advisory locks, so

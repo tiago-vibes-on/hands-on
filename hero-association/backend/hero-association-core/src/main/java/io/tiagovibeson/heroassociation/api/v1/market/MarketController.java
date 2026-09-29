@@ -32,6 +32,7 @@ public class MarketController {
     @Consumes(MediaType.APPLICATION_JSON)
     public MarketOrderResponse createOrder(@NotNull @Valid CreateMarketOrderRequest request) {
         return marketOrderService.createOrder(
+                request.ownerType(),
                 request.agencyId(),
                 request.side(),
                 request.itemId(),

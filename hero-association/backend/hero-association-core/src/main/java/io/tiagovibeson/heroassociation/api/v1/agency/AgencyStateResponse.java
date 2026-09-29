@@ -6,6 +6,7 @@ import java.util.UUID;
 import java.time.Instant;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import io.tiagovibeson.heroassociation.domain.Agency;
 import io.tiagovibeson.heroassociation.domain.AgencyItem;
@@ -13,6 +14,7 @@ import io.tiagovibeson.heroassociation.domain.AgencyRune;
 import io.tiagovibeson.heroassociation.domain.FeedPost;
 import io.tiagovibeson.heroassociation.domain.Hero;
 import io.tiagovibeson.heroassociation.domain.HeroRune;
+import io.tiagovibeson.heroassociation.domain.HeroSkill;
 import io.tiagovibeson.heroassociation.domain.Item;
 import io.tiagovibeson.heroassociation.domain.Party;
 import io.tiagovibeson.heroassociation.domain.Quest;
@@ -27,6 +29,7 @@ public record AgencyStateResponse(
         List<PartyResponse> parties,
         List<QuestResponse> quests,
         List<HeroResponse> heroes,
+        List<HeroResponse> personalHeroes,
         List<InventoryRuneResponse> runeInventory,
         List<InventoryItemResponse> itemInventory,
         List<FeedPostResponse> feedPosts) {
@@ -34,12 +37,13 @@ public record AgencyStateResponse(
     public static AgencyStateResponse from(
             Agency agency,
             List<Hero> heroes,
+            List<Hero> personalHeroes,
             List<Party> parties,
             List<Quest> quests,
             List<AgencyRune> runeInventory,
             List<AgencyItem> itemInventory,
             List<FeedPost> feedPosts) {
-        Map<UUID, List<UUID>> heroIdsByParty = heroes.stream()
+        Map<UUID, List<UUID>> heroIdsByParty = Stream.concat(heroes.stream(), personalHeroes.stream())
                 .filter(hero -> hero.getParty() != null)
                 .collect(Collectors.groupingBy(
                         hero -> hero.getParty().getId(),
@@ -50,6 +54,7 @@ public record AgencyStateResponse(
                 parties.stream().map(party -> PartyResponse.from(party, heroIdsByParty.getOrDefault(party.getId(), List.of()))).toList(),
                 quests.stream().map(QuestResponse::from).toList(),
                 heroes.stream().map(HeroResponse::from).toList(),
+                personalHeroes.stream().map(HeroResponse::from).toList(),
                 runeInventory.stream().map(InventoryRuneResponse::from).toList(),
                 itemInventory.stream().map(InventoryItemResponse::from).toList(),
                 feedPosts.stream().map(FeedPostResponse::from).toList());
@@ -91,10 +96,12 @@ public record AgencyStateResponse(
             int intelligence) {
     }
 
-    public record PartyResponse(UUID id, String name, QuestResponse quest, List<UUID> heroIds) {
+    public record PartyResponse(UUID id, String name, UUID ownerManagerId, QuestResponse quest, List<UUID> heroIds) {
 
         private static PartyResponse from(Party party, List<UUID> heroIds) {
-            return new PartyResponse(party.getId(), party.getName(), QuestResponse.from(party.getQuest()), heroIds);
+            return new PartyResponse(
+                    party.getId(), party.getName(), party.getOwnerManager().getId(),
+                    QuestResponse.from(party.getQuest()), heroIds);
         }
     }
 
@@ -252,11 +259,16 @@ public record AgencyStateResponse(
 
     public record HeroResponse(
             UUID id,
+            UUID ownerManagerId,
+            long borrowingFeeGold,
             String name,
             String alias,
             String heroClass,
             int level,
+            int meleeLevel,
+            int distanceLevel,
             int magicLevel,
+            int shieldLevel,
             int currentHealth,
             int maxHealth,
             int currentMana,
@@ -273,11 +285,16 @@ public record AgencyStateResponse(
                     .collect(Collectors.toMap(HeroRune::getSlotIndex, HeroRune::getRune));
             return new HeroResponse(
                     hero.getId(),
+                    hero.getOwnerManager() == null ? null : hero.getOwnerManager().getId(),
+                    hero.getBorrowingFeeGold(),
                     hero.getName(),
                     hero.getAlias(),
                     hero.getHeroClass().name(),
                     hero.getLevel(),
+                    hero.getSkillLevel(HeroSkill.MELEE),
+                    hero.getSkillLevel(HeroSkill.DISTANCE),
                     hero.getMagicLevel(),
+                    hero.getSkillLevel(HeroSkill.SHIELD),
                     hero.getCurrentHealth(),
                     hero.getMaxHealth(),
                     hero.getCurrentMana(),

@@ -21,13 +21,20 @@ already running, run from `hero-association/pipeline`:
 ```
 
 Optionally pass a unique build ID. The command checks the isolated cluster
-and runs rollback regression tests before building and testing Core, BFF, and
+and runs rollback and Core-reset target tests before building and testing Core, BFF, and
 frontend once. It archives those images, runs the archive-backed Playwright
 gate, then imports and deploys them to k3d and runs the k3d browser and
 containerized market k6 suites. If any stage fails, later stages do not run.
 The archive remains in ignored `artifacts/<build-id>/all/` for inspection or
 a later deployment target. It does not reset databases or modify the normal
-Compose development stack. On WSL, prefix the command with
+Compose development stack. For an intentional schema/seed change in the
+disposable k3d Core database, run `./run-k3d-pipeline.sh --reset-core-db`
+instead. That flag is destructive **only to k3d Core game data**: after the
+archive-backed browser gate, the pipeline uses the exact verified Core image
+to recreate Core's schema and deterministic seed. Keycloak, Redis, and
+ordinary Compose development data are not reset. A reset promotion cannot
+safely roll back to an older Core image if a later gate fails; inspect and
+repair the cluster before retrying. On WSL, prefix either command with
 `TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal` if Testcontainers needs it.
 
 ## Build and verify in separate stages
@@ -126,6 +133,8 @@ From `hero-association/pipeline`, with the isolated k3d lab running:
 
 ```bash
 node deploy-k3d.mjs artifacts/<build-id>/all
+# Only when deliberately replacing disposable k3d Core data:
+node deploy-k3d.mjs --reset-core-db artifacts/<build-id>/all
 ```
 
 This command checks the archive and its passing E2E record before loading
@@ -143,14 +152,23 @@ k6 suites. A failed rollout or suite restores the previous Deployment image
 references, verifies them, and reports concurrent changes without overwriting
 them. Run `node --test rollback-k3d.test.mjs` to test this failure path without
 changing the cluster. Promotion does not build images, apply bootstrap
-manifests, reset Core data, or touch normal Compose development.
+manifests, reset Core data, or touch normal Compose development. The
+`--reset-core-db` variant requires a complete three-service archive. After
+checking the k3d context, exact Core database identity, archive, and passing
+archive E2E record, it imports those images, stops Core and its HPA, and
+creates a one-shot bootstrap Job with **the archived Core image**, not the
+fixed `:k3d` tag. It then starts Core, restores the HPA, promotes BFF and
+frontend, and runs the same Pod-image, browser, and k6 gates. If bootstrap
+fails, Core remains stopped for inspection. If a later gate fails, the
+reset-aware command leaves deployment images in place instead of attempting
+an unsafe rollback against a newly recreated schema.
 The rollback path was also exercised in the disposable k3d lab on 2026-09-28:
 an older verified archive reached the browser gate, an intentionally missing
 Playwright config failed that gate, and all three previous images were restored.
 The read-only audit, six browser tests, and market k6 suite passed afterward.
 After all gates pass, it writes ignored `k3d-promotion.json` beside the
-archive with the archive checksum, image IDs, observed Pod image IDs, and
-passed gate names. This is a point-in-time local result, not a live health
+archive with the archive checksum, image IDs, observed Pod image IDs, passed gate
+names, and whether a Core reset/bootstrapping Job was used. This is a point-in-time local result, not a live health
 check or part of the Floci archive upload. A failed promotion does not write
 a new passing result; use `--verify-only` to check the current Pods.
 Keep the archive directory: its checksum, image IDs, and E2E record are the

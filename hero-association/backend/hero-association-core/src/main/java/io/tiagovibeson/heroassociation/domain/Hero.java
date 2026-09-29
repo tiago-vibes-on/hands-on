@@ -55,6 +55,10 @@ public class Hero extends UuidEntity {
     @Column(name = "current_mana", nullable = false)
     private int currentMana;
 
+    @Column(name = "borrowing_fee_gold", nullable = false)
+    @org.hibernate.annotations.ColumnDefault("0")
+    private long borrowingFeeGold;
+
     @Column(name = "stamina_milliseconds", nullable = false)
     private long staminaMilliseconds;
 
@@ -68,6 +72,10 @@ public class Hero extends UuidEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "agency_id")
     private Agency agency;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "manager_id")
+    private Manager ownerManager;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "party_id")
@@ -90,6 +98,12 @@ public class Hero extends UuidEntity {
         hero.currentMana = heroClass.getBaseMana();
         hero.staminaMilliseconds = HeroProgression.MAX_STAMINA_MILLISECONDS;
         hero.activity = HeroActivity.TRAINING;
+        return hero;
+    }
+
+    public static Hero createPersonal(String name, String alias, HeroClass heroClass, Manager manager) {
+        Hero hero = createRecruitable(name, alias, heroClass);
+        hero.ownerManager = Objects.requireNonNull(manager);
         return hero;
     }
 
@@ -257,15 +271,47 @@ public class Hero extends UuidEntity {
     }
 
     public boolean isRecruitable() {
-        return agency == null;
+        return agency == null && ownerManager == null;
+    }
+
+    public Manager getOwnerManager() {
+        return ownerManager;
+    }
+
+    public Agency getAgency() {
+        return agency;
+    }
+
+    public long getBorrowingFeeGold() {
+        return borrowingFeeGold;
+    }
+
+    public void setBorrowingFeeGold(long borrowingFeeGold) {
+        if (borrowingFeeGold < 0) {
+            throw new IllegalArgumentException("Borrowing fee cannot be negative.");
+        }
+        this.borrowingFeeGold = borrowingFeeGold;
     }
 
     public void recruitTo(Agency newAgency) {
-        if (!isRecruitable()) {
-            throw new IllegalStateException("A hero who belongs to an agency cannot be recruited again.");
-        }
+        requireRecruitable();
+        agency = Objects.requireNonNull(newAgency);
+        initializeRecruitedResources();
+    }
 
-        agency = newAgency;
+    public void recruitTo(Manager newOwnerManager) {
+        requireRecruitable();
+        ownerManager = Objects.requireNonNull(newOwnerManager);
+        initializeRecruitedResources();
+    }
+
+    private void requireRecruitable() {
+        if (!isRecruitable()) {
+            throw new IllegalStateException("An owned hero cannot be recruited again.");
+        }
+    }
+
+    private void initializeRecruitedResources() {
         party = null;
         activity = HeroActivity.TRAINING;
         currentHealth = getMaxHealth();

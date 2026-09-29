@@ -304,6 +304,11 @@ Ordered implementation:
   keep the current local development environment and Core data untouched.
 - [x] Add one local command that runs build, archived-image E2E verification,
   and k3d promotion in order, stopping at the first failed gate.
+- [x] Add an explicit `--reset-core-db` variant for early-stage schema
+  changes. It bootstraps only the isolated Core database with the exact
+  verified archive image, then verifies live Pod digests, browser E2E, and
+  market k6. The 2026-09-29 borrowing-fee build passed this full path;
+  Keycloak and Redis stayed available.
 - [x] Install a local Docker-hosted Jenkins controller and WSL build agent.
   The legacy complete-stack job passed its gates and deployed to k3d, then
   was disabled in favor of the nine service jobs. Do not run unreviewed pull
@@ -363,20 +368,27 @@ are established. See [ADR 0004](adr/0004-core-as-temporary-modular-monolith.md).
 
 - [x] Add manager1 through manager10 as deterministic local test identities and
   distribute them across three multi-Manager agencies. See [TEST_DATA.md](TEST_DATA.md).
-- [ ] Give each Manager a personal hero roster, gold wallet, item inventory,
-  and rune inventory that survive agency changes. Keep agency assets separate.
-- [ ] Start every new Manager with no gold, items, or runes and one personal
+- [x] Give each Manager a personal hero roster, gold wallet, item inventory,
+  and rune inventory owned independently of agency membership. Agency-change
+  workflows still need to be implemented and tested.
+- [x] Start every new Manager with no gold, items, or runes and one personal
   Level 1 Warrior, Mage, and Archer, with starting skills at Level 10 per
-  `PROGRESSION.md`. Keep provisioning idempotent.
-- [ ] Make personal recruitment the default; allow an agency-owned recruit
-  only when the Manager has agency recruitment permission and selects it.
-- [ ] Give each party a Manager owner; allow only that Manager's heroes and
-  available borrowed agency heroes, without transferring hero ownership.
-- [ ] Define and implement the agency-hero borrowing fee and charge timing.
-- [ ] Support Manager-owned and agency-owned market orders, reserving from the
-  correct wallet/inventory and enforcing agency trading permissions. Revise
-  the current agency-only market request and extraction plan before splitting
-  the Market service.
+  `PROGRESSION.md`. Transactional onboarding provisions them once;
+  deterministic fixtures cover existing seeded Managers.
+- [x] Make personal recruitment the default for globally available NPCs.
+- [x] Allow an agency-owned recruit only when the Manager explicitly selects it
+  and is the agency leader. Delegated recruitment permission remains future work.
+- [x] Give each party a Manager owner, allow that Manager to assign their
+  personal heroes, and require ownership to change members or start quests.
+  The seeded Broken Pass party keeps its agency heroes.
+- [x] Allow available agency heroes to be borrowed without transferring
+  ownership. The leader sets a nonnegative per-quest fee (default 0); a
+  quoted total is paid from the party Manager to the agency only at quest
+  start, including when the leader starts the quest.
+- [x] Support Manager-owned and agency-owned market orders, reserving from the
+  correct wallet/inventory and enforcing leader-only agency trading. The public
+  owner selector and extraction plan are revised. Personal market-sale agency
+  share and delegated agency trading remain open.
 
 ## Deferred until domain separation — Economic quest rewards
 
@@ -408,8 +420,12 @@ These do not all block the current combat-progression slice.
 - [ ] Define quest duration, difficulty, failure, and cancellation rules.
 - [ ] Define armor and attack-speed formulas, plus initial persistent creature
   attributes.
+- [ ] Decide whether a Manager's personal order may match an order owned by
+  their own agency. For now, matching blocks identical trading owners only;
+  the personal wallet and agency treasury remain separate owners.
 - [ ] Define agency-share treatment of market proceeds, transfers, and refunds,
   and how rate changes affect already-started quests and open orders.
-- [ ] Define the agency-hero borrowing fee and its charge/refund timing.
+- [x] Define and implement the agency-hero borrowing fee and charge timing.
+- [ ] Define any refund policy if quest cancellation is later introduced.
 - [ ] Define additional tradable item categories.
 - [ ] Define agency invitation, ownership transfer, and permission rules.

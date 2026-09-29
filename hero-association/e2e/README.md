@@ -37,11 +37,16 @@ including after a failed setup. The normal development data is never reset.
 
 The suite covers registration, sign-out and sign-in again, token refresh,
 Redis session expiry, session sharing across BFF instances, Manager and
-agency onboarding, recruitment, cross-agency authorization, and market-order
-proxying through both BFF instances without a local rate limit. It uses the
-versioned local Keycloak users `user1@mail.com` / `user1`,
-`user2@mail.com` / `user2`, and the initially unprovisioned
-`user3@mail.com` / `user3`. Access tokens last eight seconds only in this
+agency onboarding, personal and leader-only agency recruitment, one-time
+claims across both ownership routes, cross-agency authorization, and
+market-order proxying through both BFF instances without a local rate limit,
+a personal order placed and cancelled through the browser, leader editing of
+an agency-hero fee, and a borrowing fee charged when its party starts a quest.
+It uses the versioned local Keycloak users `user1@mail.com` / `user1`,
+`user2@mail.com` / `user2`, the initially unprovisioned
+`user3@mail.com` / `user3`, `manager4@mail.com` / `manager4` for
+personal trading, and `manager9@mail.com` / `manager9` for non-leader
+authorization. Access tokens last eight seconds only in this
 isolated realm.
 
 Failure screenshots and traces are written to ignored `test-results/` and
@@ -83,8 +88,14 @@ npm run test:k3d
 It uses the seeded local-only `user1@mail.com` / `user1` and
 `user2@mail.com` / `user2` accounts to verify login, logout, login again,
 account identity, repeated authenticated agency-state reads, and rejection
-of a cross-agency read. It also checks the Envoy market-order limit with two
-BFF Pods, two sessions for one user, and a second user with a separate budget.
+of a cross-agency read. It uses `manager4@mail.com` / `manager4` to place and
+cancel a personal market order, and checks the Envoy market-order limit with
+two BFF Pods, two sessions for one user, and a second user with a separate
+budget. Manager 4 must exist in the k3d Keycloak realm with the UUIDv7 subject
+from the versioned [realm file](../backend/keycloak/realm/hero-association-realm.json).
+Keycloak does not reimport users
+into an existing realm when Core's database is reset; an older k3d realm must
+be synchronized or recreated separately before this test.
 Unlike `npm test`, it does not start Compose, flush Redis, or delete volumes.
 The Playwright container uses Docker host networking and maps both k3d
 hostnames to `127.0.0.1`, reaching the cluster's HTTPS port `443`. It ignores

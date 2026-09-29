@@ -2,9 +2,12 @@
 
 These fixtures are for disposable local development and automated tests only.
 All passwords below are deliberately weak and must never be used outside the
-local or isolated k3d lab. The current backend still stores heroes, gold, and
-inventory on agencies; the planned manager-owned assets in [GAME.md](GAME.md)
-are **not** implemented by these fixtures.
+local or isolated k3d lab. Each seeded Manager also owns a separate personal
+roster of one Level 1 Warrior, Mage, and Archer. Personal rune inventories
+are empty; Manager 3 and Manager 4 have small item stacks for personal market
+tests. Most have zero personal gold; borrowing-payment fixtures below have
+specific balances. Existing agency assets remain separate. Personal trading,
+parties, and recruitment are implemented.
 
 ## Sign-in accounts
 
@@ -41,12 +44,36 @@ tests still cover that path.
 | Ironridge Exchange | User 2 | Manager 5–7 | 4 |
 | Silverkeep Guild | Manager 8 | Manager 9–10 | 3 |
 
+The seeded Broken Pass Party belongs to User 1. Its agency heroes remain
+assigned for the existing in-progress quest fixture. Available agency-owned
+heroes can now join a Manager's prepared party without changing ownership.
+Borrowing is free at assignment and charged only when the quest starts.
+
+| Manager | Personal gold | Personal items | Borrowing scenario |
+| --- | ---: | --- | --- |
+| Soren (Core-only) | 25 | None | Exact payment for Emberveil |
+| Manager 2 | 25 | None | Exact payment for Emberveil |
+| Manager 3 | 20 | 2 Magic Crystals | Insufficient for Emberveil |
+| Manager 4 | 200 | 5 Iron Ingots | Can afford Hawkeye |
+| All others | 0 | None | Default zero-balance case |
+
+Dawnwatch agency heroes Oakshield, Emberveil, and Hawkeye have borrowing fees
+of 0, 25, and 100 gold per quest respectively. A stale fee quote or
+insufficient personal gold rejects quest start without moving gold. Manager 3
+can place a personal Magic Crystal sell order; Manager 4 can place personal
+Iron Ingot sell orders or buy orders using their own wallet. Existing Core
+databases must be reset to receive the market-owner column and seed values;
+local dev/test recreate the schema automatically. For the isolated k3d lab,
+use `./run-k3d-pipeline.sh --reset-core-db` from `pipeline/` to rebuild,
+verify, and reseed Core with the exact archived image. This discards only
+k3d Core game data; it does not reset Keycloak, Redis, or normal development.
+
 The fixture IDs are deterministic UUIDv7 values. The Keycloak users are in
 [`backend/keycloak/realm/hero-association-realm.json`](backend/keycloak/realm/hero-association-realm.json);
 the matching Core Accounts, Managers, agencies, and memberships are in
 [`backend/hero-association-core/src/main/resources/import.sql`](backend/hero-association-core/src/main/resources/import.sql).
 The k3d realm generator reads the same versioned Keycloak source. The Core
-fixture test verifies the new membership mapping.
+fixture test verifies the membership mapping and personal starter assets.
 
 ## Refreshing disposable environments
 

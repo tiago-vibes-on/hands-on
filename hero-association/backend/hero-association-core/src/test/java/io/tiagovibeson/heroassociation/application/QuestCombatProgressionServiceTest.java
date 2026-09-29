@@ -194,7 +194,7 @@ class QuestCombatProgressionServiceTest {
 
     private Fixture createCombat() {
         Agency agency = entityManager.find(Agency.class, AGENCY_ID);
-        Party party = new Party(agency, "Progression " + UuidV7.next());
+        Party party = new Party(agency, agency.getLeader(), "Progression " + UuidV7.next());
         entityManager.persist(party);
         Hero warrior = createHero(agency, party, HeroClass.WARRIOR);
         Hero mage = createHero(agency, party, HeroClass.MAGE);

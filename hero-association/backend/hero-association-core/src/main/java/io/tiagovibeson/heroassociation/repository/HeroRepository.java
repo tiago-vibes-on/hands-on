@@ -13,13 +13,23 @@ import jakarta.persistence.LockModeType;
 public class HeroRepository implements PanacheRepositoryBase<Hero, UUID> {
 
     public List<Hero> listRecruitable() {
-        return list("agency is null order by alias");
+        return list("agency is null and ownerManager is null order by alias");
+    }
+
+    public List<Hero> listByManagerId(UUID managerId) {
+        return list("ownerManager.id = ?1 order by heroClass", managerId);
     }
 
     public java.util.Optional<Hero> findForUpdate(UUID heroId) {
         return find("id", heroId)
                 .withLock(LockModeType.PESSIMISTIC_WRITE)
                 .firstResultOptional();
+    }
+
+    public List<Hero> listByPartyForUpdate(UUID partyId) {
+        return find("party.id = ?1 order by id", partyId)
+                .withLock(LockModeType.PESSIMISTIC_WRITE)
+                .list();
     }
 
     public List<Hero> listRecoveringForUpdate() {

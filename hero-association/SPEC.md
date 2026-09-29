@@ -78,18 +78,30 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
 
 - `GET /api/v1/account` provisions and returns the Account corresponding to
   the authenticated Keycloak subject. `POST /api/v1/account/manager` creates
-  its one Manager with a unique, case-insensitive display name.
+  its one Manager with a unique, case-insensitive display name. Manager
+  creation transactionally provisions one personally owned Level 1 Warrior,
+  Mage, and Archer (all skills Level 10). Re-reading the account does not
+  duplicate them. The account response includes the Manager's personal gold,
+  hero roster, item inventory, and rune inventory; these are separate from
+  agency assets.
 - `POST /api/v1/agencies` lets an onboarded Manager with no membership create
   an empty Level 1 agency. Its 3-to-100-character name is unique
   case-insensitively, the creator becomes its `LEADER`, and `201 Created`
   returns its empty agency state.
-- `GET /api/v1/recruits` lists the globally available initial NPCs for an
-  onboarded Manager. `POST /api/v1/agencies/{agencyId}/heroes` claims the
-  request body's `recruitId` for an agency member and returns its updated state.
-  `GET /api/v1/agencies/{agencyId}/heroes/{heroId}` returns a membership-protected hero detail.
+- `GET /api/v1/recruits` lists globally available initial NPCs for an
+  onboarded Manager. `POST /api/v1/recruits/{recruitId}/claim` claims one for
+  that Manager, without requiring agency membership, and returns the personal
+  hero detail. `POST /api/v1/agencies/{agencyId}/recruits/{recruitId}/claim`
+  explicitly claims a recruit for the agency and returns the updated agency
+  state; only that agency's `LEADER` may call it. `GET /api/v1/agencies/{agencyId}/heroes/{heroId}`
+  returns membership-protected detail for agency-owned heroes only.
 - `GET /api/v1/agencies/{agencyId}/state` returns an agency, its leader and
-  upgrade levels, heroes, parties and quests, rune and item inventory, hero
-  rune slots, feed posts, and any persisted quest-combat snapshot.
+  upgrade levels, agency heroes in `heroes`, the caller's personal heroes
+  and agency-party participants in `personalHeroes`, parties and quests,
+  rune and item inventory, hero rune slots, feed posts, and any persisted
+  quest-combat snapshot. Party records expose `ownerManagerId`; hero records
+  expose `ownerManagerId` only for personally owned heroes and expose
+  `borrowingFeeGold` (default 0) for each hero.
 - `PUT /api/v1/agencies/{agencyId}/heroes/{heroId}/rune-slots/{slotIndex}`
   equips the requested available rune in a slot and returns the updated agency
   state.
@@ -98,26 +110,38 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
 - `PUT /api/v1/agencies/{agencyId}/heroes/{heroId}/activity` changes an
   agency hero's activity to `TRAINING` or `RESTING` and returns the updated
   agency state.
+- `PUT /api/v1/agencies/{agencyId}/heroes/{heroId}/borrowing-fee` accepts
+  `{ "feeGold": 0 }` or another nonnegative integer. Only the agency leader
+  can set the per-quest price of an agency-owned hero.
 - `POST /api/v1/agencies/{agencyId}/parties` creates a named prepared party
-  and returns the updated agency state.
-- `PUT /api/v1/agencies/{agencyId}/parties/{partyId}/heroes/{heroId}` adds an
-  available agency hero to a prepared party and returns the updated agency
-  state.
+  owned by the authenticated Manager and returns the updated agency state.
+- `PUT /api/v1/agencies/{agencyId}/parties/{partyId}/heroes/{heroId}` adds
+  one of that Manager's available personal heroes or an available hero owned
+  by the same agency to their prepared party. Assignment itself is free;
+  a hero already assigned to another party returns `409 Conflict`.
 - `DELETE /api/v1/agencies/{agencyId}/parties/{partyId}/heroes/{heroId}`
-  removes a hero from a prepared party and returns the updated agency state.
+  removes a hero from the authenticated Manager's prepared party.
 - `PUT /api/v1/agencies/{agencyId}/quests/{questId}/start` starts an available
-  quest with the `partyId` in its request body and returns the updated agency
-  state.
+  quest with the authenticated Manager's `partyId` and nonnegative
+  `expectedBorrowingFeeGold` in its request body. Core rechecks the sum of
+  the party's agency-hero fees and, only for a valid start, atomically moves
+  that amount from the party Manager's personal wallet to the agency treasury.
+  Stale quotes and insufficient personal gold return `409 Conflict` without
+  starting the quest or charging the Manager. These mutations return the
+  updated agency state; another Manager's party appears as not found.
 - `POST /api/v1/agencies/{agencyId}/quests/{questId}/combat/sync` advances an
   existing combat snapshot by elapsed wall time and returns the updated agency
   state.
 - `POST /api/v1/agencies/{agencyId}/feed-posts` creates an agency-scoped text
   post and returns the updated agency state.
 - `GET /api/v1/market/orders` returns the global open market order book.
-- `POST /api/v1/market/orders` accepts `agencyId`, `side`, `itemId`,
-  `quantity`, and `priceGoldPerItem` in the JSON body. It creates and attempts
-  to match a buy or sell order and returns the resulting market order, including
-  its status. The authenticated user must lead the selected agency.
+- `POST /api/v1/market/orders` accepts `ownerType` (`MANAGER` or `AGENCY`),
+  `side`, `itemId`, `quantity`, and `priceGoldPerItem`. `agencyId` is required
+  only for an agency order and forbidden for a personal order. Core derives the
+  personal Manager from the authenticated identity; an agency order requires
+  leadership of the selected agency. The response includes `ownerType`,
+  `ownerId`, `ownerName`, and the resulting order status. Personal and agency
+  wallets and item inventories are reserved separately.
   In k3d, Envoy Gateway asks the BFF to validate the opaque browser session
   and CSRF token, then enforces a Redis-backed limit of five placement
   attempts per second per validated Keycloak subject across sessions,
@@ -130,20 +154,22 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
   The BFF does not apply a second market limit.
   Normal local Traefik development has no market rate limit. Reads and
   cancellations are not limited.
-- `DELETE /api/v1/market/orders/{orderId}` cancels an open order owned by
-  an agency led by the authenticated user, releases its remaining reservation,
-  and returns the cancelled market order. Clients refresh agency state
-  separately after order mutations. Market orders still execute inside Game
-  Core's database transaction; the future Market service split is not yet
-  implemented.
+- `DELETE /api/v1/market/orders/{orderId}` cancels an open order only for
+  its personal Manager owner or a leader of its agency owner. It releases the
+  remaining reservation to that same owner's wallet or inventory and returns
+  the cancelled order. Clients refresh account and agency state separately
+  after mutations. Market orders still execute inside Game Core's database
+  transaction; the future Market service split is not yet implemented.
 - An unknown agency returns `404 Not Found` with an error message.
 
 The initial recruitment board contains Alden Steelward (Warrior), Seris
 Dawnflame (Mage), and Tarin Windmark (Archer). Each is a globally unique, free
-Level 1 NPC that can be claimed once by an agency member. Claiming starts the
-hero in `TRAINING` with full class health and mana and 100% stamina. A missing
-candidate returns `404 Not Found`; a previously claimed candidate returns `409
-Conflict`.
+Level 1 NPC that can be claimed once, either personally by an onboarded
+Manager (the default) or for an agency by its leader through an explicit
+agency claim. Ownership is exclusive across both routes. A recruited hero
+starts in `TRAINING` with full class health and mana and 100% stamina. A
+missing candidate returns `404 Not Found`; a previously claimed candidate
+returns `409 Conflict`. A non-leader agency claim returns `403 Forbidden`.
 
 The response includes all five rune slots for every hero, including empty
 slots. Hero class values define base health, mana, and per-second health and
@@ -162,10 +188,17 @@ Rest represents the agency's recovery facilities; there is no Medical Level.
 Its concrete upgrade effect is still to be defined. Quest heroes cannot change
 their agency activity or rune loadout and return `409 Conflict`.
 Prepared-party members remain at the agency and retain their `TRAINING` or
-`RESTING` activity until a quest starts. Party membership cannot change while
-the party is on an in-progress quest, and a quest hero cannot be moved into a
-prepared party; both return `409 Conflict`. Party names must be unique within
-an agency. Other game actions are still being specified.
+`RESTING` activity until a quest starts. Each party has a Manager owner.
+The owner can assign their own available personal heroes or available heroes
+owned by the same agency, and start a quest with that party. Agency-hero
+ownership does not change. Each agency hero has a leader-configured,
+nonnegative gold fee per quest (zero by default). The entire fee is due from
+the party Manager, including the agency leader, to the agency treasury when
+the quest starts; assignment is free. Party membership cannot change while
+the party is on an in-progress quest, and a hero already assigned elsewhere
+cannot be moved into the party; both return `409 Conflict`. Party names must
+be unique per Manager within an agency. Other game actions are still being
+specified.
 Quest definitions include a description, creature objective, party-size range,
 duration estimate, and gold reward. Starting a quest requires a prepared party
 whose member count is inside that quest's range. It changes the quest to
@@ -239,9 +272,11 @@ items. Compatible orders match by price and then creation time, at the resting
 order's price. The buyer receives the items and the seller receives 90% of the
 trade value; the remaining 10% fee is removed from the game economy for now.
 Partially filled orders remain open, and cancelling an open order returns its
-remaining reserved gold or items. Market-order creation and cancellation
-require agency leadership. Order history and expanded item categories are
-deferred.
+remaining reserved gold or items. Personal orders require the authenticated Manager; agency orders require
+agency leadership. Orders cannot match another order of the same owner.
+The 10% market fee applies to both owner types. Whether an agency also takes
+part of a personal market-sale payout is deferred; no additional agency share
+is charged yet. Order history and expanded item categories are deferred.
 
 Agency names, like Manager display names, are unique case-insensitively. The
 initial agency-creation flow is intentionally limited to a Manager with no
@@ -258,13 +293,23 @@ IDs must not be added for entities or exposed through the API.
 - Database tables use singular entity names, including `agency`, `manager`,
   `hero`, `party`, `quest`, `quest_combat`, `quest_combatant`,
   `quest_combat_event`, `quest_combat_hit`, `rune`, `agency_rune`, `item`,
-  `agency_item`, `hero_rune`, `feed_post`, and `market_order`.
+  `agency_item`, `manager_item`, `manager_rune`, `hero_rune`,
+  `feed_post`, and `market_order`. A hero is either recruitable,
+  agency-owned, or Manager-owned; personal heroes cannot be recruited by
+  an agency.
 - Until Flyway is introduced, Core's development and test profiles drop and
   recreate the schema on startup, then load deterministic state from
   `import.sql`. Packaged Docker Compose explicitly keeps this disposable
   reset behavior. The k3d lab instead runs a single bootstrap Job only when
   its Core schema is absent or an explicit reset is requested; normal Core
-  Pods validate the schema without modifying data. The seed contains
+  Pods validate the schema without modifying data. For a schema-changing
+  archive, explicit reset-aware promotion verifies the full archive and E2E
+  result, stops Core and its HPA, bootstraps only the k3d Core database using
+  the exact archived Core image, restores Core and its HPA, then runs the normal
+  Pod-image, browser, and k6 gates. Keycloak, Redis, and normal Compose data
+  remain untouched. Because a data reset is not reversible by restoring an
+  older image, failures after reset do not automatically roll back images.
+  The seed contains
   local Accounts and Managers for user1, user2, and manager1 through
   manager10, plus a Core-only Soren fixture. User3 remains unprovisioned for
   onboarding tests. Dawnwatch Agency has six members and six heroes;
@@ -273,9 +318,18 @@ IDs must not be added for entities or exposed through the API.
   Broken Pass Party and its in-progress quest and initial Troll combat snapshot,
   Lost Courier, rune inventory, Magic Crystals, Iron Ingots, equipped runes,
   and two feed posts. See [TEST_DATA.md](TEST_DATA.md) for all credentials and
-  memberships. Manager-owned heroes, wallets, and inventory are planned in
-  [GAME.md](GAME.md), not implemented by this seed change. This development-only
-  workflow does not retain application data.
+  memberships. Seeded Managers normally have zero personal gold; Soren and
+  Manager 2 have 25 gold, Manager 3 has 20, and Manager 4 has 200 to exercise
+  exact, insufficient, and ample borrowing payments. All have empty personal
+  item and rune inventories except Manager 3's Magic Crystals and Manager 4's
+  Iron Ingots, and a distinct personal starter
+  Warrior, Mage, and Archer. These 39 heroes are not agency assets or global
+  recruits. Manager-owned parties, personal hero quest participation, and personal
+  recruitment and leader-only agency recruitment are implemented.
+  Personal market orders are implemented; agency-change workflows remain
+  planned in [GAME.md](GAME.md).
+  This development-only workflow does not retain
+  application data.
   The product is in an early stage, so local and pre-production schema and
   seed-data changes may be applied directly by resetting and recreating data;
   they do not require backwards compatibility before Flyway is introduced.
@@ -333,7 +387,8 @@ IDs must not be added for entities or exposed through the API.
   a unique Manager name. A Manager without an agency membership can create one
   empty Level 1 agency and becomes its leader; `agency_member` controls access
   to agency state and commands. Both roles can run gameplay commands, while
-  leaders alone can create or cancel market orders.
+  leaders alone can create or cancel agency-owned market orders. Any Manager
+  can create or cancel their own personal orders.
 - The local Keycloak realm seeds `user1@mail.com` / `user1` and
   `user2@mail.com` / `user2` with matching Account and Manager records. Their
   direct Keycloak profile names are `User1 Last1` and `User2 Last2`; their
@@ -402,17 +457,25 @@ IDs must not be added for entities or exposed through the API.
   is ready and Elara has sufficient mana. A dark radial overlay clears from
   right to left across a spell icon to visualize the cooldown reported in the
   latest snapshot.
-- The Heroes screen loads the global recruitment board. It lets an agency member
-  claim a free initial NPC and immediately refreshes the agency roster; a
-  claimed NPC disappears from the board for every agency. The screen also
+- The Heroes screen shows the signed-in Manager's personal starter roster
+  and gold separately from the agency roster. The Manager can create a party,
+  assign or remove their personal heroes or available agency heroes, and send
+  an eligible prepared party on a quest. The agency leader can set a per-hero
+  borrowing fee. The
+  screen also loads the global recruitment board and lets an onboarded Manager
+  claim a free initial NPC for their personal roster by default, or explicitly
+  for their agency if they are its leader. The roster refreshes immediately;
+  a claimed NPC disappears from the board for everyone. The screen also
   separates active quest parties, prepared parties, and unassigned heroes at
   the agency. Agency heroes can persistently switch between Training and
   Resting, without numeric training stats. Prepared parties can be named,
   filled, and changed through the backend; their members retain their agency
   activity until a quest starts.
 - The Quests screen reads available, active, and resolved quests from the API.
-  A manager can select a prepared party and start an eligible available quest.
-  Every quest start creates a server combat snapshot using each party member's
+  A Manager can select their own prepared party and see its total agency-hero
+  borrowing fee alongside their personal gold. A quest start submits that exact
+  quote, then refreshes agency and account balances; a stale quote is rejected
+  and the UI refreshes both. Every quest start creates a server combat snapshot using each party member's
   current resources, class combat values, and equipped Critical Chance and
   Critical Damage Rune effects, plus one creature for every required objective.
   Until per-creature difficulty is designed, new creatures use a shared
@@ -550,7 +613,10 @@ when the observability Pod is replaced.
 A build-once local delivery lane packages tested Core and BFF JVM images
 plus the frontend image in a checksummed archive. The archive-backed browser E2E
 suite records a matching passing result before k3d promotion is allowed.
-Promotion imports those exact images, updates only the three k3d application
-Deployments, waits for rollouts, and runs k3d browser tests. A failed rollout
-or test restores prior image references; it does not bootstrap or reset Core
-data, or change the normal development stack.
+Normal promotion imports those exact images, updates only the three k3d
+application Deployments, waits for rollouts, and runs k3d browser tests. A
+failed normal rollout or test restores prior image references. An explicit
+`--reset-core-db` promotion requires a complete verified archive, resets
+only the k3d Core database using that archive's Core image, then runs the same
+gates; it cannot safely roll back to an older Core image after resetting data.
+Neither mode changes the normal development stack.

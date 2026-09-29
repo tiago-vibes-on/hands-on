@@ -4,7 +4,11 @@ The Hero Association frontend is a React application built with Vite. At
 startup, it loads the seeded agency state and recruitment board from the BFF
 and refreshes them every five seconds while the tab is visible. Recruitment,
 rune loadouts, agency activity, party preparation, quest starts, and the seeded
-combat encounter use backend APIs.
+combat encounter use backend APIs. The market places personal orders by
+default; an agency leader can select agency trading instead. Each order
+reserves gold or items from the selected owner. The open book identifies
+owners, and personal account and agency balances refresh after mutations and
+while the tab is visible.
 
 ## Requirements
 
@@ -59,8 +63,8 @@ Keycloak is available locally on `http://localhost:17180`. The frontend begins
 at a sign-in screen, uses the BFF's `/auth/login` redirect, and receives no
 Keycloak tokens in browser storage. The first signed-in visit provisions an
 Account and requires a unique Manager name before the game opens. A Manager
-without a membership sees an agency-creation form. The created Level 1 agency
-starts empty and can claim available heroes from the recruitment board.
+without a membership sees an agency-creation form. The created Level 1 agency starts empty; the Manager already owns three starter
+heroes and can claim available NPCs into their personal roster.
 
 For local testing, use `user1@mail.com` / `user1` or
 `user2@mail.com` / `user2`. Both have seeded agency memberships. Do not use
@@ -112,17 +116,22 @@ for cluster setup, local CA trust, and image-restart instructions.
   book; the state refreshes every five seconds while the tab is visible
 - Live market order book with buy and sell order creation and cancellation for
   the current agency
-- The Heroes screen loads the global recruitment board. An agency member can
-  claim a free Level 1 NPC once; the claimed hero immediately joins the agency
-  roster in Training.
+- The Heroes screen loads the global recruitment board. An onboarded Manager
+  can claim a free Level 1 NPC once for their personal roster by default, or
+  explicitly for the agency if they are its leader. The claim API also works
+  before agency membership, but the Heroes screen appears after agency setup.
+  Both claim routes share the globally unique recruitment board.
 - Hero roster grouped into an active quest party, prepared parties, and
   unassigned heroes at the agency
-- Prepared parties can be named and have available heroes added or removed
-  through the backend; their members retain Training or Resting until a quest
-  starts
+- Prepared parties can be named and have available personal or agency heroes
+  added or removed through the backend. Assignment is free and does not
+  change hero ownership; members retain Training or Resting until a quest
+  starts.
 - API-loaded available quests show party-size, duration, and gold-reward
-  details. Selecting an eligible prepared party starts a quest and moves its
-  heroes to `ON_QUEST`
+  details. The selected party displays its total agency-hero borrowing fee
+  beside the Manager's personal gold. Starting the quest submits this quote,
+  atomically pays the agency on success, and moves its heroes to `ON_QUEST`.
+  The agency leader can set each agency hero's fee from its card.
 - Agency heroes shown as Training or Resting; quest party members shown earning
   experience from creatures
 - Training and Resting actions persist through the backend when it is available

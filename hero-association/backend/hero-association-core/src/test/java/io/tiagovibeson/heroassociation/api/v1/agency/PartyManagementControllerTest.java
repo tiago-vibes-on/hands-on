@@ -20,6 +20,8 @@ class PartyManagementControllerTest {
     private static final String BROKEN_PASS_PARTY_ID = "019c4c00-0002-7000-8000-000000000001";
     private static final String IRONWALL_ID = "019c4c00-0010-7000-8000-000000000001";
     private static final String OAKSHIELD_ID = "019c4c00-0010-7000-8000-000000000004";
+    private static final String PERSONAL_WARRIOR_ID = "019c4c00-0030-7001-8000-000000000001";
+    private static final String OTHER_PERSONAL_WARRIOR_ID = "019c4c00-0030-7001-8000-000000000201";
 
     @Test
     void shouldCreateAPreparedPartyAndManageItsMembers() {
@@ -27,24 +29,26 @@ class PartyManagementControllerTest {
                 .then()
                 .statusCode(200)
                 .body("parties.name", hasItem("Forest Scouts"))
+                .body("parties.find { it.name == 'Forest Scouts' }.ownerManagerId",
+                        is("019c4c00-0000-7000-8000-000000000001"))
                 .extract()
                 .path("parties.find { it.name == 'Forest Scouts' }.id");
 
         given()
                 .when()
-                .put("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, partyId, OAKSHIELD_ID))
+                .put("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, partyId, PERSONAL_WARRIOR_ID))
                 .then()
                 .statusCode(200)
-                .body("heroes.find { it.id == '%s' }.partyId".formatted(OAKSHIELD_ID), is(partyId))
-                .body("heroes.find { it.id == '%s' }.activity".formatted(OAKSHIELD_ID), is("TRAINING"))
-                .body("parties.find { it.id == '%s' }.heroIds".formatted(partyId), hasItem(OAKSHIELD_ID));
+                .body("personalHeroes.find { it.id == '%s' }.partyId".formatted(PERSONAL_WARRIOR_ID), is(partyId))
+                .body("personalHeroes.find { it.id == '%s' }.activity".formatted(PERSONAL_WARRIOR_ID), is("TRAINING"))
+                .body("parties.find { it.id == '%s' }.heroIds".formatted(partyId), hasItem(PERSONAL_WARRIOR_ID));
 
         given()
                 .when()
-                .delete("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, partyId, OAKSHIELD_ID))
+                .delete("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, partyId, PERSONAL_WARRIOR_ID))
                 .then()
                 .statusCode(200)
-                .body("heroes.find { it.id == '%s' }.partyId".formatted(OAKSHIELD_ID), nullValue())
+                .body("personalHeroes.find { it.id == '%s' }.partyId".formatted(PERSONAL_WARRIOR_ID), nullValue())
                 .body("parties.find { it.id == '%s' }.heroIds".formatted(partyId), empty());
     }
 
@@ -52,14 +56,14 @@ class PartyManagementControllerTest {
     void shouldRejectMembershipChangesForAnActiveQuestParty() {
         given()
                 .when()
-                .put("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, BROKEN_PASS_PARTY_ID, OAKSHIELD_ID))
+                .put("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, BROKEN_PASS_PARTY_ID, PERSONAL_WARRIOR_ID))
                 .then()
                 .statusCode(409)
                 .body("message", is("Party with id %s is on a quest and its membership cannot change.".formatted(BROKEN_PASS_PARTY_ID)));
     }
 
     @Test
-    void shouldRejectMovingAQuestHeroToAPreparedParty() {
+    void shouldBorrowAnAvailableAgencyHeroWithoutChargingAtAssignment() {
         String partyId = createParty("North Watch")
                 .then()
                 .statusCode(200)
@@ -68,10 +72,61 @@ class PartyManagementControllerTest {
 
         given()
                 .when()
-                .put("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, partyId, IRONWALL_ID))
+                .put("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, partyId, OAKSHIELD_ID))
+                .then()
+                .statusCode(200)
+                .body("heroes.find { it.id == '%s' }.partyId".formatted(OAKSHIELD_ID), is(partyId))
+                .body("heroes.find { it.id == '%s' }.borrowingFeeGold".formatted(OAKSHIELD_ID), is(0))
+                .body("agency.gold", is(2480));
+
+        String otherPartyId = createParty("South Watch")
+                .then().statusCode(200)
+                .extract().path("parties.find { it.name == 'South Watch' }.id");
+
+        given()
+                .when()
+                .put("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, otherPartyId, OAKSHIELD_ID))
                 .then()
                 .statusCode(409)
-                .body("message", is("Hero with id %s is on a quest and is not available for this action.".formatted(IRONWALL_ID)));
+                .body("message", is("Hero with id %s is already assigned to another party.".formatted(OAKSHIELD_ID)));
+
+        given()
+                .when()
+                .delete("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, partyId, OAKSHIELD_ID))
+                .then().statusCode(200)
+                .body("heroes.find { it.id == '%s' }.partyId".formatted(OAKSHIELD_ID), nullValue());
+    }
+
+    @Test
+    void shouldRejectAssigningAnotherManagersPersonalHero() {
+        String partyId = createParty("Owner Only")
+                .then().statusCode(200)
+                .extract().path("parties.find { it.name == 'Owner Only' }.id");
+
+        given()
+                .when()
+                .put("/api/v1/agencies/%s/parties/%s/heroes/%s"
+                        .formatted(AGENCY_ID, partyId, OTHER_PERSONAL_WARRIOR_ID))
+                .then()
+                .statusCode(404);
+    }
+
+    @Test
+    @TestSecurity(user = "019c4c00-0100-7000-8000-000000000101")
+    void shouldRejectChangingAnotherManagersParty() {
+        given()
+                .when()
+                .put("/api/v1/agencies/%s/parties/%s/heroes/%s"
+                        .formatted(AGENCY_ID, BROKEN_PASS_PARTY_ID, OTHER_PERSONAL_WARRIOR_ID))
+                .then()
+                .statusCode(404);
+
+        given()
+                .when()
+                .delete("/api/v1/agencies/%s/parties/%s/heroes/%s"
+                        .formatted(AGENCY_ID, BROKEN_PASS_PARTY_ID, IRONWALL_ID))
+                .then()
+                .statusCode(404);
     }
 
     @Test

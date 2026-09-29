@@ -19,11 +19,10 @@ public class MarketOrderRepository implements PanacheRepositoryBase<MarketOrder,
                 .list();
     }
 
-    public List<MarketOrder> listMatchingBuysForUpdate(UUID itemId, UUID sellerAgencyId, long maximumPrice) {
+    public List<MarketOrder> listMatchingBuysForUpdate(UUID itemId, long maximumPrice) {
         return find(
-                "item.id = ?1 and agency.id <> ?2 and side = ?3 and (status = ?4 or status = ?5) and priceGoldPerItem >= ?6 order by priceGoldPerItem desc, createdAt asc, id asc",
+                "item.id = ?1 and side = ?2 and (status = ?3 or status = ?4) and priceGoldPerItem >= ?5 order by priceGoldPerItem desc, createdAt asc, id asc",
                 itemId,
-                sellerAgencyId,
                 MarketOrderSide.BUY,
                 MarketOrderStatus.OPEN,
                 MarketOrderStatus.PARTIALLY_FILLED,
@@ -32,11 +31,10 @@ public class MarketOrderRepository implements PanacheRepositoryBase<MarketOrder,
                 .list();
     }
 
-    public List<MarketOrder> listMatchingSellsForUpdate(UUID itemId, UUID buyerAgencyId, long minimumPrice) {
+    public List<MarketOrder> listMatchingSellsForUpdate(UUID itemId, long minimumPrice) {
         return find(
-                "item.id = ?1 and agency.id <> ?2 and side = ?3 and (status = ?4 or status = ?5) and priceGoldPerItem <= ?6 order by priceGoldPerItem asc, createdAt asc, id asc",
+                "item.id = ?1 and side = ?2 and (status = ?3 or status = ?4) and priceGoldPerItem <= ?5 order by priceGoldPerItem asc, createdAt asc, id asc",
                 itemId,
-                buyerAgencyId,
                 MarketOrderSide.SELL,
                 MarketOrderStatus.OPEN,
                 MarketOrderStatus.PARTIALLY_FILLED,
@@ -45,8 +43,8 @@ public class MarketOrderRepository implements PanacheRepositoryBase<MarketOrder,
                 .list();
     }
 
-    public Optional<MarketOrder> findForUpdate(UUID orderId, UUID agencyId) {
-        return find("id = ?1 and agency.id = ?2", orderId, agencyId)
+    public Optional<MarketOrder> findForUpdate(UUID orderId) {
+        return find("id", orderId)
                 .withLock(LockModeType.PESSIMISTIC_WRITE)
                 .firstResultOptional();
     }

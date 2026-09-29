@@ -53,12 +53,12 @@ export async function fetchRecruits() {
   return request('/api/v1/recruits')
 }
 
-export async function recruitHero({ agencyId, recruitId }) {
-  return request(`/api/v1/agencies/${agencyId}/heroes`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ recruitId }),
-  })
+export async function recruitHero(recruitId) {
+  return request(`/api/v1/recruits/${recruitId}/claim`, { method: 'POST' })
+}
+
+export async function recruitHeroForAgency({ agencyId, recruitId }) {
+  return request(`/api/v1/agencies/${agencyId}/recruits/${recruitId}/claim`, { method: 'POST' })
 }
 
 export async function equipHeroRune({ agencyId, heroId, slotIndex, runeId }) {
@@ -72,6 +72,14 @@ export async function equipHeroRune({ agencyId, heroId, slotIndex, runeId }) {
 export async function unequipHeroRune({ agencyId, heroId, slotIndex }) {
   return request(`/api/v1/agencies/${agencyId}/heroes/${heroId}/rune-slots/${slotIndex}`, {
     method: 'DELETE',
+  })
+}
+
+export async function setHeroBorrowingFee({ agencyId, heroId, feeGold }) {
+  return request(`/api/v1/agencies/${agencyId}/heroes/${heroId}/borrowing-fee`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ feeGold }),
   })
 }
 
@@ -103,11 +111,11 @@ export async function removeHeroFromParty({ agencyId, partyId, heroId }) {
   })
 }
 
-export async function startQuest({ agencyId, questId, partyId }) {
+export async function startQuest({ agencyId, questId, partyId, expectedBorrowingFeeGold }) {
   return request(`/api/v1/agencies/${agencyId}/quests/${questId}/start`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ partyId }),
+    body: JSON.stringify({ partyId, expectedBorrowingFeeGold }),
   })
 }
 
@@ -129,11 +137,11 @@ export async function fetchMarketOrders() {
   return request('/api/v1/market/orders')
 }
 
-export async function createMarketOrder({ agencyId, side, itemId, quantity, priceGoldPerItem }) {
+export async function createMarketOrder({ ownerType, agencyId, side, itemId, quantity, priceGoldPerItem }) {
   return request('/api/v1/market/orders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ agencyId, side, itemId, quantity, priceGoldPerItem }),
+    body: JSON.stringify({ ownerType, ...(ownerType === 'AGENCY' ? { agencyId } : {}), side, itemId, quantity, priceGoldPerItem }),
   })
 }
 

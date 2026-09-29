@@ -31,6 +31,7 @@ class AgencyMembershipAuthorizationTest {
                 .body("""
                         {
                           "agencyId": "%s",
+                          "ownerType": "AGENCY",
                           "side": "SELL",
                           "itemId": "%s",
                           "quantity": 1,

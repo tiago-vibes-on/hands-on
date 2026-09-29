@@ -252,7 +252,7 @@ test('expires Redis token state and fails closed', async ({ page }) => {
   expect(response.status()).not.toBe(200)
 })
 
-test('onboards a manager and creates their first agency', async ({ page }) => {
+test('onboards a manager and recruits for personal and agency rosters', async ({ page }) => {
   await signIn(page, 'user3@mail.com', 'user3')
 
   await expect(page.getByRole('heading', { name: 'Choose your manager name' })).toBeVisible()
@@ -273,33 +273,82 @@ test('onboards a manager and creates their first agency', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Heroes', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Heroes', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Recruit Steelward' })).toBeVisible()
-  await page.getByRole('button', { name: 'Recruit Steelward' }).click()
-  await expect(page.getByRole('heading', { name: 'Steelward', exact: true })).toBeVisible()
-
   const account = await (await page.request.get(`${primaryBffUrl}/api/v1/account`, { maxRedirects: 0 })).json()
   const agencyId = account.agencyMemberships[0].agencyId
-  let createdState
-  await expect.poll(async () => {
-    const createdAgency = await page.request.get(`${primaryBffUrl}/api/v1/agencies/${agencyId}/state`, {
-      maxRedirects: 0,
-    })
-    expect(createdAgency.status()).toBe(200)
-    createdState = await createdAgency.json()
-    return createdState.heroes.length
-  }).toBe(1)
+  const recruitsResponse = await page.request.get(`${primaryBffUrl}/api/v1/recruits`)
+  expect(recruitsResponse.status()).toBe(200)
+  const recruits = await recruitsResponse.json()
+  const steelwardId = recruits.find((recruit) => recruit.alias === 'Steelward')?.id
+  const dawnflameId = recruits.find((recruit) => recruit.alias === 'Dawnflame')?.id
+  expect(steelwardId).toBeTruthy()
+  expect(dawnflameId).toBeTruthy()
+
+  await expect(page.getByRole('button', { name: 'Recruit Steelward for me' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Recruit Dawnflame for agency' })).toBeVisible()
+  await page.getByRole('button', { name: 'Recruit Steelward for me' }).click()
+  await expect(page.getByRole('heading', { name: 'Alden Steelward' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Recruit Steelward for me' })).toHaveCount(0)
+
+  const personalStateResponse = await page.request.get(`${primaryBffUrl}/api/v1/agencies/${agencyId}/state`)
+  expect(personalStateResponse.status()).toBe(200)
+  const personalState = await personalStateResponse.json()
+  expect(personalState.heroes).toHaveLength(0)
+  expect(personalState.personalHeroes).toHaveLength(4)
+  expect(personalState.personalHeroes.map((hero) => hero.id)).toContain(steelwardId)
+  const personalAccount = await (await page.request.get(`${primaryBffUrl}/api/v1/account`)).json()
+  expect(personalAccount.manager.heroes.map((hero) => hero.id)).toContain(steelwardId)
+
+  await page.getByRole('button', { name: 'Recruit Dawnflame for agency' }).click()
+  await expect(page.getByRole('heading', { name: 'Dawnflame', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Recruit Dawnflame for agency' })).toHaveCount(0)
+
+  const createdStateResponse = await page.request.get(`${primaryBffUrl}/api/v1/agencies/${agencyId}/state`)
+  expect(createdStateResponse.status()).toBe(200)
+  const createdState = await createdStateResponse.json()
   expect(createdState.agency).toMatchObject({
     id: agencyId,
     name: 'New Arrival Agency',
     gold: 0,
     reputation: 0,
   })
+  expect(createdState.heroes).toHaveLength(1)
   expect(createdState.heroes[0]).toMatchObject({
-    alias: 'Steelward',
+    id: dawnflameId,
+    alias: 'Dawnflame',
     level: 1,
     activity: 'TRAINING',
     stamina: 100,
   })
+  expect(createdState.personalHeroes).toHaveLength(4)
+
+  const session = await (await page.request.get(`${primaryBffUrl}/api/v1/session`)).json()
+  const postWithCsrf = (path) => page.request.post(`${primaryBffUrl}${path}`, {
+    headers: { 'X-CSRF-TOKEN': session.csrfToken },
+    maxRedirects: 0,
+  })
+  expect((await postWithCsrf(`/api/v1/agencies/${agencyId}/recruits/${steelwardId}/claim`)).status()).toBe(409)
+  expect((await postWithCsrf(`/api/v1/recruits/${dawnflameId}/claim`)).status()).toBe(409)
+  expect((await postWithCsrf(`/api/v1/agencies/${agencyId}/recruits/${dawnflameId}/claim`)).status()).toBe(409)
+})
+
+test('blocks agency recruitment by a non-leader', async ({ page }) => {
+  await signIn(page, 'manager9@mail.com', 'manager9')
+  await page.getByRole('button', { name: 'Heroes', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Recruit Windmark for me' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Recruit Windmark for agency' })).toHaveCount(0)
+
+  const account = await (await page.request.get(`${primaryBffUrl}/api/v1/account`)).json()
+  const agencyId = account.agencyMemberships[0].agencyId
+  const recruits = await (await page.request.get(`${primaryBffUrl}/api/v1/recruits`)).json()
+  const windmarkId = recruits.find((recruit) => recruit.alias === 'Windmark')?.id
+  expect(windmarkId).toBeTruthy()
+  const session = await (await page.request.get(`${primaryBffUrl}/api/v1/session`)).json()
+  const blockedClaim = await page.request.post(
+    `${primaryBffUrl}/api/v1/agencies/${agencyId}/recruits/${windmarkId}/claim`,
+    { headers: { 'X-CSRF-TOKEN': session.csrfToken }, maxRedirects: 0 },
+  )
+  expect(blockedClaim.status()).toBe(403)
+  await expect(page.getByRole('button', { name: 'Recruit Windmark for me' })).toBeVisible()
 })
 
 test('prevents a manager from reading another agency', async ({ page }) => {
@@ -315,4 +364,68 @@ test('prevents a manager from reading another agency', async ({ page }) => {
     maxRedirects: 0,
   })
   expect(otherAgency.status()).toBe(403)
+})
+
+test('borrows an agency hero and pays its fee only when the quest starts', async ({ page }) => {
+  await signIn(page, 'manager2@mail.com', 'manager2')
+
+  const initialAccount = await (await page.request.get(`${primaryBffUrl}/api/v1/account`)).json()
+  const initialState = await (await page.request.get(
+    `${primaryBffUrl}/api/v1/agencies/${dawnwatchAgencyId}/state`,
+  )).json()
+  expect(initialAccount.manager.gold).toBe(25)
+  const emberveil = initialState.heroes.find((hero) => hero.alias === 'Emberveil')
+  expect(emberveil?.borrowingFeeGold).toBe(25)
+
+  await page.getByRole('button', { name: 'Heroes', exact: true }).click()
+  await page.getByRole('button', { name: 'Create party' }).first().click()
+  await page.getByLabel('Party name').fill('Courier Borrowers')
+  await page.getByRole('button', { name: 'Create party' }).last().click()
+  const emberveilCard = page.locator('.hero-card').filter({
+    has: page.getByRole('heading', { name: 'Emberveil', exact: true }),
+  })
+  await emberveilCard.getByLabel('Assign to party').selectOption({ label: 'Courier Borrowers' })
+
+  const assignedAccount = await (await page.request.get(`${primaryBffUrl}/api/v1/account`)).json()
+  const assignedState = await (await page.request.get(
+    `${primaryBffUrl}/api/v1/agencies/${dawnwatchAgencyId}/state`,
+  )).json()
+  expect(assignedAccount.manager.gold).toBe(25)
+  expect(assignedState.agency.gold).toBe(initialState.agency.gold)
+
+  await page.getByRole('button', { name: 'Quests', exact: true }).click()
+  const courierQuest = page.locator('.quest-card').filter({
+    has: page.getByRole('heading', { name: 'Lost Courier', exact: true }),
+  })
+  await courierQuest.getByLabel('Prepared party').selectOption({ label: 'Courier Borrowers · 1 heroes' })
+  await expect(courierQuest).toContainText('Agency hero fee: 25 gold')
+  await expect(courierQuest).toContainText('Your gold: 25')
+  await courierQuest.getByRole('button', { name: 'Start quest' }).click()
+
+  await expect.poll(async () => {
+    const account = await (await page.request.get(`${primaryBffUrl}/api/v1/account`)).json()
+    return account.manager.gold
+  }).toBe(0)
+  const startedState = await (await page.request.get(
+    `${primaryBffUrl}/api/v1/agencies/${dawnwatchAgencyId}/state`,
+  )).json()
+  expect(startedState.agency.gold).toBe(initialState.agency.gold + 25)
+  expect(startedState.quests.find((quest) => quest.title === 'Lost Courier')?.status).toBe('IN_PROGRESS')
+})
+
+test('lets the agency leader set a hero borrowing fee', async ({ page }) => {
+  await signIn(page)
+  await page.getByRole('button', { name: 'Heroes', exact: true }).click()
+
+  const oakshieldCard = page.locator('.hero-card').filter({
+    has: page.getByRole('heading', { name: 'Oakshield', exact: true }),
+  })
+  await oakshieldCard.locator('.hero-card__fee-editor input').fill('7')
+  await oakshieldCard.getByRole('button', { name: 'Save fee' }).click()
+  await expect(oakshieldCard).toContainText('7 gold per quest')
+
+  const state = await (await page.request.get(
+    `${primaryBffUrl}/api/v1/agencies/${dawnwatchAgencyId}/state`,
+  )).json()
+  expect(state.heroes.find((hero) => hero.alias === 'Oakshield')?.borrowingFeeGold).toBe(7)
 })

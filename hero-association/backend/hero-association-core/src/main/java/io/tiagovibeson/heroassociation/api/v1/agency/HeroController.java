@@ -2,12 +2,14 @@ package io.tiagovibeson.heroassociation.api.v1.agency;
 
 import java.util.UUID;
 
+import io.tiagovibeson.heroassociation.application.HeroBorrowingService;
 import io.tiagovibeson.heroassociation.application.HeroRecruitmentService;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
-import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -20,13 +22,8 @@ public class HeroController {
     @Inject
     HeroRecruitmentService heroRecruitmentService;
 
-    @POST
-    @Consumes(MediaType.APPLICATION_JSON)
-    public AgencyStateResponse recruit(
-            @PathParam("agencyId") UUID agencyId,
-            @Valid RecruitHeroRequest request) {
-        return heroRecruitmentService.recruit(agencyId, request.recruitId());
-    }
+    @Inject
+    HeroBorrowingService heroBorrowingService;
 
     @GET
     @Path("/{heroId}")
@@ -34,5 +31,15 @@ public class HeroController {
             @PathParam("agencyId") UUID agencyId,
             @PathParam("heroId") UUID heroId) {
         return heroRecruitmentService.findDetail(agencyId, heroId);
+    }
+
+    @PUT
+    @Path("/{heroId}/borrowing-fee")
+    @Consumes(MediaType.APPLICATION_JSON)
+    public AgencyStateResponse setBorrowingFee(
+            @PathParam("agencyId") UUID agencyId,
+            @PathParam("heroId") UUID heroId,
+            @NotNull @Valid SetBorrowingFeeRequest request) {
+        return heroBorrowingService.setFee(agencyId, heroId, request.feeGold());
     }
 }

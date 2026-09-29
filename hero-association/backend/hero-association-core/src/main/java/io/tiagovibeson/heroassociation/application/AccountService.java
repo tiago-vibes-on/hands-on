@@ -10,10 +10,15 @@ import io.tiagovibeson.heroassociation.application.exception.ManagerNameAlreadyU
 import io.tiagovibeson.heroassociation.domain.Account;
 import io.tiagovibeson.heroassociation.domain.AccountStatus;
 import io.tiagovibeson.heroassociation.domain.AgencyMember;
+import io.tiagovibeson.heroassociation.domain.Hero;
+import io.tiagovibeson.heroassociation.domain.HeroClass;
 import io.tiagovibeson.heroassociation.domain.Manager;
 import io.tiagovibeson.heroassociation.repository.AccountRepository;
 import io.tiagovibeson.heroassociation.repository.AgencyMemberRepository;
+import io.tiagovibeson.heroassociation.repository.HeroRepository;
+import io.tiagovibeson.heroassociation.repository.ManagerItemRepository;
 import io.tiagovibeson.heroassociation.repository.ManagerRepository;
+import io.tiagovibeson.heroassociation.repository.ManagerRuneRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -29,6 +34,15 @@ public class AccountService {
 
     @Inject
     AgencyMemberRepository agencyMemberRepository;
+
+    @Inject
+    HeroRepository heroRepository;
+
+    @Inject
+    ManagerItemRepository managerItemRepository;
+
+    @Inject
+    ManagerRuneRepository managerRuneRepository;
 
     @Transactional
     public AccountResponse currentAccount(AuthenticatedIdentity identity) {
@@ -51,6 +65,16 @@ public class AccountService {
 
         Manager manager = new Manager(account, displayName, displayNameNormalized);
         managerRepository.persist(manager);
+        for (HeroClass heroClass : HeroClass.values()) {
+            String className = heroClass.name().toLowerCase(Locale.ROOT);
+            String alias = "starter-" + manager.getId().toString().substring(24) + "-" + className;
+            Hero hero = Hero.createPersonal(
+                    "Starter " + className.substring(0, 1).toUpperCase(Locale.ROOT) + className.substring(1),
+                    alias,
+                    heroClass,
+                    manager);
+            heroRepository.persist(hero);
+        }
         return responseFor(account, manager);
     }
 
@@ -86,6 +110,9 @@ public class AccountService {
         return AccountResponse.from(
                 account,
                 manager,
-                manager == null ? java.util.List.of() : agencyMemberRepository.listByManagerId(manager.getId()));
+                manager == null ? java.util.List.of() : agencyMemberRepository.listByManagerId(manager.getId()),
+                manager == null ? java.util.List.of() : heroRepository.listByManagerId(manager.getId()),
+                manager == null ? java.util.List.of() : managerItemRepository.listByManagerId(manager.getId()),
+                manager == null ? java.util.List.of() : managerRuneRepository.listByManagerId(manager.getId()));
     }
 }
