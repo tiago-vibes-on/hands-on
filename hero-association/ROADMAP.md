@@ -109,9 +109,9 @@ Decisions to settle before the affected step, not before starting Step 1:
   split by party size or damage dealt.
 - [ ] Choose a practice-action cadence and Magic mana cost; confirm Shield
   aptitude rates and a block rule before Shield combat progression.
-- [ ] Give a new Magic Level 1 Mage a way to earn Magic points before Fire Ball
-  unlocks at Level 10: choose a mana-spending basic attack, an entry-level
-  spell, or implement agency Magic practice first.
+- [x] Give a new Magic Level 1 Mage a way to earn Magic points before Fire Ball
+  unlocks at Level 10: basic attacks spend 20 mana when available; otherwise
+  they still attack for free without Magic progress.
 - [ ] Choose health, mana, and stamina on return after defeat, and whether a
   level-up refills current resources, before Step 4.
 
@@ -150,6 +150,13 @@ Ordered implementation:
    Level 1, plus 5% of that baseline per later level. Magic practice spends
    real mana; below 15 hours, skill progress is halved even in Training.
    Test higher levels with fixtures; player upgrade commands remain Milestone 6.
+
+   Progress:
+
+   - [x] Recover stamina at Training and Rest rates, including higher Rest
+     levels, personal heroes, exact elapsed time, and cross-Pod locking.
+   - [ ] Add selected-skill practice and Magic mana spending.
+
 4. [ ] Event rates and defeat: add Core-owned, shared XP and skill rates
    defaulting to `1x`, with scheduled overrides evaluated at the action or
    kill timestamp. Above 40 hours, add 50 percentage points to hero XP only;
@@ -392,6 +399,11 @@ are established. See [ADR 0004](adr/0004-core-as-temporary-modular-monolith.md).
   correct wallet/inventory and enforcing leader-only agency trading. The public
   owner selector and extraction plan are revised. Personal market-sale agency
   share and delegated agency trading remain open.
+- [x] Move gold atomically between a Manager's personal wallet and any
+  agency treasury, or from an agency treasury to any Manager when authorized
+  by that agency's leader. Transfers incur no market fee or agency share.
+- [ ] Add durable transfer receipts and request idempotency before wallet
+  operations cross service or database boundaries.
 
 ## Deferred until domain separation — Economic quest rewards
 
@@ -426,7 +438,7 @@ These do not all block the current combat-progression slice.
 - [ ] Decide whether a Manager's personal order may match an order owned by
   their own agency. For now, matching blocks identical trading owners only;
   the personal wallet and agency treasury remain separate owners.
-- [ ] Define agency-share treatment of market proceeds, transfers, and refunds,
+- [ ] Define agency-share treatment of market proceeds and refunds,
   and how rate changes affect already-started quests and open orders.
 - [x] Define and implement the agency-hero borrowing fee and charge timing.
 - [ ] Define any refund policy if quest cancellation is later introduced.

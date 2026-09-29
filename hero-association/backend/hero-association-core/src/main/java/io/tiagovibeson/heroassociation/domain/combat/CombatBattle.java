@@ -232,6 +232,9 @@ public final class CombatBattle {
                 return;
             }
 
+            int manaSpent = attacker.getCurrentMana() >= attacker.getBasicAttackManaCost()
+                    ? attacker.getBasicAttackManaCost() : 0;
+            attacker.spendMana(manaSpent);
             CombatHit hit = resolveHit(attacker, target, attacker.getAttackDamage(), random);
             attacker.scheduleBasicAttackAt(currentTimeMilliseconds + attacker.getAttackIntervalMilliseconds());
             events.add(new CombatEvent(
@@ -239,7 +242,7 @@ public final class CombatBattle {
                     CombatAction.BASIC_ATTACK,
                     attacker.getId(),
                     List.of(hit),
-                    0,
+                    manaSpent,
                     0,
                     0));
             updateStatus();

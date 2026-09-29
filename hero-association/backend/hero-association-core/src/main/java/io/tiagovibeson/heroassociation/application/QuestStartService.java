@@ -91,7 +91,7 @@ public class QuestStartService {
 
         quest.startWith(party);
         questCombatRepository.persist(QuestCombat.start(quest, heroes));
-        heroes.forEach(hero -> hero.changeActivity(HeroActivity.ON_QUEST));
+        heroes.forEach(hero -> hero.changeActivity(HeroActivity.ON_QUEST, party.getAgency().getRestLevel()));
         return agencyStateService.findState(agencyId);
     }
 

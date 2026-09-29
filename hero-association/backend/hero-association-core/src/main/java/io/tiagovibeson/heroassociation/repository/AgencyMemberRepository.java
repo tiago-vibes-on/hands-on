@@ -2,6 +2,7 @@ package io.tiagovibeson.heroassociation.repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
@@ -21,5 +22,9 @@ public class AgencyMemberRepository implements PanacheRepositoryBase<AgencyMembe
 
     public List<AgencyMember> listByManagerId(UUID managerId) {
         return list("manager.id = ?1 order by agency.name", managerId);
+    }
+
+    public List<AgencyMember> listByManagerIds(Set<UUID> managerIds) {
+        return list("manager.id in ?1", managerIds);
     }
 }

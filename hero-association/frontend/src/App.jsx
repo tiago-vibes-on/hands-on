@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { addHeroToParty, ApiRequestError, beginLogin, beginRegistration, cancelMarketOrder, changeHeroActivity, createAgency, createFeedPost, createManager, createMarketOrder, createParty, equipHeroRune, fetchAccount, fetchAgencyState, fetchMarketOrders, fetchRecruits, fetchSession, logout, recruitHero, recruitHeroForAgency, removeHeroFromParty, setHeroBorrowingFee, startQuest, synchronizeQuestCombat, unequipHeroRune } from './api/agency'
+import { addHeroToParty, ApiRequestError, beginLogin, beginRegistration, cancelMarketOrder, changeHeroActivity, createAgency, createFeedPost, createManager, createMarketOrder, createParty, equipHeroRune, fetchAccount, fetchAgencyState, fetchMarketOrders, fetchRecruits, fetchSession, logout, recruitHero, recruitHeroForAgency, removeHeroFromParty, setHeroBorrowingFee, startQuest, synchronizeQuestCombat, transferGold, unequipHeroRune } from './api/agency'
 import { initialEquippedRunes, initialRunes } from './data/inventory'
 import { mageSpells } from './data/spells'
 import './App.css'
@@ -617,9 +617,28 @@ function Quests({ activeParty, activeParties, availableQuests, resolvedQuests, p
   )
 }
 
-function Agency({ agency, upgrades, runeInventory, itemInventory }) {
+function Agency({ agency, manager, canTransferAgencyGold, upgrades, runeInventory, itemInventory, isTransferringGold, transferError, transferNotice, onTransferGold }) {
   const itemQuantity = itemInventory.reduce((total, item) => total + item.quantity, 0)
   const runeQuantity = runeInventory.reduce((total, rune) => total + rune.quantity, 0)
+  const [depositAgencyName, setDepositAgencyName] = useState(agency.name)
+  const [recipientManagerName, setRecipientManagerName] = useState('')
+  const [depositAmount, setDepositAmount] = useState('')
+  const [withdrawAmount, setWithdrawAmount] = useState('')
+
+  async function submitDeposit(event) {
+    event.preventDefault()
+    if (await onTransferGold({ direction: 'MANAGER_TO_AGENCY', agencyName: depositAgencyName, amountGold: Number(depositAmount) })) {
+      setDepositAmount('')
+    }
+  }
+
+  async function submitWithdrawal(event) {
+    event.preventDefault()
+    if (await onTransferGold({ direction: 'AGENCY_TO_MANAGER', agencyName: agency.name, managerName: recipientManagerName, amountGold: Number(withdrawAmount) })) {
+      setWithdrawAmount('')
+      setRecipientManagerName('')
+    }
+  }
 
   return (
     <>
@@ -632,6 +651,28 @@ function Agency({ agency, upgrades, runeInventory, itemInventory }) {
             <button className="text-button" type="button">Details</button>
           </article>
         ))}
+      </section>
+      <section className="panel gold-transfer">
+        <div className="panel__header"><div><p className="eyebrow">Treasury</p><h2>Move gold</h2></div><span className="status">{agency.gold} agency gold</span></div>
+        <p className="gold-transfer__hint">Transfers move existing gold without a fee or agency earnings share. Enter the exact agency or Manager name.</p>
+        <div className="gold-transfer__forms">
+          <form className="gold-transfer__form" aria-label="Send personal gold to an agency" onSubmit={submitDeposit}>
+            <h3>Send to an agency</h3>
+            <p>Your wallet: {manager?.gold ?? 0} gold. You can send to any agency.</p>
+            <label><span>Agency name</span><input type="text" value={depositAgencyName} maxLength={100} required disabled={isTransferringGold} onChange={(event) => setDepositAgencyName(event.target.value)} /></label>
+            <label><span>Gold amount</span><input type="number" min="1" max={manager?.gold ?? 0} step="1" value={depositAmount} required disabled={isTransferringGold} onChange={(event) => setDepositAmount(event.target.value)} /></label>
+            <button className="button button--primary" type="submit" disabled={isTransferringGold || (manager?.gold ?? 0) < 1}>Send gold</button>
+          </form>
+          {canTransferAgencyGold && <form className="gold-transfer__form" aria-label="Send agency gold to a Manager" onSubmit={submitWithdrawal}>
+            <h3>Send from agency</h3>
+            <p>Only the agency leader can send treasury gold to any Manager, including themselves.</p>
+            <label><span>Recipient Manager name</span><input type="text" value={recipientManagerName} maxLength={100} required disabled={isTransferringGold} onChange={(event) => setRecipientManagerName(event.target.value)} /></label>
+            <label><span>Gold amount</span><input type="number" min="1" max={agency.gold} step="1" value={withdrawAmount} required disabled={isTransferringGold} onChange={(event) => setWithdrawAmount(event.target.value)} /></label>
+            <button className="button button--secondary" type="submit" disabled={isTransferringGold || agency.gold < 1}>Send gold</button>
+          </form>}
+        </div>
+        {transferError && <p className="inline-error" role="alert">{transferError}</p>}
+        {transferNotice && <p className="gold-transfer__notice" role="status">{transferNotice}</p>}
       </section>
       <section className="panel agency-inventory">
         <div className="panel__header"><div><p className="eyebrow">Agency storage</p><h2>Agency inventory</h2></div><span className="status">{itemQuantity} items · {runeQuantity} runes</span></div>
@@ -838,6 +879,9 @@ function App() {
   const [marketOrders, setMarketOrders] = useState(fallbackMarketOrders)
   const [isSubmittingMarketOrder, setIsSubmittingMarketOrder] = useState(false)
   const [marketError, setMarketError] = useState(null)
+  const [isTransferringGold, setIsTransferringGold] = useState(false)
+  const [transferError, setTransferError] = useState(null)
+  const [transferNotice, setTransferNotice] = useState(null)
   const [availableRecruits, setAvailableRecruits] = useState([])
   const [isRecruitingHero, setIsRecruitingHero] = useState(false)
   const [recruitmentError, setRecruitmentError] = useState(null)
@@ -1338,6 +1382,36 @@ function App() {
     setMarketOrders(await fetchMarketOrders())
   }
 
+  async function handleTransferGold(transfer) {
+    if (apiStatus !== 'ready') {
+      setTransferError('Gold transfers require the backend connection.')
+      return false
+    }
+    if (!Number.isSafeInteger(transfer.amountGold) || transfer.amountGold < 1) {
+      setTransferError('Enter a positive whole number of gold.')
+      return false
+    }
+
+    setIsTransferringGold(true)
+    setTransferError(null)
+    setTransferNotice(null)
+    try {
+      const result = await transferGold(transfer)
+      const [state, updatedAccount] = await Promise.all([fetchAgencyState(gameState.agency.id), fetchAccount()])
+      applyRemoteAgencyState(state)
+      setAccount(updatedAccount)
+      setTransferNotice(result.direction === 'MANAGER_TO_AGENCY'
+        ? `Moved ${result.amountGold} gold to ${result.agencyName}.`
+        : `Moved ${result.amountGold} gold from ${result.agencyName} to ${result.managerName}.`)
+      return true
+    } catch (error) {
+      setTransferError(error.message)
+      return false
+    } finally {
+      setIsTransferringGold(false)
+    }
+  }
+
   async function handleCreateMarketOrder(order) {
     if (apiStatus !== 'ready') {
       setMarketError('Market orders require the backend connection.')
@@ -1469,7 +1543,7 @@ function App() {
     overview: <Overview agency={gameState.agency} metrics={gameState.metrics} activeParty={gameState.activeParty} questHeroes={gameState.questHeroes} onNavigate={setActivePage} />,
     heroes: <Heroes agency={gameState.agency} manager={account?.manager} heroes={gameState.heroes} activeParties={gameState.activeParties} agencyHeroes={gameState.agencyHeroes} preparedParties={gameState.preparedParties.filter((party) => party.ownerManagerId === account?.manager?.id)} runes={equippedRunes} availableRecruits={availableRecruits} isRecruitingHero={isRecruitingHero} recruitmentError={recruitmentError} isUpdatingActivity={isUpdatingActivity} activityError={activityError} isUpdatingParty={isUpdatingParty} partyError={partyError} isCreatingParty={isCreatingParty} partyName={partyName} onPartyNameChange={setPartyName} onCreateParty={handleCreateParty} onCancelCreateParty={cancelCreatingParty} onStartCreateParty={startCreatingParty} onRecruitHero={handleRecruitHero} onSelectRuneSlot={(hero, slotIndex) => { setLoadoutError(null); setSelectedSlot({ hero, slotIndex }) }} onChangeActivity={updateHeroActivity} onAddToParty={assignHeroToParty} onRemoveFromParty={removeHeroFromPreparedParty} onSetBorrowingFee={updateHeroBorrowingFee} isUpdatingBorrowingFee={isUpdatingBorrowingFee} borrowingFeeError={borrowingFeeError} />,
     quests: <Quests activeParty={gameState.activeParty} activeParties={gameState.activeParties} availableQuests={gameState.availableQuests} resolvedQuests={gameState.resolvedQuests} preparedParties={gameState.preparedParties.filter((party) => party.ownerManagerId === account?.manager?.id)} heroes={gameState.heroes} managerGold={account?.manager?.gold ?? 0} battle={battle} isCombatExpanded={isCombatExpanded} isSynchronizingCombat={isSynchronizingCombat} isStartingQuest={isStartingQuest} questError={questError} onStartQuest={handleStartQuest} onToggleCombat={() => setIsCombatExpanded((expanded) => !expanded)} />,
-    agency: <Agency agency={gameState.agency} upgrades={gameState.upgrades} runeInventory={runeInventory} itemInventory={gameState.itemInventory} />,
+    agency: <Agency agency={gameState.agency} manager={account?.manager} canTransferAgencyGold={account?.agencyMemberships?.some((membership) => membership.agencyId === gameState.agency.id && membership.role === 'LEADER')} upgrades={gameState.upgrades} runeInventory={runeInventory} itemInventory={gameState.itemInventory} isTransferringGold={isTransferringGold} transferError={transferError} transferNotice={transferNotice} onTransferGold={handleTransferGold} />,
     market: <Market agency={gameState.agency} manager={account?.manager} canTradeAgency={account?.agencyMemberships?.some((membership) => membership.agencyId === gameState.agency.id && membership.role === 'LEADER')} itemInventory={gameState.itemInventory} marketOrders={marketOrders} isSubmittingOrder={isSubmittingMarketOrder} marketError={marketError} onCreateOrder={handleCreateMarketOrder} onCancelOrder={handleCancelMarketOrder} />,
     feed: <Feed agency={gameState.agency} heroes={gameState.heroes.filter((hero) => !hero.ownerManagerId)} feedPosts={gameState.feedPosts} itemInventory={gameState.itemInventory} isPostingFeed={isPostingFeed} feedError={feedError} onCreatePost={handleCreateFeedPost} />,
   }

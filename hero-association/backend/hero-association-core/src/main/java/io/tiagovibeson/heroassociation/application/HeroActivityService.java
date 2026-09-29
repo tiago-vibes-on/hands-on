@@ -7,12 +7,14 @@ import io.tiagovibeson.heroassociation.application.exception.AgencyNotFoundExcep
 import io.tiagovibeson.heroassociation.application.exception.HeroNotFoundException;
 import io.tiagovibeson.heroassociation.application.exception.HeroOnQuestException;
 import io.tiagovibeson.heroassociation.application.exception.InvalidHeroActivityException;
+import io.tiagovibeson.heroassociation.domain.Agency;
 import io.tiagovibeson.heroassociation.domain.Hero;
 import io.tiagovibeson.heroassociation.domain.HeroActivity;
 import io.tiagovibeson.heroassociation.repository.AgencyRepository;
 import io.tiagovibeson.heroassociation.repository.HeroRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.persistence.LockModeType;
 import jakarta.transaction.Transactional;
 
 @ApplicationScoped
@@ -32,12 +34,12 @@ public class HeroActivityService {
 
     @Transactional
     public AgencyStateResponse changeActivity(UUID agencyId, UUID heroId, HeroActivity activity) {
-        if (!agencyRepository.findByIdOptional(agencyId).isPresent()) {
-            throw new AgencyNotFoundException(agencyId);
-        }
+        Agency agency = agencyRepository.findByIdOptional(agencyId)
+                .orElseThrow(() -> new AgencyNotFoundException(agencyId));
         agencyAccessService.requireMembership(agencyId);
 
         Hero hero = heroRepository.find("id = ?1 and agency.id = ?2", heroId, agencyId)
+                .withLock(LockModeType.PESSIMISTIC_WRITE)
                 .firstResultOptional()
                 .orElseThrow(() -> new HeroNotFoundException(heroId));
         if (hero.getParty() != null || hero.getActivity() == HeroActivity.ON_QUEST) {
@@ -47,7 +49,7 @@ public class HeroActivityService {
             throw new InvalidHeroActivityException();
         }
 
-        hero.changeActivity(activity);
+        hero.changeActivity(activity, agency.getRestLevel());
         return agencyStateService.findState(agencyId);
     }
 }

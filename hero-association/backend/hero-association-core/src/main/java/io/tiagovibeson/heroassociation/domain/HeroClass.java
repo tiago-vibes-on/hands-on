@@ -3,9 +3,9 @@ package io.tiagovibeson.heroassociation.domain;
 import java.math.BigDecimal;
 
 public enum HeroClass {
-    WARRIOR(300, 40, 50, 10, 10, 2, 22, 1_300),
-    MAGE(100, 15, 500, 60, 2, 10, 32, 1_700),
-    ARCHER(200, 25, 200, 25, 6, 6, 26, 1_100);
+    WARRIOR(300, 40, 50, 10, 10, 2, 22, 1_300, 0),
+    MAGE(100, 15, 500, 60, 2, 10, 32, 1_700, 20),
+    ARCHER(200, 25, 200, 25, 6, 6, 26, 1_100, 0);
 
     private final int baseHealth;
     private final int healthGainPerLevel;
@@ -15,6 +15,7 @@ public enum HeroClass {
     private final int manaRecoveryPerSecond;
     private final int baseAttackDamage;
     private final long attackIntervalMilliseconds;
+    private final int basicAttackManaCost;
 
     HeroClass(
             int baseHealth,
@@ -24,7 +25,8 @@ public enum HeroClass {
             int healthRecoveryPerSecond,
             int manaRecoveryPerSecond,
             int baseAttackDamage,
-            long attackIntervalMilliseconds) {
+            long attackIntervalMilliseconds,
+            int basicAttackManaCost) {
         this.baseHealth = baseHealth;
         this.healthGainPerLevel = healthGainPerLevel;
         this.baseMana = baseMana;
@@ -33,6 +35,7 @@ public enum HeroClass {
         this.manaRecoveryPerSecond = manaRecoveryPerSecond;
         this.baseAttackDamage = baseAttackDamage;
         this.attackIntervalMilliseconds = attackIntervalMilliseconds;
+        this.basicAttackManaCost = basicAttackManaCost;
     }
 
     public int getBaseHealth() {
@@ -86,5 +89,9 @@ public enum HeroClass {
 
     public long getAttackIntervalMilliseconds() {
         return attackIntervalMilliseconds;
+    }
+
+    public int getBasicAttackManaCost() {
+        return basicAttackManaCost;
     }
 }

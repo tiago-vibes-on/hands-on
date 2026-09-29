@@ -145,6 +145,14 @@ export async function createMarketOrder({ ownerType, agencyId, side, itemId, qua
   })
 }
 
+export async function transferGold({ direction, agencyName, managerName, amountGold }) {
+  return request('/api/v1/gold-transfers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ direction, agencyName, ...(direction === 'AGENCY_TO_MANAGER' ? { managerName } : {}), amountGold }),
+  })
+}
+
 export async function cancelMarketOrder({ orderId }) {
   return request(`/api/v1/market/orders/${orderId}`, {
     method: 'DELETE',

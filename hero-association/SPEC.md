@@ -160,6 +160,22 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
   the cancelled order. Clients refresh account and agency state separately
   after mutations. Market orders still execute inside Game Core's database
   transaction; the future Market service split is not yet implemented.
+- `POST /api/v1/gold-transfers` moves existing gold between wallets in one
+  Core transaction. To deposit, send
+  `{ "direction": "MANAGER_TO_AGENCY", "agencyName": "Dawnwatch Agency", "amountGold": 10 }`.
+  The sender is always the authenticated Manager; any Manager may deposit
+  into any existing agency without membership. To withdraw, the agency
+  leader sends
+  `{ "direction": "AGENCY_TO_MANAGER", "agencyName": "Dawnwatch Agency", "managerName": "User 2", "amountGold": 10 }`.
+  The recipient may be any existing Manager, including the leader. Names are
+  matched case-insensitively after trimming whitespace. The positive whole
+  amount moves exactly: no market fee, agency share, payment, or reward is
+  applied. The response contains both wallet owners and their new balances.
+  Invalid input returns `400`, unauthorized withdrawal `403`, an unknown
+  agency or recipient `404`, and insufficient gold or an overflowing
+  destination wallet `409`. Requests are not yet idempotent; clients must
+  not automatically retry an ambiguous response. Transfer receipts and
+  request idempotency are required before cross-service wallet operations.
 - An unknown agency returns `404 Not Found` with an error message.
 
 The initial recruitment board contains Alden Steelward (Warrior), Seris
@@ -175,7 +191,8 @@ The response includes all five rune slots for every hero, including empty
 slots. Hero class values define base health, mana, and per-second health and
 mana recovery. Every five seconds, a background worker restores agency heroes'
 health and mana from their elapsed time: `TRAINING` uses the base class rate
-and `RESTING` uses twice that rate. Stamina recovery is not implemented yet.
+and `RESTING` uses twice that rate. The same worker recovers stamina at one
+stamina minute per real minute in Training or the agency Rest Level rate while Resting.
 Equipping and replacing runes atomically moves one rune between the agency
 inventory and a hero slot. A rune that is unavailable in inventory or a hero
 who is on a quest returns `409 Conflict`; a slot outside 0 through 4 returns
@@ -229,21 +246,21 @@ new event stream is processed inside the combat transaction before retaining
 only the latest 100 UI events. Each creature defeat awards its full base
 XP separately to every living party hero using the stamina of each hero at
 the kill time. Provisional creatures currently have 100 base XP. Shield
-combat points, stamina recovery, economic rewards, and death resolution
-remain planned.
+combat points, economic rewards, and death resolution remain planned.
+Agency stamina recovery is implemented.
 
 Core now persists cumulative hero XP, fractional Melee, Distance, Magic, and
 Shield points, and up to 48 hours of millisecond-precise stamina. Hero and
 skill levels derive from those totals, and class-specific maximum health and
 mana derive from hero level. New heroes start at Level 1 with all four skills
-at Level 10. The existing Hero API still returns percentage stamina for the
+at Level 1. The existing Hero API still returns percentage stamina for the
 frontend; a time-based API is planned separately. Combat skill and
 creature XP awards are active; agency practice is not.
 
 Combat XP is calculated separately for each living party hero from the full
 creature base XP at defeat, without a party-size or damage split. Individual
 stamina can change the final award. Shield combat progress awaits a
-block rule. Agency Training will recover one stamina minute per real minute; Resting will recover two at Rest Level 1, plus 10% of that baseline
+block rule. Agency Training recovers one stamina minute per real minute; Resting recovers two at Rest Level 1, plus 10% of that baseline
 per later level. Training skill progress will start at 2x and gain 5% of that
 baseline per later Training Level. Above 40 hours adds 50 percentage points
 to hero XP only; below 15 hours halves hero XP and skill progress. A battle
@@ -487,7 +504,7 @@ IDs must not be added for entities or exposed through the API.
   non-permanent defeat penalty remain unimplemented.
 - A background worker restores agency hero health and mana every five seconds
   from elapsed full seconds. Training uses the base class rate and Resting uses
-  twice that rate. Stamina recovery is not implemented yet.
+  twice that rate. The worker also recovers agency stamina at the documented rates.
 - The server combat engine recovers hero health and mana once per second. Warrior
   recovery is 10 health and 2 mana; Mage recovery is 2 health and 10 mana;
   Archer recovery is 6 health and 6 mana. The UI still shows prototype XP;
@@ -504,8 +521,10 @@ IDs must not be added for entities or exposed through the API.
   mana actually spent earns Magic points. Successful shield blocks and agency
   practice are not implemented yet. Planned agency practice earns 2x points
   before class and server rates; see `PROGRESSION.md` for provisional rates.
-  New Mages cannot yet advance Magic from Level 1: their basic attack costs
-  no mana and their first spell requires Magic Level 10.
+  A Mage basic attack spends 20 mana when available and earns one base Magic
+  point before class and stamina rates. Below 20 mana, the attack still deals
+  its normal damage for free but earns no Magic points. Other basic attacks
+  remain free.
 - Every hero card ends with five rune slots loaded from the API. Heroes with
   learned spells also show their spell slots; Elara has both mage spells,
   while new Mages start at Magic Level 1 and unlock Fire Ball at Magic Level 10.

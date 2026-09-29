@@ -73,7 +73,7 @@ class QuestCombatProgressionServiceTest {
         assertEquals(archerStamina - 1_000, fixture.archer().getStaminaMilliseconds());
         assertEquals(0, fixture.warrior().getSkillPoints(HeroSkill.MELEE).compareTo(BigDecimal.ONE));
         assertEquals(0, fixture.archer().getSkillPoints(HeroSkill.DISTANCE).compareTo(BigDecimal.ONE));
-        assertEquals(0, fixture.mage().getSkillPoints(HeroSkill.MAGIC).compareTo(new BigDecimal("4058.5")));
+        assertEquals(0, fixture.mage().getSkillPoints(HeroSkill.MAGIC).compareTo(new BigDecimal("4059")));
 
         progressionService.synchronize(fixture.combat(), synchronizedAt);
         entityManager.flush();
@@ -82,7 +82,7 @@ class QuestCombatProgressionServiceTest {
         assertEquals(warriorStamina - 1_000, reloaded.warrior().getStaminaMilliseconds());
         assertEquals(0, reloaded.warrior().getSkillPoints(HeroSkill.MELEE).compareTo(BigDecimal.ONE));
         assertEquals(0, reloaded.mage().getSkillPoints(HeroSkill.MAGIC)
-                .compareTo(new BigDecimal("4058.5")));
+                .compareTo(new BigDecimal("4059")));
     }
 
     @Test
@@ -152,7 +152,7 @@ class QuestCombatProgressionServiceTest {
         assertEquals(0, fixture.archer().getSkillPoints(HeroSkill.DISTANCE)
                 .compareTo(new BigDecimal("54")));
         assertEquals(0, fixture.mage().getSkillPoints(HeroSkill.MAGIC)
-                .compareTo(new BigDecimal("4080")));
+                .compareTo(new BigDecimal("4085")));
     }
 
     @Test

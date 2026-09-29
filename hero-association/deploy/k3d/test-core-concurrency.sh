@@ -27,6 +27,12 @@ if kubectl -n "$namespace" get deployment "$deployment" >/dev/null 2>&1; then
   printf 'Refusing to replace an existing %s deployment.\n' "$deployment" >&2
   exit 1
 fi
+core_image="$(kubectl -n "$namespace" get deployment/core -o jsonpath='{.spec.template.spec.containers[0].image}')"
+if [[ -z "$core_image" ]]; then
+  printf 'The deployed Core image is required for the isolated test.\n' >&2
+  exit 1
+fi
+printf 'Testing deployed Core image %s.\n' "$core_image"
 
 query() {
   kubectl -n "$namespace" exec deployment/postgres-core -c postgres -- \
@@ -79,7 +85,8 @@ printf 'Creating isolated test database %s.\n' "$database"
 admin_query "CREATE DATABASE \"$database\""
 database_created=true
 
-bootstrap_job="$(kubectl set env --local -f "$script_dir/../k8s/backend/core-db-bootstrap.yaml" \
+bootstrap_job="$(kubectl set image --local -f "$script_dir/../k8s/backend/core-db-bootstrap.yaml" bootstrap="$core_image" -o yaml \
+  | kubectl set env --local -f - \
   "QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://postgres-core:5432/$database" -o yaml \
   | kubectl create -f - -o jsonpath='{.metadata.name}')"
 if ! kubectl -n "$namespace" wait --for=condition=complete "job/$bootstrap_job" --timeout=5m; then
@@ -95,7 +102,8 @@ combat_start="$(query "SELECT last_synchronized_at FROM quest_combat WHERE id = 
 query "UPDATE quest_combatant SET max_health = 20000, current_health = 20000 WHERE combat_id = '$combat_id' AND team = 'CREATURES'" >/dev/null
 
 printf 'Starting two Core Pods against the same test database.\n'
-kubectl set env --local -f "$script_dir/../k8s/backend/core-concurrency-test.yaml" \
+kubectl set image --local -f "$script_dir/../k8s/backend/core-concurrency-test.yaml" core="$core_image" -o yaml \
+  | kubectl set env --local -f - \
   "QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://postgres-core:5432/$database" -o yaml \
   | kubectl create -f - >/dev/null
 deployment_created=true
@@ -115,20 +123,20 @@ kubectl -n "$namespace" exec -i deployment/postgres-core -c postgres -- \
   -d "$database" -f /dev/stdin >"$read_load_output" 2>&1 <<SQL &
 SELECT count(*) FROM quest_combat_event WHERE combat_id = '$combat_id';
 SELECT status, current_time_milliseconds FROM quest_combat WHERE id = '$combat_id';
-SELECT current_health, current_mana FROM hero WHERE id = '$hero_id';
+SELECT current_health, current_mana, stamina_milliseconds FROM hero WHERE id = '$hero_id';
 SQL
 read_load_pid=$!
 
 verify_recovery() {
   local replica_count="$1"
   local baseline recovery
-  baseline="$(query "UPDATE hero SET current_health = 0, current_mana = 0, last_resource_synchronized_at = clock_timestamp() WHERE id = '$hero_id' RETURNING last_resource_synchronized_at")"
+  baseline="$(query "UPDATE hero SET current_health = 0, current_mana = 0, stamina_milliseconds = 0, last_resource_synchronized_at = clock_timestamp() WHERE id = '$hero_id' RETURNING last_resource_synchronized_at")"
   if [[ -z "$baseline" ]]; then
     printf 'Failed to prepare the recovering hero.\n' >&2
     exit 1
   fi
   sleep 12
-  recovery="$(query "WITH elapsed AS (SELECT current_health, current_mana, floor(extract(epoch FROM (last_resource_synchronized_at - '$baseline'::timestamptz)))::int AS seconds FROM hero WHERE id = '$hero_id') SELECT CASE WHEN seconds >= 5 AND current_health = LEAST(300, 10 * seconds) AND current_mana = LEAST(50, 2 * seconds) THEN 'PASS' ELSE 'FAIL' END || '|seconds=' || seconds || '|health=' || current_health || '|mana=' || current_mana FROM elapsed")"
+  recovery="$(query "WITH elapsed AS (SELECT current_health, current_mana, stamina_milliseconds, floor(extract(epoch FROM (last_resource_synchronized_at - '$baseline'::timestamptz)))::int AS seconds FROM hero WHERE id = '$hero_id') SELECT CASE WHEN seconds >= 5 AND current_health = LEAST(300, 10 * seconds) AND current_mana = LEAST(50, 2 * seconds) AND stamina_milliseconds = 1000 * seconds THEN 'PASS' ELSE 'FAIL' END || '|seconds=' || seconds || '|health=' || current_health || '|mana=' || current_mana || '|stamina_ms=' || stamina_milliseconds FROM elapsed")"
   printf 'Shared recovery with %s Pods: %s\n' "$replica_count" "$recovery"
   if [[ "$recovery" != PASS\|* ]]; then
     exit 1

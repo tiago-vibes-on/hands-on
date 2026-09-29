@@ -12,6 +12,7 @@ public record CombatantSnapshot(
         int currentHealth,
         int currentMana,
         int attackDamage,
+        int basicAttackManaCost,
         long attackIntervalMilliseconds,
         int healthRecoveryPerSecond,
         int manaRecoveryPerSecond,

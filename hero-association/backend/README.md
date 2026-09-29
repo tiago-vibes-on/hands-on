@@ -28,6 +28,16 @@ Manager; each uses its own wallet and inventory. [ADR 0003](../adr/0003-market-s
 records the public owner contract and the reservation/settlement work required
 before extracting Market as a separate service.
 
+Gold transfers use `POST /api/v1/gold-transfers` through the BFF. On the
+Agency page, any authenticated Manager can send personal gold to any agency
+by its exact name; only that agency's leader can send treasury gold to any
+Manager by display name, including themselves. Names are case-insensitive.
+Use `direction: MANAGER_TO_AGENCY` with `agencyName` and `amountGold`, or
+`direction: AGENCY_TO_MANAGER` with those fields plus `managerName`.
+These are atomic moves of existing gold, without a market fee or agency
+earnings share. The endpoint returns both new balances. It is not yet
+idempotent, so clients must not automatically retry an ambiguous response.
+
 Normal Compose development keeps Traefik and has no market-order rate limit.
 The isolated k3d deployment uses Envoy Gateway external authorization and a
 Redis-backed global per-user limit for `POST /api/v1/market/orders`; see the
@@ -125,6 +135,9 @@ account. Google login is a post-MVP task. The first signed-in visit provisions a
 Account and asks for a unique Manager name. Onboarding also creates a personal
 Level 1 Warrior, Mage, and Archer with Level 1 skills, zero personal gold, and
 empty personal inventories. These assets belong to the Manager, not the agency.
+The starter Mage begins at Magic Level 1. In combat, its basic attack spends
+20 mana and earns Magic progress when enough mana is available; at lower mana,
+the attack remains free but earns no Magic progress.
 A Manager with no membership can create one empty Level 1 agency as its leader;
 invitations are a later task. Parties belong to individual Managers inside
 their agency. A Manager can assign their own available heroes or available
@@ -307,10 +320,12 @@ schema change, use `../pipeline/run-k3d-pipeline.sh --reset-core-db` to build,
 verify, recreate Core data from the exact archived Core image, and deploy.
 The older direct-build reset in `deploy/k3d/` uses the fixed `:k3d` image
 and must not be mixed with an archive promotion. Core's scheduled jobs use
-PostgreSQL advisory locks to avoid
-overlapping across Pods. An isolated concurrency test exercises two, four,
-and eight Core Pods, active combat and recovery, concurrent database reads,
-and Pod restarts without duplicate quest resolution. Separate CPU HPAs keep
+PostgreSQL advisory locks to avoid overlapping across Pods. The recovery job
+also restores stamina from elapsed time at the Training rate or current
+agency Rest Level rate, capped at 48 hours. An isolated concurrency test
+exercises two, four, and eight Core Pods, active combat and recovery,
+concurrent database reads, and Pod restarts without duplicate quest
+resolution. Separate CPU HPAs keep
 BFF and Core between two and eight Pods in k3d; normal host-run development
 remains unchanged. See the
 [autoscaling test](../deploy/k3d/README.md#autoscaling-and-sustained-validation)

@@ -15,6 +15,10 @@ public class AgencyRepository implements PanacheRepositoryBase<Agency, UUID> {
         return count("nameNormalized", nameNormalized) > 0;
     }
 
+    public Optional<Agency> findByNormalizedName(String nameNormalized) {
+        return find("nameNormalized", nameNormalized).firstResultOptional();
+    }
+
     public Optional<Agency> findForUpdate(UUID agencyId) {
         return find("id", agencyId)
                 .withLock(LockModeType.PESSIMISTIC_WRITE)

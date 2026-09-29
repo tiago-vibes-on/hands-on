@@ -77,6 +77,7 @@ class ScheduledJobLockTest {
                 UPDATE hero
                 SET current_health = 10,
                     current_mana = 10,
+                    stamina_milliseconds = 100000,
                     activity = 'TRAINING',
                     last_resource_synchronized_at = :synchronizedAt
                 WHERE id = :heroId
@@ -92,6 +93,7 @@ class ScheduledJobLockTest {
             Hero hero = heroRepository.findById(RECOVERING_HERO_ID);
             assertEquals(10, hero.getCurrentHealth());
             assertEquals(10, hero.getCurrentMana());
+            assertEquals(100000, hero.getStaminaMilliseconds());
         });
 
         agencyRecoveryScheduler.recoverAgencyHeroes();
@@ -99,6 +101,7 @@ class ScheduledJobLockTest {
         entityManager.clear();
         Hero hero = heroRepository.findById(RECOVERING_HERO_ID);
         assertTrue(hero.getCurrentHealth() > 10);
+        assertTrue(hero.getStaminaMilliseconds() > 100000);
         assertTrue(hero.getCurrentMana() > 10);
     }
 

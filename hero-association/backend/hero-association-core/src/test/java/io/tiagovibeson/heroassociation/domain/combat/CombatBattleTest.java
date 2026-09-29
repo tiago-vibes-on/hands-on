@@ -14,11 +14,11 @@ class CombatBattleTest {
     @Test
     void shouldResolveEachCombatantsBasicAttackOnItsOwnTimer() {
         Combatant warrior = combatant(
-                "warrior", CombatTeam.HEROES, 300, 50, 300, 50, 22, 1_300, 10, 2, 0, 0, 2, List.of());
+                "warrior", CombatTeam.HEROES, 300, 50, 300, 50, 22, 0, 1_300, 10, 2, 0, 0, 2, List.of());
         Combatant archer = combatant(
-                "archer", CombatTeam.HEROES, 200, 200, 200, 200, 26, 1_100, 6, 6, 0, 0, 2, List.of());
+                "archer", CombatTeam.HEROES, 200, 200, 200, 200, 26, 0, 1_100, 6, 6, 0, 0, 2, List.of());
         Combatant troll = combatant(
-                "troll", CombatTeam.CREATURES, 1_000, 100, 1_000, 100, 1, 1_850, 0, 0, 0, 0, 2, List.of());
+                "troll", CombatTeam.CREATURES, 1_000, 100, 1_000, 100, 1, 0, 1_850, 0, 0, 0, 0, 2, List.of());
 
         CombatBattle battle = CombatBattle.start(List.of(warrior, archer), List.of(troll));
 
@@ -39,10 +39,10 @@ class CombatBattleTest {
     @Test
     void shouldResolveMageSpellsWithTheirOwnCooldownsAndManaCosts() {
         Combatant mage = combatant(
-                "mage", CombatTeam.HEROES, 100, 500, 100, 500, 0, 1_700, 2, 10, 15, 0, 2,
+                "mage", CombatTeam.HEROES, 100, 500, 100, 500, 0, 20, 1_700, 2, 10, 15, 0, 2,
                 List.of(CombatSpell.FIRE_BALL, CombatSpell.LIGHTNING_RAIL));
         Combatant troll = combatant(
-                "troll", CombatTeam.CREATURES, 1_000, 100, 1_000, 100, 0, 10_000, 0, 0, 0, 0, 2, List.of());
+                "troll", CombatTeam.CREATURES, 1_000, 100, 1_000, 100, 0, 0, 10_000, 0, 0, 0, 0, 2, List.of());
 
         CombatBattle battle = CombatBattle.start(List.of(mage), List.of(troll));
 
@@ -59,15 +59,42 @@ class CombatBattleTest {
         assertThat(spellEvents.get(1).occurredAtMilliseconds(), is(1_350L));
         assertThat(spellEvents.get(1).hits().getFirst().damage(), is(14));
         assertThat(spellEvents.get(1).manaSpent(), is(40));
-        assertThat(mage.getCurrentMana(), is(450));
+        assertThat(mage.getCurrentMana(), is(430));
+    }
+
+    @Test
+    void shouldSpendManaOnMageBasicAttackAndFallBackToAFreeAttackWhenManaIsLow() {
+        Combatant mage = combatant(
+                "mage", CombatTeam.HEROES, 100, 500, 100, 39, 32, 20, 1_700, 0, 0, 1, 0, 2, List.of());
+        Combatant troll = combatant(
+                "troll", CombatTeam.CREATURES, 1_000, 100, 1_000, 100, 0, 0, 10_000, 0, 0, 0, 0, 2, List.of());
+        CombatBattle battle = CombatBattle.start(List.of(mage), List.of(troll));
+
+        List<CombatEvent> firstEvents = battle.advanceTo(480, () -> 0.99);
+        assertThat(firstEvents.getFirst().action(), is(CombatAction.BASIC_ATTACK));
+        assertThat(firstEvents.getFirst().manaSpent(), is(20));
+        assertThat(mage.getCurrentMana(), is(19));
+        assertThat(troll.getCurrentHealth(), is(968));
+
+        CombatBattle restored = CombatBattle.restore(battle.snapshot());
+        CombatEvent fallback = restored.advanceTo(2_180, () -> 0.99).stream()
+                .filter(event -> event.actorId().equals("mage"))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(fallback.action(), is(CombatAction.BASIC_ATTACK));
+        assertThat(fallback.manaSpent(), is(0));
+        assertThat(fallback.hits().getFirst().damage(), is(32));
+        assertThat(restored.getHeroes().getFirst().getCurrentMana(), is(19));
+        assertThat(restored.getCreatures().getFirst().getCurrentHealth(), is(936));
     }
 
     @Test
     void shouldUseInjectedRandomnessForCriticalHitsAndFinishWhenAllCreaturesDie() {
         Combatant warrior = combatant(
-                "warrior", CombatTeam.HEROES, 300, 50, 300, 50, 22, 1_300, 10, 2, 0, 1, 2, List.of());
+                "warrior", CombatTeam.HEROES, 300, 50, 300, 50, 22, 0, 1_300, 10, 2, 0, 1, 2, List.of());
         Combatant troll = combatant(
-                "troll", CombatTeam.CREATURES, 40, 100, 40, 100, 1, 1_850, 0, 0, 0, 0, 2, List.of());
+                "troll", CombatTeam.CREATURES, 40, 100, 40, 100, 1, 0, 1_850, 0, 0, 0, 0, 2, List.of());
         CombatBattle battle = CombatBattle.start(List.of(warrior), List.of(troll));
 
         List<CombatEvent> events = battle.advanceTo(480, () -> 0.5);
@@ -82,9 +109,9 @@ class CombatBattleTest {
     @Test
     void shouldContinueFromAPersistedCombatSnapshot() {
         Combatant warrior = combatant(
-                "warrior", CombatTeam.HEROES, 300, 50, 300, 50, 22, 1_300, 10, 2, 0, 0, 2, List.of());
+                "warrior", CombatTeam.HEROES, 300, 50, 300, 50, 22, 0, 1_300, 10, 2, 0, 0, 2, List.of());
         Combatant troll = combatant(
-                "troll", CombatTeam.CREATURES, 1_000, 100, 1_000, 100, 1, 1_850, 0, 0, 0, 0, 2, List.of());
+                "troll", CombatTeam.CREATURES, 1_000, 100, 1_000, 100, 1, 0, 1_850, 0, 0, 0, 0, 2, List.of());
         CombatBattle originalBattle = CombatBattle.start(List.of(warrior), List.of(troll));
         originalBattle.advanceTo(900, () -> 0.99);
 
@@ -105,6 +132,7 @@ class CombatBattleTest {
             int currentHealth,
             int currentMana,
             int attackDamage,
+            int basicAttackManaCost,
             long attackIntervalMilliseconds,
             int healthRecoveryPerSecond,
             int manaRecoveryPerSecond,
@@ -121,6 +149,7 @@ class CombatBattleTest {
                 currentHealth,
                 currentMana,
                 attackDamage,
+                basicAttackManaCost,
                 attackIntervalMilliseconds,
                 healthRecoveryPerSecond,
                 manaRecoveryPerSecond,

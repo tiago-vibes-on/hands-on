@@ -33,7 +33,7 @@ public class HeroRepository implements PanacheRepositoryBase<Hero, UUID> {
     }
 
     public List<Hero> listRecoveringForUpdate() {
-        return find("activity = ?1 or activity = ?2", HeroActivity.TRAINING, HeroActivity.RESTING)
+        return find("(activity = ?1 or activity = ?2) order by id", HeroActivity.TRAINING, HeroActivity.RESTING)
                 .withLock(LockModeType.PESSIMISTIC_WRITE)
                 .list();
     }

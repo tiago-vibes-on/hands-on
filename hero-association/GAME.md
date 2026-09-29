@@ -29,9 +29,10 @@ a hero in combat.
 
 - The agency receives 10% of a Manager's gold earnings by default. Its leader
   can configure the share from 0% to 99%. The design goal is to cover all
-  Manager gold earnings, but the treatment of market-sale proceeds, transfers,
-  refunds, and the effective rate for work already in progress still needs an
-  explicit rule before implementation.
+  Manager gold earnings, but the treatment of market-sale proceeds, refunds,
+  and the effective rate for work already in progress still needs an explicit
+  rule before implementation. Moving existing gold between wallets is not
+  new earnings, so gold transfers do not trigger the agency share.
 - An agency hero's per-quest borrowing fee starts at 0 gold. The agency leader
   can set a nonnegative fee for each hero. Party assignment is free; on a
   successful quest start, the total quoted fee moves atomically from the
@@ -72,6 +73,11 @@ workflows remain planned:
   from its owner, and refunds and trade settlement return to that same owner.
   Both owner types pay the 10% market fee. No additional agency share is taken
   from personal sale proceeds until that separate economic rule is decided.
+- Any Manager can send personal gold to any existing agency, even if they are
+  not a member. Only an agency's leader can send treasury gold to any
+  existing Manager, including themselves. These are direct wallet transfers,
+  not payments or rewards; they do not create gold or incur a market fee.
+  A transfer succeeds only when its source has enough gold.
 
 The expanded [local test fixtures](TEST_DATA.md) include multi-Manager agencies
 and separate personal starter heroes, wallets, and inventories.
@@ -114,7 +120,9 @@ spells. Their strongest skills remain:
 
 Melee and Distance gain progress on each valid attack attempt against a living
 creature. Magic gains progress from mana actually spent, including on spells;
-free attacks and mana recovery do not train Magic. Shield progresses on
+Mage basic attacks spend 20 mana when available. At less than 20 mana, they
+still deal normal damage for free but do not train Magic. Other free attacks
+and mana recovery do not train Magic. Shield progresses on
 successful blocks with a shield. Class aptitude makes Warrior Melee, Archer
 Distance, and Mage Magic fastest; other classes learn those skills more slowly.
 
@@ -163,7 +171,7 @@ At the agency, Training recovers one stamina minute per real minute. Resting at
 Rest Level 1 recovers two stamina minutes per real minute; each additional Rest
 Level adds 10% of the Level 1 rate (Level 2: 2.2; Level 3: 2.4). Both activities
 also recover health and mana: Training uses the class base rate and Resting
-uses twice that rate. Stamina recovery is not implemented in Core yet.
+uses twice that rate. Core also recovers stamina at the Training or Rest rate.
 
 Compare exact stamina time, not rounded percentages. Above 40 hours adds 50
 percentage points to hero XP only; below 15 hours halves XP, skill progress
@@ -358,7 +366,7 @@ Heroes begin at Level 1. The initial health and mana values are:
   ready and she has enough mana. Her displayed spell slots show those spells.
 - The server engine recovers hero health and mana once per second using their
   class recovery values. At the agency, training recovers both at the base
-  rate and resting at 2× the base rate; stamina recovery is still pending.
+  rate and resting at 2× the base rate; agency stamina recovery is active.
 - Each hero shows five read-only rune slots in combat so the party's equipped
   runes are visible. The initial quest party equips one Critical Chance Rune
   per hero, while Elara also equips a Critical Damage Rune. Creatures do not
@@ -415,7 +423,7 @@ Heroes begin at Level 1. The initial health and mana values are:
 The following details are intentionally not defined yet:
 
 - Which gold inflows count toward the agency share, especially personal market
-  sales, transfers, and refunds; when a changed share takes effect; and how to
+  sales and refunds; when a changed share takes effect; and how to
   protect Managers from a surprise increase during an active quest or order.
 - Whether and how an already-paid agency-hero fee is refunded if quest
   cancellation is introduced; later PvE defeat does not undo the start fee.

@@ -1,9 +1,9 @@
 # Hero progression and PvE defeat
 
 Status: partially implemented in Game Core. Progression storage and formulas,
-combat-time stamina drain, Melee, Distance, and mana-spent Magic gains, and
-creature XP awards are in place. Shield blocks, agency practice and stamina
-recovery, event rates, and defeat penalties remain planned. Skill-point values
+combat-time stamina drain, Melee, Distance, mana-spent Magic gains, creature
+XP awards, and agency stamina recovery are in place. Shield blocks, agency
+practice, event rates, and defeat penalties remain planned. Skill-point values
 and training pace should be play-tested before becoming final balance.
 
 Track implementation order and completed steps in [ROADMAP.md](ROADMAP.md),
@@ -103,13 +103,11 @@ Proposed base point-earning rules, before class, training, and server rates:
   or basic attack. The provisional 20-mana divisor keeps the existing skill
   curve usable; it needs play-testing. A cast earns no extra per-hit or
   per-target points. A zero-mana basic attack, a failed cast, and mana recovery
-  earn no Magic points. The current Mage basic attack spends zero mana, so it
-  does not train Magic; Mage spells do. If a future Mage basic attack spends mana, that spent
-  mana counts just like spell mana.
-
-  Current gap: with Level 1 starting Magic, the zero-mana basic attack, and
-  agency practice not yet implemented, new Mages cannot earn Magic points.
-  Resolve the starting mana-spending action before relying on Mage progression.
+  earn no Magic points. A Mage basic attack spends 20 mana when available and
+  earns one base Magic point before class and stamina rates. Below 20 mana, it
+  still deals its normal damage for free but earns no Magic points.
+- Mage spells keep their own mana costs and cooldowns; they award Magic points
+  from the mana actually spent, independently of basic attacks.
 - Shield earns one base point on a successful block while using a shield. It
   does not advance merely because the hero attacks or takes damage. Combat
   blocking is not implemented yet.
@@ -212,6 +210,9 @@ real minute. At any Rest Level `L >= 1`, the rate is
 minute, regardless of Training Level. The Rest upgrade does not change
 training recovery; the Training upgrade changes skill progress, not stamina
 recovery. Clamp recovery at the 48-hour maximum.
+The existing five-second agency recovery worker applies these rates from
+elapsed full seconds, without counting an interval twice. Personal heroes use
+their current agency's Rest Level, or Level 1 if they have no membership.
 
 Economic rewards (gold and items), including the following proposed loot
 rules, are deferred until the game domains are separated. They are not needed

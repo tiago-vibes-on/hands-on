@@ -42,6 +42,8 @@ claims across both ownership routes, cross-agency authorization, and
 market-order proxying through both BFF instances without a local rate limit,
 a personal order placed and cancelled through the browser, leader editing of
 an agency-hero fee, and a borrowing fee charged when its party starts a quest.
+The Agency page suite also checks a leader's gold withdrawal to self and
+deposit back into the agency without fees or net balance changes.
 It uses the versioned local Keycloak users `user1@mail.com` / `user1`,
 `user2@mail.com` / `user2`, the initially unprovisioned
 `user3@mail.com` / `user3`, `manager4@mail.com` / `manager4` for

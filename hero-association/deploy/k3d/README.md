@@ -447,14 +447,16 @@ this isolated correctness test from `deploy/k3d`:
 ```
 
 The script checks the k3d context, creates a uniquely named temporary Core
-PostgreSQL database, and seeds it with the one-shot bootstrap Job. It starts
-two test-only Core Pods on different nodes, then scales them to four and eight
-across the three k3d nodes. While Core writes combat and agency recovery, the
+PostgreSQL database, and seeds it with the one-shot bootstrap Job from the
+currently deployed Core image. It starts two test-only Core Pods on different
+nodes, then scales them to four and eight across the three k3d nodes.
+While Core writes combat and agency recovery, the
 PostgreSQL Pod runs `pgbench` at 20 read-only transactions per second against
 that same temporary database for 180 seconds; no host-side `pgbench` install
-is needed. The test checks elapsed-time recovery, persisted combat time and
-event sequence continuity at each size, restarts a Pod during combat, resolves
-the quest once, and restarts a Pod again to check that the result stays fixed.
+is needed. The test checks elapsed-time health, mana, and stamina recovery,
+persisted combat time and event sequence continuity at each size, restarts a
+Pod during combat, resolves the quest once, and restarts a Pod again to check
+that the result stays fixed.
 
 The script removes its test Pods, bootstrap Job, and temporary database on
 exit. It does not modify the live Core database or deployment, and its manifest

@@ -13,6 +13,7 @@ public final class Combatant {
     private final int maxHealth;
     private final int maxMana;
     private final int attackDamage;
+    private final int basicAttackManaCost;
     private final long attackIntervalMilliseconds;
     private final int healthRecoveryPerSecond;
     private final int manaRecoveryPerSecond;
@@ -35,6 +36,7 @@ public final class Combatant {
             int currentHealth,
             int currentMana,
             int attackDamage,
+            int basicAttackManaCost,
             long attackIntervalMilliseconds,
             int healthRecoveryPerSecond,
             int manaRecoveryPerSecond,
@@ -50,6 +52,7 @@ public final class Combatant {
         requireWithin(currentHealth, 0, maxHealth, "currentHealth");
         requireWithin(currentMana, 0, maxMana, "currentMana");
         requireNonNegative(attackDamage, "attackDamage");
+        requireWithin(basicAttackManaCost, 0, maxMana, "basicAttackManaCost");
         requirePositive(attackIntervalMilliseconds, "attackIntervalMilliseconds");
         requireNonNegative(healthRecoveryPerSecond, "healthRecoveryPerSecond");
         requireNonNegative(manaRecoveryPerSecond, "manaRecoveryPerSecond");
@@ -64,6 +67,7 @@ public final class Combatant {
         this.currentHealth = currentHealth;
         this.currentMana = currentMana;
         this.attackDamage = attackDamage;
+        this.basicAttackManaCost = basicAttackManaCost;
         this.attackIntervalMilliseconds = attackIntervalMilliseconds;
         this.healthRecoveryPerSecond = healthRecoveryPerSecond;
         this.manaRecoveryPerSecond = manaRecoveryPerSecond;
@@ -103,6 +107,10 @@ public final class Combatant {
 
     public int getAttackDamage() {
         return attackDamage;
+    }
+
+    public int getBasicAttackManaCost() {
+        return basicAttackManaCost;
     }
 
     public long getAttackIntervalMilliseconds() {
@@ -147,6 +155,7 @@ public final class Combatant {
                 currentHealth,
                 currentMana,
                 attackDamage,
+                basicAttackManaCost,
                 attackIntervalMilliseconds,
                 healthRecoveryPerSecond,
                 manaRecoveryPerSecond,
@@ -168,6 +177,7 @@ public final class Combatant {
                 snapshot.currentHealth(),
                 snapshot.currentMana(),
                 snapshot.attackDamage(),
+                snapshot.basicAttackManaCost(),
                 snapshot.attackIntervalMilliseconds(),
                 snapshot.healthRecoveryPerSecond(),
                 snapshot.manaRecoveryPerSecond(),

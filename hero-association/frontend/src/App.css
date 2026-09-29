@@ -219,6 +219,18 @@
 .upgrade-card__level { display: grid; width: 42px; height: 42px; place-items: center; color: var(--accent); font-family: var(--display-font); font-weight: 700; background: var(--accent-soft); border: 1px solid var(--accent-border); border-radius: 9px; }
 .upgrade-card h2 { font-size: 16px; }
 .upgrade-card p { margin: 5px 0 0; color: var(--text-muted); font-size: 12px; }
+.gold-transfer { margin-top: 18px; }
+.gold-transfer__hint { margin: 12px 0 18px; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.gold-transfer__forms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.gold-transfer__form { display: grid; align-content: start; gap: 11px; min-width: 0; padding: 18px; background: #131c2e; border: 1px solid var(--border-soft); border-radius: 8px; }
+.gold-transfer__form h3 { margin: 0; color: var(--text-strong); font-size: 14px; }
+.gold-transfer__form p { margin: 0; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.gold-transfer__form label { display: grid; gap: 6px; color: var(--text-muted); font-size: 11px; font-weight: 700; }
+.gold-transfer__form input { box-sizing: border-box; width: 100%; height: 36px; padding: 0 10px; color: var(--text-strong); font: inherit; font-size: 13px; background: #101827; border: 1px solid #485875; border-radius: 6px; }
+.gold-transfer__form input:focus { outline: 2px solid #d8a74c; outline-offset: 1px; }
+.gold-transfer__form .button { justify-self: start; }
+.gold-transfer__notice { margin: 16px 0 0; color: #91c9a0; font-size: 12px; }
+@media (max-width: 660px) { .gold-transfer__forms { grid-template-columns: 1fr; } }
 .agency-inventory { margin-top: 18px; }
 .agency-inventory__heading { margin: 22px 0 -8px; color: var(--text-muted); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .agency-inventory__items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-top: 18px; }

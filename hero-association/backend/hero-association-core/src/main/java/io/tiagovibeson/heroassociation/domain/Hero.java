@@ -220,8 +220,12 @@ public class Hero extends UuidEntity {
     }
 
     public void changeActivity(HeroActivity newActivity) {
+        changeActivity(newActivity, agency == null ? 1 : agency.getRestLevel());
+    }
+
+    public void changeActivity(HeroActivity newActivity, int restLevel) {
         Instant changedAt = Instant.now();
-        recoverAgencyResourcesAt(changedAt);
+        recoverAgencyResourcesAt(changedAt, restLevel);
         activity = newActivity;
         lastResourceSynchronizedAt = changedAt;
     }
@@ -232,7 +236,10 @@ public class Hero extends UuidEntity {
         lastResourceSynchronizedAt = synchronizedAt;
     }
 
-    public void recoverAgencyResourcesAt(Instant synchronizedAt) {
+    public void recoverAgencyResourcesAt(Instant synchronizedAt, int restLevel) {
+        if (restLevel < 1) {
+            throw new IllegalArgumentException("Rest level must be positive.");
+        }
         if (activity == HeroActivity.ON_QUEST || !synchronizedAt.isAfter(lastResourceSynchronizedAt)) {
             return;
         }
@@ -253,7 +260,22 @@ public class Hero extends UuidEntity {
                 getMaxMana(),
                 heroClass.getManaRecoveryPerSecond() * recoveryMultiplier,
                 elapsedSeconds);
+        recoverAgencyStamina(elapsedSeconds, restLevel);
         lastResourceSynchronizedAt = lastResourceSynchronizedAt.plusSeconds(elapsedSeconds);
+    }
+
+    private void recoverAgencyStamina(long elapsedSeconds, int restLevel) {
+        long missing = HeroProgression.MAX_STAMINA_MILLISECONDS - staminaMilliseconds;
+        if (missing == 0) {
+            return;
+        }
+        long recoveryPerSecond = activity == HeroActivity.RESTING
+                ? 2_000L + 200L * (restLevel - 1)
+                : 1_000L;
+        long secondsUntilFull = (missing + recoveryPerSecond - 1) / recoveryPerSecond;
+        recoverStaminaMilliseconds(elapsedSeconds >= secondsUntilFull
+                ? missing
+                : elapsedSeconds * recoveryPerSecond);
     }
 
     private int recover(int currentValue, int maximumValue, int recoveryPerSecond, long elapsedSeconds) {
