@@ -39,10 +39,10 @@ class AccountControllerTest {
                 .body("manager.heroes.size()", is(3))
                 .body("manager.heroes.heroClass", containsInAnyOrder("WARRIOR", "MAGE", "ARCHER"))
                 .body("manager.heroes.level", everyItem(is(1)))
-                .body("manager.heroes.meleeLevel", everyItem(is(10)))
-                .body("manager.heroes.distanceLevel", everyItem(is(10)))
-                .body("manager.heroes.magicLevel", everyItem(is(10)))
-                .body("manager.heroes.shieldLevel", everyItem(is(10)))
+                .body("manager.heroes.meleeLevel", everyItem(is(1)))
+                .body("manager.heroes.distanceLevel", everyItem(is(1)))
+                .body("manager.heroes.magicLevel", everyItem(is(1)))
+                .body("manager.heroes.shieldLevel", everyItem(is(1)))
                 .body("manager.items.size()", is(0))
                 .body("manager.runes.size()", is(0));
 

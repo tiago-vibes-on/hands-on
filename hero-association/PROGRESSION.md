@@ -73,24 +73,25 @@ maxMana(L)   = baseMana   + (L - 1) * manaGainPerLevel
 
 Keep cumulative, non-negative **skill points** separately for Melee, Distance,
 Magic, and Shield on every hero, regardless of class. This includes a
-Warrior's Magic Level. For now, every starter skill begins at Level 10 with
-zero points; cross-class starting levels remain open to balancing. A Level 1
-Mage therefore has Magic Level 10 and can use Fire Ball; Lightning Rail
-becomes available at Magic Level 15. A skill's level is the highest `S >= 10`
-reached by its cumulative point threshold:
+Warrior's Magic Level. Every new hero starts all four skills at Level 1 with
+zero points. A new Mage cannot use Fire Ball until Magic Level 10; Lightning
+Rail becomes available at Magic Level 15. The seeded Elara Moonweaver is
+already trained to Magic Level 15 for the combat demo. A skill's level is
+the highest `S >= 1` reached by its cumulative point threshold:
 
 ```text
-points_for_next_skill_level(S) = ceil(100 * (23 / 20)^(S - 10))
-total_skill_points_required(S) = sum(points_for_next_skill_level(k), k = 10..S-1)
+points_for_next_skill_level(S) = ceil(100 * (23 / 20)^(S - 1))
+total_skill_points_required(S) = sum(points_for_next_skill_level(k), k = 1..S-1)
 ```
 
 | Skill level reached | Total skill points required | Points to next level |
 | ---: | ---: | ---: |
-| 10 | 0 | 100 |
-| 11 | 100 | 115 |
-| 12 | 215 | 133 |
-| 15 | 676 | 202 |
-| 20 | 2,035 | 405 |
+| 1 | 0 | 100 |
+| 2 | 100 | 115 |
+| 3 | 215 | 133 |
+| 10 | 1,683 | 352 |
+| 15 | 4,058 | 708 |
+| 20 | 8,831 | 1,424 |
 
 Proposed base point-earning rules, before class, training, and server rates:
 
@@ -105,6 +106,10 @@ Proposed base point-earning rules, before class, training, and server rates:
   earn no Magic points. The current Mage basic attack spends zero mana, so it
   does not train Magic; Mage spells do. If a future Mage basic attack spends mana, that spent
   mana counts just like spell mana.
+
+  Current gap: with Level 1 starting Magic, the zero-mana basic attack, and
+  agency practice not yet implemented, new Mages cannot earn Magic points.
+  Resolve the starting mana-spending action before relying on Mage progression.
 - Shield earns one base point on a successful block while using a shield. It
   does not advance merely because the hero attacks or takes damage. Combat
   blocking is not implemented yet.
@@ -282,7 +287,7 @@ skill_points_after = skill_points_before - floor(skill_points_before * p)
 ```
 
 Recalculate hero and skill levels from the remaining totals. Hero Level cannot
-fall below 1 and skills cannot fall below Level 10. Their progress bars are
+fall below 1 and skills cannot fall below Level 1. Their progress bars are
 recomputed from the totals; levels may go down. At Level 1, the 10% rate can
 still reduce skill points even when hero XP is zero.
 
@@ -295,7 +300,7 @@ still reduce skill points even when hero XP is zero.
 | 200 | 3.77% |
 
 Example: a Level 100 hero exactly at 15,694,800 XP loses 713,100 XP. A skill
-at Level 15 with exactly 676 cumulative points loses 30 points and falls back
+at Level 15 with exactly 4,058 cumulative points loses 184 points and falls back
 to Level 14. Use integer/rational arithmetic rather than floating-point
 rounding so repeated processing and tests give identical results.
 

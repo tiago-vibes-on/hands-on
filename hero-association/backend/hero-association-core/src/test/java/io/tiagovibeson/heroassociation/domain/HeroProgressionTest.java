@@ -26,14 +26,18 @@ class HeroProgressionTest {
 
     @Test
     void shouldCalculateSkillLevelsFromFractionalCumulativePoints() {
-        assertEquals(BigInteger.valueOf(100), HeroProgression.pointsForNextSkillLevel(10));
-        assertEquals(BigInteger.valueOf(115), HeroProgression.pointsForNextSkillLevel(11));
-        assertEquals(BigInteger.valueOf(133), HeroProgression.pointsForNextSkillLevel(12));
-        assertEquals(10, HeroProgression.skillLevelForPoints(new BigDecimal("99.999999")));
-        assertEquals(11, HeroProgression.skillLevelForPoints(new BigDecimal("100")));
-        assertEquals(12, HeroProgression.skillLevelForPoints(new BigDecimal("215")));
-        assertEquals(15, HeroProgression.skillLevelForPoints(new BigDecimal("676")));
-        assertEquals(20, HeroProgression.skillLevelForPoints(new BigDecimal("2035")));
+        assertEquals(BigInteger.valueOf(100), HeroProgression.pointsForNextSkillLevel(1));
+        assertEquals(BigInteger.valueOf(115), HeroProgression.pointsForNextSkillLevel(2));
+        assertEquals(BigInteger.valueOf(133), HeroProgression.pointsForNextSkillLevel(3));
+        assertEquals(BigInteger.valueOf(352), HeroProgression.pointsForNextSkillLevel(10));
+        assertEquals(1, HeroProgression.skillLevelForPoints(BigDecimal.ZERO));
+        assertEquals(1, HeroProgression.skillLevelForPoints(new BigDecimal("99.999999")));
+        assertEquals(2, HeroProgression.skillLevelForPoints(new BigDecimal("100")));
+        assertEquals(3, HeroProgression.skillLevelForPoints(new BigDecimal("215")));
+        assertEquals(10, HeroProgression.skillLevelForPoints(new BigDecimal("1683")));
+        assertEquals(15, HeroProgression.skillLevelForPoints(new BigDecimal("4058")));
+        assertEquals(20, HeroProgression.skillLevelForPoints(new BigDecimal("8831")));
+        assertThrows(IllegalArgumentException.class, () -> HeroProgression.pointsForNextSkillLevel(0));
     }
 
     @Test
@@ -102,7 +106,7 @@ class HeroProgressionTest {
 
         hero.addSkillPoints(HeroSkill.MAGIC, new BigDecimal("0.05"));
         assertEquals(0, hero.getSkillPoints(HeroSkill.MAGIC).compareTo(new BigDecimal("0.05")));
-        assertEquals(10, hero.getMagicLevel());
+        assertEquals(1, hero.getMagicLevel());
         assertThrows(IllegalArgumentException.class, () -> hero.addExperience(-1));
         assertThrows(IllegalArgumentException.class, () -> hero.consumeStaminaMilliseconds(-1));
     }

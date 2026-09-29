@@ -109,6 +109,9 @@ Decisions to settle before the affected step, not before starting Step 1:
   split by party size or damage dealt.
 - [ ] Choose a practice-action cadence and Magic mana cost; confirm Shield
   aptitude rates and a block rule before Shield combat progression.
+- [ ] Give a new Magic Level 1 Mage a way to earn Magic points before Fire Ball
+  unlocks at Level 10: choose a mana-spending basic attack, an entry-level
+  spell, or implement agency Magic practice first.
 - [ ] Choose health, mana, and stamina on return after defeat, and whether a
   level-up refills current resources, before Step 4.
 
@@ -116,10 +119,10 @@ Ordered implementation:
 
 1. [x] Persistence and pure rules: replace percentage stamina with up to
    48 hours of precise time; store cumulative hero XP and fractional Melee,
-   Distance, Magic, and Shield progress. Start all four skills at Level 10,
-   replacing the current Magic Level 0 seed. Derive levels and max resources
-   from the documented formulas. Reset deterministic local data; no Flyway
-   migration or compatibility layer is needed at this stage.
+   Distance, Magic, and Shield progress. Start all four skills at Level 1.
+   Derive levels and max resources from the documented formulas. Reset
+   local data; no Flyway migration or compatibility layer is needed at this
+   stage.
 2. [ ] Combat progression: advance each living hero stamina by actual active
    battle time (one minute per minute), stopping at the real terminal event,
    not the later sync target. Apply Melee/Distance progress per attack and
@@ -372,7 +375,7 @@ are established. See [ADR 0004](adr/0004-core-as-temporary-modular-monolith.md).
   and rune inventory owned independently of agency membership. Agency-change
   workflows still need to be implemented and tested.
 - [x] Start every new Manager with no gold, items, or runes and one personal
-  Level 1 Warrior, Mage, and Archer, with starting skills at Level 10 per
+  Level 1 Warrior, Mage, and Archer, with starting skills at Level 1 per
   `PROGRESSION.md`. Transactional onboarding provisions them once;
   deterministic fixtures cover existing seeded Managers.
 - [x] Make personal recruitment the default for globally available NPCs.

@@ -123,7 +123,7 @@ account** to open Keycloak's native registration form. Registration does not
 request first or last name; standard email and password inputs create the
 account. Google login is a post-MVP task. The first signed-in visit provisions an
 Account and asks for a unique Manager name. Onboarding also creates a personal
-Level 1 Warrior, Mage, and Archer with Level 10 skills, zero personal gold, and
+Level 1 Warrior, Mage, and Archer with Level 1 skills, zero personal gold, and
 empty personal inventories. These assets belong to the Manager, not the agency.
 A Manager with no membership can create one empty Level 1 agency as its leader;
 invitations are a later task. Parties belong to individual Managers inside

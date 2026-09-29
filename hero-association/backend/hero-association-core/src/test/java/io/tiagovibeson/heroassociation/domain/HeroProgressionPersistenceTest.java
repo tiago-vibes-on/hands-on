@@ -34,7 +34,7 @@ class HeroProgressionPersistenceTest {
     void shouldPersistExperienceSkillsAndPreciseStamina() {
         Hero hero = Hero.createRecruitable("Progression Mage", "progression-mage-" + UuidV7.next(),
                 HeroClass.MAGE);
-        hero.addSkillPoints(HeroSkill.MAGIC, new BigDecimal("676"));
+        hero.addSkillPoints(HeroSkill.MAGIC, new BigDecimal("4058"));
         hero.consumeStaminaMilliseconds(HeroProgression.MAX_STAMINA_MILLISECONDS - 41_472_000);
         heroRepository.persist(hero);
         entityManager.flush();

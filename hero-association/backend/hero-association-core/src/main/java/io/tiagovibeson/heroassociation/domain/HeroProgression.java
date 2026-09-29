@@ -7,7 +7,7 @@ import java.util.Objects;
 
 public final class HeroProgression {
 
-    public static final int STARTING_SKILL_LEVEL = 10;
+    public static final int STARTING_SKILL_LEVEL = 1;
     public static final long MAX_STAMINA_MILLISECONDS = Duration.ofHours(48).toMillis();
     public static final long LOW_STAMINA_MILLISECONDS = Duration.ofHours(15).toMillis();
     public static final long HIGH_STAMINA_MILLISECONDS = Duration.ofHours(40).toMillis();

@@ -73,7 +73,7 @@ class QuestCombatProgressionServiceTest {
         assertEquals(archerStamina - 1_000, fixture.archer().getStaminaMilliseconds());
         assertEquals(0, fixture.warrior().getSkillPoints(HeroSkill.MELEE).compareTo(BigDecimal.ONE));
         assertEquals(0, fixture.archer().getSkillPoints(HeroSkill.DISTANCE).compareTo(BigDecimal.ONE));
-        assertEquals(0, fixture.mage().getSkillPoints(HeroSkill.MAGIC).compareTo(new BigDecimal("676.5")));
+        assertEquals(0, fixture.mage().getSkillPoints(HeroSkill.MAGIC).compareTo(new BigDecimal("4058.5")));
 
         progressionService.synchronize(fixture.combat(), synchronizedAt);
         entityManager.flush();
@@ -82,7 +82,7 @@ class QuestCombatProgressionServiceTest {
         assertEquals(warriorStamina - 1_000, reloaded.warrior().getStaminaMilliseconds());
         assertEquals(0, reloaded.warrior().getSkillPoints(HeroSkill.MELEE).compareTo(BigDecimal.ONE));
         assertEquals(0, reloaded.mage().getSkillPoints(HeroSkill.MAGIC)
-                .compareTo(new BigDecimal("676.5")));
+                .compareTo(new BigDecimal("4058.5")));
     }
 
     @Test
@@ -152,7 +152,7 @@ class QuestCombatProgressionServiceTest {
         assertEquals(0, fixture.archer().getSkillPoints(HeroSkill.DISTANCE)
                 .compareTo(new BigDecimal("54")));
         assertEquals(0, fixture.mage().getSkillPoints(HeroSkill.MAGIC)
-                .compareTo(new BigDecimal("698")));
+                .compareTo(new BigDecimal("4080")));
     }
 
     @Test
@@ -199,7 +199,7 @@ class QuestCombatProgressionServiceTest {
         Hero warrior = createHero(agency, party, HeroClass.WARRIOR);
         Hero mage = createHero(agency, party, HeroClass.MAGE);
         Hero archer = createHero(agency, party, HeroClass.ARCHER);
-        mage.addSkillPoints(HeroSkill.MAGIC, new BigDecimal("676"));
+        mage.addSkillPoints(HeroSkill.MAGIC, new BigDecimal("4058"));
         mage.consumeStaminaMilliseconds(HeroProgression.MAX_STAMINA_MILLISECONDS - 41_472_000);
         entityManager.flush();
 

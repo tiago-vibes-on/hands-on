@@ -102,7 +102,9 @@ and separate personal starter heroes, wallets, and inventories.
 ### Skill growth and agency training
 
 Every class has Melee, Distance, Magic, and Shield Levels, including a
-Warrior's Magic Level. Their strongest skills remain:
+Warrior's Magic Level. New heroes start every skill at Level 1. The seeded
+Elara Moonweaver has already reached Magic Level 15 to demonstrate both mage
+spells. Their strongest skills remain:
 
 | Class | Preferred skills |
 | --- | --- |

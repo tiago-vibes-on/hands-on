@@ -80,7 +80,7 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
   the authenticated Keycloak subject. `POST /api/v1/account/manager` creates
   its one Manager with a unique, case-insensitive display name. Manager
   creation transactionally provisions one personally owned Level 1 Warrior,
-  Mage, and Archer (all skills Level 10). Re-reading the account does not
+  Mage, and Archer (all skills Level 1). Re-reading the account does not
   duplicate them. The account response includes the Manager's personal gold,
   hero roster, item inventory, and rune inventory; these are separate from
   agency assets.
@@ -499,14 +499,17 @@ IDs must not be added for entities or exposed through the API.
   15 through 40 hours, and red below 15 hours. At the current `1x` rate, hero XP is
   150%, 100%, and 50%; a planned `2x` rate would yield 250%, 200%, and 100%.
 - Core now stores fractional Melee, Distance, Magic, and Shield points for
-  every hero and derives their skill levels, starting each skill at Level 10.
+  every hero and derives their skill levels, starting each skill at Level 1.
   Valid Warrior and Archer basic attacks now earn Melee and Distance points;
   mana actually spent earns Magic points. Successful shield blocks and agency
   practice are not implemented yet. Planned agency practice earns 2x points
   before class and server rates; see `PROGRESSION.md` for provisional rates.
+  New Mages cannot yet advance Magic from Level 1: their basic attack costs
+  no mana and their first spell requires Magic Level 10.
 - Every hero card ends with five rune slots loaded from the API. Heroes with
   learned spells also show their spell slots; Elara has both mage spells,
-  while other Mages now start at Magic Level 10 with Fire Ball available. Critical Chance and Critical Damage Runes affect server combat;
+  while new Mages start at Magic Level 1 and unlock Fire Ball at Magic Level 10.
+  Critical Chance and Critical Damage Runes affect server combat;
   other rune stat effects do not yet change gameplay. Combat displays five
   read-only rune slots for each hero so their equipped loadout is visible;
   creatures do not display rune slots.

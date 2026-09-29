@@ -74,10 +74,10 @@ class SeededManagerFixtureTest {
             for (var hero : personalHeroes) {
                 assertEquals(manager.getId(), hero.getOwnerManager().getId());
                 assertEquals(1, hero.getLevel());
-                assertEquals(10, hero.getSkillLevel(HeroSkill.MELEE));
-                assertEquals(10, hero.getSkillLevel(HeroSkill.DISTANCE));
-                assertEquals(10, hero.getSkillLevel(HeroSkill.MAGIC));
-                assertEquals(10, hero.getSkillLevel(HeroSkill.SHIELD));
+                assertEquals(1, hero.getSkillLevel(HeroSkill.MELEE));
+                assertEquals(1, hero.getSkillLevel(HeroSkill.DISTANCE));
+                assertEquals(1, hero.getSkillLevel(HeroSkill.MAGIC));
+                assertEquals(1, hero.getSkillLevel(HeroSkill.SHIELD));
                 assertEquals(false, hero.isRecruitable());
             }
             var personalItems = managerItemRepository.listByManagerId(manager.getId());
