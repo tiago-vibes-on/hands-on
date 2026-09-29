@@ -3,3 +3,4 @@ job-dsl
 workflow-aggregator
 git
 junit
+lockable-resources

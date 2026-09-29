@@ -8,6 +8,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 set -a
 source "$script_dir/agent.env"
 set +a
+export HERO_ASSOCIATION_SOURCE_REPO="$(cd -- "$script_dir/../../.." && pwd)"
 export PATH="$(dirname "$JENKINS_AGENT_JAVA_BIN"):$(dirname "$JENKINS_AGENT_NODE_BIN"):$(dirname "$K3D_BIN"):$PATH"
 mkdir -p "$JENKINS_AGENT_WORKDIR"
 exec "$JENKINS_AGENT_JAVA_BIN" -jar "$script_dir/agent.jar" \

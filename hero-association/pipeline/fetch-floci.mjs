@@ -6,7 +6,7 @@ import path from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
-import { prepareArchive, requirePassingE2EVerification } from '../e2e/archive-images.js'
+import { inspectArchive, prepareArchive, requirePassingE2EVerification } from '../e2e/archive-images.js'
 
 // This command is deliberately bound to the local emulator, never ambient AWS.
 const endpoint = 'http://127.0.0.1:4566'
@@ -35,8 +35,10 @@ async function main() {
     await pipeline(Readable.fromWeb(response.body), createWriteStream(path.join(destination, name)))
   }
 
-  const archive = await prepareArchive(destination)
+  const archive = await inspectArchive(destination)
   if (archive.buildId !== buildId) throw new Error('Downloaded manifest build ID does not match the requested build')
+  if (archive.promoteComponent) throw new Error('K3d service archives are not portable Floci artifacts')
+  await prepareArchive(archive.archiveDirectory)
   await requirePassingE2EVerification(archive)
   console.log(`Verified Floci archive: ${destination}`)
 }

@@ -89,7 +89,7 @@ async function expectedImageDigests(archive, component, platform) {
   return new Set([indexDigest, manifestDigest, configDigest])
 }
 
-async function verifyRunningPodImages(archive) {
+async function verifyRunningPodImages(archive, selectedComponents = components) {
   const nodes = JSON.parse(await run('kubectl', [...kubectl, 'get', 'nodes', '-o', 'json'], { capture: true }))
   const platforms = new Map(nodes.items.map((node) => [
     node.metadata.name,
@@ -97,7 +97,7 @@ async function verifyRunningPodImages(archive) {
   ]))
   const expected = new Map()
   const observed = {}
-  for (const component of components) {
+  for (const component of selectedComponents) {
     const { deployment } = await getDeployment(component)
     const labels = deployment.spec.selector.matchLabels ?? {}
     if (!Object.keys(labels).length || deployment.spec.selector.matchExpressions?.length) {
@@ -133,8 +133,20 @@ async function verifyRunningPodImages(archive) {
   }
   return observed
 }
-async function verifyDeploymentImageReferences(archive) {
-  for (const component of components) {
+async function verifyRunningPodImagesSettled(archive, selectedComponents = components) {
+  for (let attempt = 1; attempt <= 12; attempt++) {
+    try {
+      return await verifyRunningPodImages(archive, selectedComponents)
+    } catch (error) {
+      if (attempt === 12) throw error
+      console.log("Pod image check is not settled (attempt " + attempt + "): " + error.message)
+      await new Promise((resolve) => setTimeout(resolve, 5000))
+    }
+  }
+}
+
+async function verifyDeploymentImageReferences(archive, selectedComponents = components) {
+  for (const component of selectedComponents) {
     const { image } = await getDeployment(component)
     if (image !== archive.images[component].ref) {
       throw new Error('Deployment ' + component + ' does not reference the archived image')
@@ -149,6 +161,7 @@ async function recordPromotion(archive, observedPods) {
     cluster: 'k3d-hero-association',
     namespace,
     buildId: archive.buildId,
+    promoteComponent: archive.promoteComponent || 'all',
     archiveSha256: archive.archiveSha256,
     images: Object.fromEntries(components.map((component) => [component, {
       ref: archive.images[component].ref,
@@ -172,9 +185,10 @@ async function recordPromotion(archive, observedPods) {
 }
 
 async function main() {
-  const verifyOnly = process.argv[2] === '--verify-only'
-  if (process.argv.length !== (verifyOnly ? 4 : 3)) {
-    throw new Error('Usage: node deploy-k3d.mjs [--verify-only] artifacts/<build-id>/all')
+  const mode = process.argv[2] === '--verify-only' ? 'verify-only'
+    : process.argv[2] === '--verify-baseline' ? 'verify-baseline' : 'promote'
+  if (process.argv.length !== (mode === 'promote' ? 3 : 4)) {
+    throw new Error('Usage: node deploy-k3d.mjs [--verify-only|--verify-baseline] artifacts/<build-id>/all')
   }
   if (!existsSync(kubeconfig)) {
     throw new Error('Missing isolated k3d kubeconfig: ' + kubeconfig)
@@ -196,9 +210,19 @@ async function main() {
     previous[component] = image
   }
 
-  const archive = await inspectArchive(process.argv[verifyOnly ? 3 : 2])
+  const archive = await inspectArchive(process.argv[mode === 'promote' ? 2 : 3])
+  if (archive.promoteComponent) {
+    const baselineComponents = components.filter((component) => component !== archive.promoteComponent)
+    await verifyDeploymentImageReferences(archive, baselineComponents)
+    await verifyRunningPodImages(archive, baselineComponents)
+    console.log('Verified unchanged k3d service images against the archive')
+  }
+  if (mode === 'verify-baseline') {
+    if (!archive.promoteComponent) throw new Error('Baseline verification requires a service promotion archive')
+    return
+  }
   await requirePassingE2EVerification(archive)
-  if (verifyOnly) {
+  if (mode === 'verify-only') {
     await verifyDeploymentImageReferences(archive)
     await verifyRunningPodImages(archive)
     console.log('k3d deployment matches E2E-verified archive ' + archive.buildId)
@@ -206,12 +230,13 @@ async function main() {
   }
   await prepareArchive(archive.archiveDirectory)
   console.log('Promoting E2E-verified archive ' + archive.buildId + ' (' + archive.archiveSha256 + ')')
-  await run(k3d, ['image', 'import', ...components.map((component) => archive.images[component].ref), '--cluster', 'hero-association'])
+  const promotedComponents = archive.promoteComponent ? [archive.promoteComponent] : components
+  await run(k3d, ['image', 'import', ...promotedComponents.map((component) => archive.images[component].ref), '--cluster', 'hero-association'])
 
   const targetImages = Object.fromEntries(components.map((component) => [component, archive.images[component].ref]))
   const changed = []
   try {
-    for (const component of components) {
+    for (const component of promotedComponents) {
       const target = archive.images[component].ref
       if (previous[component] !== target) {
         changed.push(component)
@@ -222,7 +247,10 @@ async function main() {
     await verifyRunningPodImages(archive)
     await run('npm', ['run', 'test:k3d'], { cwd: path.join(projectDirectory, 'e2e') })
     await run('npm', ['run', 'test:market:k6'], { cwd: path.join(projectDirectory, 'e2e') })
-    const observedPods = await verifyRunningPodImages(archive)
+    for (const component of promotedComponents) {
+      await run('kubectl', [...kubectl, '-n', namespace, 'rollout', 'status', 'deployment/' + component, '--timeout=5m'])
+    }
+    const observedPods = await verifyRunningPodImagesSettled(archive)
     await recordPromotion(archive, observedPods)
   } catch (error) {
     console.error('Promotion failed: ' + error.message)

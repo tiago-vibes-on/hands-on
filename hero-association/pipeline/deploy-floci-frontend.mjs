@@ -2,7 +2,7 @@
 
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { prepareArchive, requirePassingE2EVerification } from '../e2e/archive-images.js'
+import { inspectArchive, prepareArchive, requirePassingE2EVerification } from '../e2e/archive-images.js'
 
 const executeFile = promisify(execFile)
 const endpoint = 'http://127.0.0.1:4566'
@@ -51,7 +51,9 @@ async function main() {
   if (process.argv.length !== 3) {
     throw new Error('Usage: node deploy-floci-frontend.mjs artifacts/<downloaded-floci-archive>')
   }
-  const archive = await prepareArchive(process.argv[2])
+  const archive = await inspectArchive(process.argv[2])
+  if (archive.promoteComponent) throw new Error('K3d service archives are not portable Floci artifacts')
+  await prepareArchive(archive.archiveDirectory)
   await requirePassingE2EVerification(archive)
   const image = archive.images.frontend
 

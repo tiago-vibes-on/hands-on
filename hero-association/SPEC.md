@@ -59,6 +59,17 @@ importing them into the cluster. Only after Pod-image verification, k3d browser
 E2E, and market k6 pass does promotion write a local result. See
 [the pipeline guide](pipeline/README.md).
 
+Jenkins has independent Core, BFF, and frontend build jobs for an uncommitted
+worktree and trusted `main`, plus one deploy-local job per service. A service
+build tests its new image together with the other two currently deployed
+k3d images in one checksummed archive. Worktree builds do not deploy
+automatically; successful `main` builds trigger their deploy job. A shared Jenkins lock
+serializes complete `main` build-and-deploy pairs across services. Deployment
+rejects a changed baseline, promotes only the candidate image, verifies all
+three running Pod digests, runs browser E2E and market k6, and rolls back the
+target service if a post-rollout gate fails. The latest successful deployment
+of a service wins; this local lab does not coordinate cross-service releases.
+
 ## API contract
 
 Game Core exposes agency game state and persisted rune loadouts at

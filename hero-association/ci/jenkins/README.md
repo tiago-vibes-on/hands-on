@@ -6,32 +6,51 @@ agent is a background process in the existing Ubuntu WSL installation, not
 another VM or WSL distribution. GitHub is the source repository; neither
 GitHub-hosted runners nor Floci/AWS execute these builds.
 
-The single `hero-association-k3d` job polls the repository's trusted `main`
-branch every few minutes. It checks out a clean revision on the WSL agent and
-runs [the existing gated pipeline](../../pipeline/README.md): Maven tests,
-frontend lint/build, three Docker image builds, archive-backed browser E2E,
-k3d image import and rollout, k3d browser E2E, and market k6. The existing
-promotion code restores previous application images if a post-rollout gate
-fails. It does not reset Core data or restart normal Compose development.
+Nine service jobs share the WSL agent's single executor:
+
+| Service | Manual uncommitted build | Trusted `main` build | Local deploy |
+| --- | --- | --- | --- |
+| Core | `hero-association-core-build-worktree` | `hero-association-core-build-main` | `hero-association-core-deploy-local` |
+| BFF | `hero-association-bff-build-worktree` | `hero-association-bff-build-main` | `hero-association-bff-deploy-local` |
+| Frontend | `hero-association-frontend-build-worktree` | `hero-association-frontend-build-main` | `hero-association-frontend-deploy-local` |
+
+Each build creates one candidate image and a checksummed three-image archive
+using the other two images currently running in k3d. Browser E2E tests the
+exact combination. A worktree build never deploys automatically; its deploy
+job is started manually with the verified artifact ID. Each successful `main`
+build triggers its corresponding deploy job. A Jenkins lock serializes the
+complete `main` build-and-deploy pairs across all three services, so a
+multi-service commit builds each candidate against the last deployed baseline.
+After the first successful `main` run, a job skips commits that change
+neither its service nor shared build, E2E, Jenkins, or k3d files.
+Deployment never rebuilds an image and rejects a baseline that changed after the build. The latest
+successful deploy of a service wins. The two old combined jobs are disabled
+without deleting their history.
+
+No service job resets Core data or restarts normal Compose development.
 Images go directly from the verified local archive into k3d; this setup does
 not add a registry.
 
 ## Requirements
 
-- Docker Desktop with WSL integration (or a Linux Docker engine), Docker
-  Compose, and a running, already bootstrapped Hero Association k3d cluster.
-- Java 25, Node.js 24/npm, Docker CLI, `kubectl`, `git`, `openssl`, and
+- Docker Desktop with WSL integration (or a Linux Docker engine) and Docker
+  Compose. Every service build and deploy job requires a running,
+  bootstrapped Hero Association k3d cluster.
+- Java 25, Node.js 24/npm, Docker CLI, `kubectl`, `git`, `rsync`, `openssl`, and
   `curl` in the same WSL distribution. The existing ignored
   `deploy/k3d/.tools/k3d` binary is used if `k3d` is not on `PATH`.
 - The readable, isolated `deploy/k3d/.kubeconfig` with current context
-  `k3d-hero-association`. The agent uses this original ignored file from its
-  clean checkout through `HERO_ASSOCIATION_K3D_KUBECONFIG`; it never copies
-  the credential into the Jenkins workspace.
-- A GitHub `main` commit containing this Jenkins configuration. The job
-  deliberately checks out `https://github.com/tiago-vibes-on/hands-on.git`
-  rather than uncommitted local changes.
+  `k3d-hero-association`. The agent uses the original ignored file from the WSL project through
+  `HERO_ASSOCIATION_K3D_KUBECONFIG`; it never copies the credential into the
+  Jenkins workspace.
+- For the `main` jobs, a GitHub `main` commit containing these service scripts.
+  They check out `https://github.com/tiago-vibes-on/hands-on.git` rather than
+  uncommitted local changes.
 - Enough free RAM and disk for the existing k3d stack, Jenkins, the JVM/Node
   builds, Playwright containers, and retained image archives.
+
+The root `.gitattributes` pins the extensionless Maven wrappers to LF. Keep
+that rule: CRLF checkout makes their Linux shebangs unexecutable.
 
 The Jenkins controller can start while k3d is stopped, but deployment requires
 the cluster. WSL and Docker must be running for builds. After they restart,
@@ -74,10 +93,40 @@ the generated password is in the ignored `.env` file:
 sed -n 's/^JENKINS_ADMIN_PASSWORD=//p' .env
 ```
 
-The first build can be started with **Build Now** after this configuration is
-on GitHub `main`; subsequent changes to `main` are picked up by SCM polling.
-The job is intentionally not configured for pull requests or forks. It allows
-one build at a time, and the Jenkins controller itself has zero executors.
+Worktree builds are available immediately. After this configuration reaches
+GitHub `main`, its three build jobs poll that branch; a successful build
+automatically invokes a separate deploy-local job.
+The jobs are intentionally not configured for pull requests or forks. The
+single agent executor allows one build or deployment at a time, and the Jenkins controller itself has zero executors.
+
+## Build and deploy one service
+
+Open <http://localhost:15180> and select the matching
+`hero-association-<service>-build-worktree` job, then choose **Build Now**.
+It snapshots tracked, staged, unstaged, and non-ignored new files before
+building only that service. Jenkins runs its tests or lint, builds the image,
+assembles a three-image archive with the current k3d BFF/Core/frontend
+baseline, and runs the archive-backed browser suite. The full archive
+is retained under the WSL agent work directory; the build record includes
+`artifact-id.txt`, the manifest, and the E2E result. If you edit source while
+a snapshot is being taken, rerun the build. Ignored files and credentials
+are not copied.
+
+To deploy, open `hero-association-<service>-deploy-local`, choose **Build with
+Parameters**, and paste the successful build artifact ID into `ARTIFACT_ID`.
+The deploy job checks the two unchanged k3d service images against the
+archive, imports and rolls only the selected service, verifies all running
+Pod image digests, then runs the k3d browser and market k6 suites. If the
+baseline has changed, build again before deploying. If a post-rollout gate
+fails, the selected service image is restored. No deploy job rebuilds an
+image. The `main` build jobs call these same deploy jobs automatically after
+a clean-checkout build passes. The controller uses the Lockable Resources
+plugin to hold `hero-association-main-promotion` across each build and its
+downstream deploy; the agent executor is released while waiting for the
+deploy job, avoiding a one-executor deadlock.
+
+The retained archives consume disk. Do not delete an archive before its
+deployment is finished. These are local study artifacts, not releases.
 
 ## Status and stopping
 
@@ -107,14 +156,14 @@ service can be disabled with
 
 The controller is reachable only through host loopback, with sign-in required.
 Its container has no Docker socket or kubeconfig. The WSL build agent does have
-access to Docker and the isolated k3d kubeconfig, so only trusted `main`
-commits may run there. Do not add pull-request builds or expose the controller
-to the LAN without a separate security design. Builds run in the agent's
-workspace rather than the developer working copy.
+access to Docker and the isolated k3d kubeconfig. The worktree build jobs do not invoke deployment, but they execute local
+uncommitted code on that privileged agent and are not a security sandbox. Run only your own trusted
+edits there. Do not add pull-request builds or expose the controller to the
+LAN without a separate security design. Builds run in the agent's workspace
+rather than the developer working copy.
 
-All deployment logic stays in `pipeline/run-k3d-pipeline.sh`; Jenkins only
-schedules that command and records its results. The small manifest and gate
-evidence files are kept in Jenkins build records, while full archives remain
-in the agent workspace for provenance and rollback. They consume disk; review
-them before manual cleanup. This is a local lab, not a production CI server or
-an AWS deployment.
+The service jobs use the build, archive-E2E, and k3d promotion commands in
+`pipeline/` through their dedicated runners. The older all-in-one pipeline
+remains available manually but its Jenkins jobs are disabled. Full archives
+remain under the agent work directory for provenance; this is a local lab,
+not a production CI server or AWS deployment.

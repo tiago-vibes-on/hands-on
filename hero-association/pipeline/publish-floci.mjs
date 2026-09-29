@@ -5,7 +5,7 @@ import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import { Readable } from 'node:stream'
-import { prepareArchive, requirePassingE2EVerification } from '../e2e/archive-images.js'
+import { inspectArchive, prepareArchive, requirePassingE2EVerification } from '../e2e/archive-images.js'
 
 // Intentionally fixed to the loopback-only emulator: this command must never
 // publish to a real AWS endpoint because of ambient AWS CLI configuration.
@@ -62,7 +62,9 @@ async function main() {
   if (process.argv.length !== 3) {
     throw new Error('Usage: node publish-floci.mjs artifacts/<build-id>/all')
   }
-  const archive = await prepareArchive(process.argv[2])
+  const archive = await inspectArchive(process.argv[2])
+  if (archive.promoteComponent) throw new Error('K3d service archives are not portable Floci artifacts')
+  await prepareArchive(archive.archiveDirectory)
   await requirePassingE2EVerification(archive)
 
   const health = await fetch(`${endpoint}/_localstack/health`, { signal: AbortSignal.timeout(10_000) })

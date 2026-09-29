@@ -44,9 +44,16 @@ export async function inspectArchive(directory) {
   if (!/^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/.test(buildId)) {
     throw new Error(`Invalid archive build ID: ${buildId}`)
   }
-  if (singleManifestValue(lines, 'component') !== 'all') {
-    throw new Error('Browser E2E requires one complete all-component archive')
+  const component = singleManifestValue(lines, 'component')
+  if (component !== 'all' && !components.includes(component)) {
+    throw new Error(`Unsupported archive component: ${component}`)
   }
+  const promotions = lines.filter((line) => line.startsWith('promote_component='))
+  if (promotions.length > 1 || (promotions.length &&
+      (component !== 'all' || !components.includes(promotions[0].slice('promote_component='.length))))) {
+    throw new Error('Invalid archive promotion component')
+  }
+  const promoteComponent = promotions.length ? promotions[0].slice('promote_component='.length) : null
 
   const archiveSha256 = singleManifestValue(lines, 'archive_sha256')
   const checksum = await readFile(path.join(archiveDirectory, 'images.tar.sha256'), 'utf8')
@@ -59,21 +66,27 @@ export async function inspectArchive(directory) {
   }
 
   const imageLines = lines.filter((line) => line.startsWith('image='))
-  if (imageLines.length !== components.length) {
-    throw new Error('Archive manifest must contain exactly the Core, BFF, and frontend images')
+  const expectedComponents = component === 'all' ? components : [component]
+  if (imageLines.length !== expectedComponents.length) {
+    throw new Error(`Archive manifest must contain exactly ${expectedComponents.join(', ')} image(s)`)
   }
   const images = {}
-  for (const component of components) {
-    const ref = `hero-association-${component}:${buildId}`
-    const matches = imageLines.filter((line) => line.startsWith(`image=${ref} `))
-    const match = matches.length === 1 && /^image=\S+ (sha256:[a-f0-9]{64})$/.exec(matches[0])
+  for (const imageComponent of expectedComponents) {
+    const prefix = `hero-association-${imageComponent}:`
+    const matches = imageLines.filter((line) => line.startsWith(`image=${prefix}`))
+    const match = matches.length === 1 && /^image=(\S+) (sha256:[a-f0-9]{64})$/.exec(matches[0])
     if (!match) {
-      throw new Error(`Archive manifest is missing exactly one valid ${ref} image ID`)
+      throw new Error(`Archive manifest is missing exactly one valid ${imageComponent} image ID`)
     }
-    images[component] = { ref, id: match[1] }
+    const [, ref, id] = match
+    if (!new RegExp(`^hero-association-${imageComponent}:[A-Za-z0-9_.-]+$`).test(ref) ||
+        ((!promoteComponent || imageComponent === promoteComponent) && ref !== `${prefix}${buildId}`)) {
+      throw new Error(`Archive has invalid ${imageComponent} image reference: ${ref}`)
+    }
+    images[imageComponent] = { ref, id }
   }
 
-  return { archiveDirectory, archiveSha256, buildId, images }
+  return { archiveDirectory, archiveSha256, buildId, component, promoteComponent, images }
 }
 
 export async function prepareArchive(directory) {
@@ -98,6 +111,9 @@ export async function prepareArchive(directory) {
 }
 
 export async function recordE2EVerification(archive, status) {
+  if (archive.component !== 'all') {
+    throw new Error('Browser E2E requires a complete three-image archive')
+  }
   if (status !== 'pending' && status !== 'passed') {
     throw new Error(`Unsupported E2E verification status: ${status}`)
   }
@@ -118,6 +134,9 @@ export async function recordE2EVerification(archive, status) {
 }
 
 export async function requirePassingE2EVerification(archive) {
+  if (archive.component !== 'all') {
+    throw new Error('Deployment requires a complete three-image archive')
+  }
   let record
   try {
     record = JSON.parse(await readFile(path.join(archive.archiveDirectory, 'e2e-verification.json'), 'utf8'))

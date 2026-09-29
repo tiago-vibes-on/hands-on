@@ -10,7 +10,7 @@ if [[ -z "$k3d_bin" ]]; then
 fi
 agent_workdir="${JENKINS_AGENT_WORKDIR:-${XDG_STATE_HOME:-$HOME/.local/state}/hero-association-jenkins/agent}"
 
-for tool in docker kubectl java node npm git openssl curl; do
+for tool in docker kubectl java node npm git rsync openssl curl; do
   command -v "$tool" >/dev/null || { printf 'Missing required tool: %s\n' "$tool" >&2; exit 1; }
 done
 [[ -r "$kubeconfig" ]] || { printf 'Missing readable k3d kubeconfig: %s\n' "$kubeconfig" >&2; exit 1; }

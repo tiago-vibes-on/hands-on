@@ -1,5 +1,5 @@
 jenkins:
-  systemMessage: "Hero Association local k3d CI/CD. Builds only trusted main on the WSL agent."
+  systemMessage: "Hero Association local CI: trusted main promotion and manual pre-commit checks on the WSL agent."
   numExecutors: 0
   slaveAgentPort: -1
   securityRealm:
@@ -27,23 +27,115 @@ jenkins:
 
 jobs:
   - script: |
-      pipelineJob('hero-association-k3d') {
-        description('Trusted main only: build and verify once, then promote to local k3d.')
-        triggers {
-          scm('H/5 * * * *')
-        }
-        definition {
-          cpsScm {
-            scm {
-              git {
-                remote {
-                  url('https://github.com/tiago-vibes-on/hands-on.git')
+      def services = ['core', 'bff', 'frontend']
+      services.each { service ->
+        def worktreeScript = '''
+          pipeline {
+            agent { label 'wsl-local' }
+            options {
+              skipDefaultCheckout(true)
+              disableConcurrentBuilds()
+              timeout(time: 3, unit: 'HOURS')
+            }
+            stages {
+              stage('Build and verify worktree service') {
+                steps {
+                  deleteDir()
+                  sh 'bash "$HERO_ASSOCIATION_SOURCE_REPO/hero-association/ci/jenkins/run-service-build.sh" worktree __SERVICE__'
                 }
-                branch('*/main')
               }
             }
-            scriptPath('hero-association/ci/jenkins/Jenkinsfile')
-            lightweight()
+            post {
+              always { archiveArtifacts artifacts: 'artifact-id.txt,evidence/*', allowEmptyArchive: true }
+            }
           }
+        '''.replace('__SERVICE__', service)
+        pipelineJob("hero-association-" + service + "-build-worktree") {
+          description("Manual: build " + service + " from a local worktree snapshot and verify its three-image archive; no deployment.")
+          definition { cps { script(worktreeScript); sandbox() } }
         }
+
+        def deployScript = '''
+          pipeline {
+            agent { label 'wsl-local' }
+            options {
+              skipDefaultCheckout(true)
+              disableConcurrentBuilds()
+              timeout(time: 1, unit: 'HOURS')
+            }
+            parameters { string(name: 'ARTIFACT_ID', defaultValue: '', description: 'Verified service artifact ID from a build job') }
+            stages {
+              stage('Deploy verified service artifact to k3d') {
+                steps {
+                  deleteDir()
+                  sh 'bash "$HERO_ASSOCIATION_SOURCE_REPO/hero-association/ci/jenkins/run-service-deploy.sh" __SERVICE__ "$ARTIFACT_ID"'
+                }
+              }
+            }
+            post {
+              always { archiveArtifacts artifacts: 'evidence/*', allowEmptyArchive: true }
+            }
+          }
+        '''.replace('__SERVICE__', service)
+        pipelineJob("hero-association-" + service + "-deploy-local") {
+          description("Deploy an already verified " + service + " artifact to the local k3d cluster without rebuilding.")
+          parameters { stringParam("ARTIFACT_ID", "", "Verified service artifact ID") }
+          definition { cps { script(deployScript); sandbox() } }
+        }
+
+        def mainScript = '''
+          pipeline {
+            agent none
+            options {
+              skipDefaultCheckout(true)
+              disableConcurrentBuilds()
+              timeout(time: 3, unit: 'HOURS')
+            }
+            stages {
+              stage('Build and deploy trusted main') {
+                steps {
+                  script {
+                    lock(resource: 'hero-association-main-promotion') {
+                      def artifactId = ''
+                      node('wsl-local') {
+                        deleteDir()
+                        git branch: 'main', url: 'https://github.com/tiago-vibes-on/hands-on.git', poll: true
+                        if (fileExists('hero-association/ci/jenkins/run-service-build.sh')) {
+                          try {
+                            sh 'bash hero-association/ci/jenkins/run-service-build.sh main __SERVICE__'
+                            if (fileExists('artifact-id.txt')) {
+                              artifactId = readFile('artifact-id.txt').trim()
+                            }
+                          } finally {
+                            archiveArtifacts artifacts: 'artifact-id.txt,evidence/*', allowEmptyArchive: true
+                          }
+                        } else {
+                          echo 'Service jobs are not on main yet; no deployment.'
+                        }
+                      }
+                      if (artifactId) {
+                        build job: 'hero-association-__SERVICE__-deploy-local',
+                          parameters: [string(name: 'ARTIFACT_ID', value: artifactId)],
+                          wait: true, propagate: true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        '''.replace('__SERVICE__', service)
+        pipelineJob("hero-association-" + service + "-build-main") {
+          description("Poll trusted main, build and verify " + service + ", then trigger its separate local deploy job.")
+          triggers { scm('H/5 * * * *') }
+          definition { cps { script(mainScript); sandbox() } }
+        }
+      }
+      pipelineJob('hero-association-k3d') {
+        disabled(true)
+        description('Legacy full-stack job; replaced by service jobs.')
+      }
+      pipelineJob('hero-association-precommit') {
+        disabled(true)
+        description('Legacy full-stack precommit job; replaced by service jobs.')
       }

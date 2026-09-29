@@ -4,9 +4,12 @@ This local pipeline builds once, verifies the archived images, and can deploy
 them to k3d or store them in Floci S3 for a later AWS-lab deployment. The normal
 Vite/Quarkus development workflow remains separate.
 
-To run this same gated k3d pipeline automatically from trusted GitHub `main`
-commits, see the [local Jenkins runbook](../ci/jenkins/README.md). Jenkins builds
-on the existing WSL machine; it does not use GitHub-hosted runners.
+The [local Jenkins setup](../ci/jenkins/README.md) has independent Core, BFF,
+and frontend worktree builds and trusted-`main` builds, plus a deploy-local job
+for each service. The older complete-stack command below remains available
+manually. Worktree builds need a separate manual deployment; successful `main`
+builds trigger their service deploy job. A Jenkins lock serializes whole
+`main` build-and-deploy pairs; all run on WSL, not GitHub runners.
 
 ## Run the complete k3d pipeline
 
@@ -86,6 +89,36 @@ pulls, checks the running container IDs, and runs Playwright. The ignored
 `e2e-verification.json` beside the archive records `result: passed` only
 after tests and cleanup succeed. `npm test` remains the source-building
 development suite.
+
+## Jenkins service artifacts
+
+For a single-service promotion, Jenkins first runs `build-local.sh` for that
+component. It then uses `assemble-service-archive.mjs` to combine the candidate
+with the two live k3d images in a checksummed, three-image archive. The manifest
+includes `promote_component`. The archive browser gate tests exactly this
+combination, not an unrelated three-service rebuild. Build and deploy jobs
+share the retained artifact under the WSL agent work directory at
+`artifacts/<build-id>/all`; the Jenkins build record stores its ID and small
+evidence. A build does not change k3d.
+
+`deploy-k3d.mjs --verify-baseline` checks the two baseline Deployment
+references and running Pod image digests before the browser gate. The deploy
+job repeats this drift check and requires the exact archive's passing E2E record.
+It imports and rolls only the promoted component. It still verifies all three
+Pods and runs the k3d browser and market k6 gates. After k6, the final Pod
+check briefly retries while autoscaling settles, but a persistent digest or
+readiness mismatch fails promotion. A failure after rollout
+restores only that component's previous reference. If either baseline changed
+since the build, rebuild against the current cluster. The latest successful
+per-service deployment wins.
+
+This local mechanism needs a healthy k3d cluster even for a build, because
+the other two images are read from it. It does not create a reproducible
+release artifact for other environments. Floci publish, fetch, and frontend
+preview reject these k3d-specific composite archives; use a full
+three-image build for the separate Floci lab. Main builds use a clean GitHub
+checkout; worktree builds snapshot staged, unstaged, and non-ignored new
+files. Do not delete retained archives while a deploy job may still use them.
 
 ## Promote the verified archive to k3d
 

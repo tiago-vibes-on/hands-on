@@ -280,6 +280,12 @@ checks, so Docker must be available.
 
 ## Promote a verified archive
 
+For independent Core, BFF, or frontend updates, use the nine jobs in the
+[local Jenkins runbook](../../ci/jenkins/README.md). A service build verifies
+its candidate together with the two images currently running here; its
+separate deploy job promotes only that service and rejects a changed baseline.
+The manual commands below remain the complete-stack archive workflow.
+
 For a fresh build through archived-image E2E, k3d browser, and market k6
 gates, run `../../pipeline/run-k3d-pipeline.sh` from this directory. It
 creates a new archive and prints its path. The commands below promote an archive that has
