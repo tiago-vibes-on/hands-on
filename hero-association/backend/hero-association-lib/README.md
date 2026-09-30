@@ -7,7 +7,7 @@ Shared Hero progression formulas and UUIDv7 helpers also live here so Core
 and Expedition apply the same calculations.
 
 From backend/, test it and install the artifact for standalone Core or
-Combat builds:
+Expedition builds:
 
 ~~~bash
 ./mvnw --batch-mode -pl hero-association-lib -am install
@@ -18,7 +18,6 @@ the backend reactor:
 
 ~~~bash
 ./mvnw --batch-mode -pl hero-association-core -am package
-./mvnw --batch-mode -pl hero-association-combat -am package
 ./mvnw --batch-mode -pl hero-association-expedition -am package
 ~~~
 

@@ -344,31 +344,10 @@ IDs must not be added for entities or exposed through the API.
   `feed_post`, and `market_order`. A hero is either recruitable,
   agency-owned, or Manager-owned; personal heroes cannot be recruited by
   an agency.
-- An isolated pre-cutover Combat service owns a separate singular `battle`
-  table. Its private start endpoint validates a typed, engine-restorable
-  opening snapshot and ordered pinned Hero/Creature inputs (identity, class,
-  levels, stamina, rune slots, Creature definition/version, and base XP). It
-  persists canonical state with a UUIDv7-keyed `PREPARED` request. Identical
-  retries are idempotent; conflicting payloads return `409`. It requires a
-  Combat-audience JWT with the `combat:start` role. The only accepted ruleset
-  label is provisionally `core-v1`. It uses the same deterministic `hero-association-lib/combat-engine`
-  library as Core; there is no duplicate production engine or parity script. Its
-  separate database supports bounded manual advances that atomically persist
-  the new snapshot, ordered `battle_event` rows, and chronological facts in
-  `battle_progression_batch` outbox rows. Repeated target times do not duplicate
-  facts. An opt-in one-second worker advances due battles from a persisted
-  wall-clock anchor in at most ten-second steps. Row locks prevent duplicate
-  progression across replicas. The worker is off by default. A separate,
-  opt-in outbox worker publishes versioned progression batches to a durable
-  RabbitMQ queue with publisher confirms, then marks them published. A broker
-  failure leaves the row pending for retry. An opt-in Core RabbitMQ consumer
-  validates each batch and stores it once in the singular
-  `combat_progression_inbox` table before acknowledging it; invalid batches
-  are requeued. A manual, registration-gated Core applier can process contiguous
-  batches into Hero stamina, skills, XP, and final health/mana in one transaction
-  with its sequence cursor. Registration requires a Party outside a live Core
-  Quest and has no production caller yet. Run outcomes remain for their own
-  owner. No live traffic uses Combat; normal Core intake is disabled by default.
+- The standalone Combat sandbox and Core Combat-fact inbox were retired.
+  Core Quest combat and Expedition Map combat still use the same pure
+  `hero-association-lib/combat-engine` library; only Expedition owns live
+  Map fight timelines and returns aggregated progress to Core.
 - Until Flyway is introduced, Core's development and test profiles drop and
   recreate the schema on startup, then load deterministic state from
   `import.sql`. Packaged Docker Compose explicitly keeps this disposable

@@ -12,7 +12,6 @@
     <modules>
         <module>hero-association-lib</module>
         <module>hero-association-core</module>
-        <module>hero-association-combat</module>
         <module>hero-association-expedition</module>
         <module>hero-association-bff</module>
     </modules>

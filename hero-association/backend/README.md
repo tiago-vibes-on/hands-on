@@ -1,7 +1,7 @@
 # Hero Association Backend Services
 
-Core and BFF run in all environments. The k3d Map also uses Expedition;
-the standalone Combat sandbox stays private:
+Core and BFF run in all environments. Expedition powers the k3d Map and is
+opt-in for ordinary local development:
 
 ```text
 browser -> hero-association-bff -> hero-association-core -> Core PostgreSQL
@@ -21,15 +21,6 @@ browser -> hero-association-bff -> hero-association-core -> Core PostgreSQL
 - `hero-association-core` owns game rules, PostgreSQL state, and the internal
   API. It validates the `hero-association-core` bearer-token audience for every
   API call, listens on port `8081`, and is not published by Docker Compose.
-  An optional Combat inbox stores sandbox fact batches; a manual,
-  registration-gated applier is not wired to live battles.
-- `hero-association-combat` validates typed opening snapshots and pinned
-  Hero/Creature inputs. Its isolated database supports idempotent starts,
-  manual advances, and opt-in advancement and RabbitMQ outbox workers.
-  Progression batches are only published when explicitly enabled; Core's
-  inbox intake is also opt-in, and neither Core nor BFF calls Combat yet. See its
-  [README](hero-association-combat/README.md); Core remains the sole live
-  battle writer.
 
 `hero-association-expedition` is an opt-in Quarkus service
 with a Redis-backed encounter loop. Core admission supplies a pinned Hero
@@ -76,14 +67,18 @@ enable Expedition; rerun the integration command after it. The k3d frontend
 build enables Map by default.
 
 The pure combat rules and snapshots live in `hero-association-lib/combat-engine`,
-shared by Core, the isolated Combat sandbox, and Expedition. The library has no Quarkus or
+shared by Core and Expedition. The library has no Quarkus or
 infrastructure dependencies. From `backend/`, a clean build runs
 `./mvnw -pl hero-association-core -am package` or
-`./mvnw -pl hero-association-combat -am package`, or
 `./mvnw -pl hero-association-expedition -am package`. For direct module commands
 (including `quarkus:dev`), first install the library with
 `./mvnw -pl hero-association-lib -am install`. See the
 [library README](hero-association-lib/README.md).
+
+Existing local databases may retain the retired `combat_battle_registration`
+and `combat_progression_inbox` tables. They are not used by the new code;
+an explicit disposable Core schema reset after promoting the updated image
+removes them. Do not drop these tables under an older Core Pod.
 
 The BFF keeps Keycloak token state in Redis. See
 [`../AUTHENTICATION.md`](../AUTHENTICATION.md) for the implementation status
@@ -230,7 +225,7 @@ and a cache error falls back to PostgreSQL. Troll has 2,000 health and Forest
 Wolf has 120. Active snapshots retain these inputs if roster or definition
 data changes. Compiled spell
 formulas are not versioned yet; see the planned
-[Combat contract](../COMBAT_CONTRACT.md). The Map UI is available in k3d
+[Combat and Expedition plan](../COMBAT_EXPEDITION_PLAN.md). The Map UI is available in k3d
 with Expedition integration enabled and reuses the Phaser battle animations;
 ordinary local development keeps Expedition feature flags disabled.
 Any onboarded Manager can claim a globally available recruit into their personal

@@ -3,10 +3,9 @@
 Status: in progress. The shared combat library, Expedition encounter loop,
 aggregate settlement handoff, and a player-facing k3d Map journey are live.
 Ordinary local development still keeps Map opt-in. Follow
-[ADR 0008](adr/0008-combat-engine-in-expedition.md). The current Core quest
-combat and the isolated Combat-service sandbox remain as described in
-[SPEC.md](SPEC.md) and [the sandbox contract](COMBAT_CONTRACT.md). This plan
-does not claim that they already use the new architecture.
+[ADR 0008](adr/0008-combat-engine-in-expedition.md). Core Quest combat
+still runs in Core. The standalone Combat-service sandbox and its Core fact
+inbox have been retired; [SPEC.md](SPEC.md) documents the remaining runtime.
 
 The current fight-timeline design is recorded in
 [COMBAT_TIMELINE.md](COMBAT_TIMELINE.md).
@@ -44,8 +43,8 @@ after the final load-test report without a new explicit request.
 ## Ordered work
 
 1. [x] Record the new architecture and supersede the standalone Combat
-   cutover plan without changing the live path. Keep the existing sandbox
-   clearly labeled; update the repository roadmap and contract pointers.
+   cutover plan without changing the live path. Mark the earlier sandbox
+   superseded in the repository roadmap and architecture records.
 2. [x] Create `backend/hero-association-lib/combat-engine` and move the pure
    deterministic rules out of duplicated Core/Combat packages. Provide a
    documented clean Maven build for Core and the library, retain engine tests,
@@ -90,8 +89,8 @@ after the final load-test report without a new explicit request.
    old expanded combat view or its two-second sync polling.
 7. [ ] Validate local and k3d end-to-end behavior, including a two-service
    restart drill, then switch the player-facing path. Retire the old Core
-   combat worker/sync path and isolated Combat-service sandbox only after no
-   supported flow depends on them. Keep unrelated Core behavior working and
+   combat worker/sync path only after no supported flow depends on it. The
+   standalone Combat sandbox has already been removed. Keep unrelated Core behavior working and
    document the final runtime commands.
    Local Compose, isolated E2E, and k3d use separate RabbitMQ service accounts.
    Private k3d Redis, RabbitMQ, and Expedition are healthy. The opt-in

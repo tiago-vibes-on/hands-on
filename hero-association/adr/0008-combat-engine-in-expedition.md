@@ -10,8 +10,8 @@
 Core currently persists live quest-combat state on a five-second worker and
 also advances it when an expanded browser view calls the two-second sync API.
 An isolated Combat-service sandbox was built with its own PostgreSQL battle
-table, one-second worker, event rows, and progression outbox. It has no live
-caller, so it does not constrain the player-facing design.
+table, one-second worker, event rows, and progression outbox. It had no live
+caller and was later retired without changing player-facing behavior.
 
 A Map run can contain several fights. The Party's current resources, XP,
 skills, stamina, and carried assets must carry into the next fight, but their
@@ -56,11 +56,10 @@ boundary snapshot and deterministic random seed. Service instances must not
 depend on a singleton Java object for authoritative run state. The exact
 failure policy and settlement acknowledgments must pass tests before cutover.
 
-Core remains the live quest-battle writer until the Expedition path, BFF
-socket, and frontend pass their cutover gates. Existing Combat-service sandbox
-code remains non-live until the new path is proven; remove obsolete code and
-deployment only after no supported workflow depends on it. The earlier
-Combat-before-Market priority and BFF-owned browser boundary remain.
+Core remains the live Quest-battle writer while Expedition owns Map fights.
+The unused standalone Combat sandbox and Core fact inbox were removed after
+the authenticated k3d Map flow passed. The earlier Combat-before-Market
+priority and BFF-owned browser boundary remain.
 
 ## Alternatives considered
 

@@ -82,40 +82,6 @@ authenticated admission is connected. See
 [Expedition settlement](../../EXPEDITION_SETTLEMENT.md) for the handoff and
 local broker settings.
 
-### Pre-cutover Combat inbox (off by default)
-
-Core has an isolated `combat_progression_inbox` table for versioned Combat
-fact batches. With `HERO_ASSOCIATION_CORE_COMBAT_INBOX_ENABLED=true`, it polls
-the optional RabbitMQ sandbox, validates and stores a batch, then acknowledges
-it only after the database commit. An identical redelivery is harmless;
-invalid or conflicting messages remain queued and require investigation.
-Gaps are stored but not applied. Intake alone does not modify live game
-state. A separate manual applier requires an explicit
-`combat_battle_registration` for a Party not attached to a Core Quest. It
-applies one contiguous batch to Hero stamina, skills, XP, and terminal
-health/mana with its sequence cursor and `applied_at` in one transaction.
-No production caller registers battles or invokes this applier, and it does
-not resolve Quest or Expedition outcomes.
-
-To exercise this intake locally, start `rabbitmq-combat` from `backend/`
-and restart Core with the flag from `hero-association-core/`:
-
-```bash
-docker compose -f compose.combat.yaml up --detach rabbitmq-combat
-cd hero-association-core
-HERO_ASSOCIATION_CORE_COMBAT_INBOX_ENABLED=true ./mvnw quarkus:dev
-```
-
-The default host AMQP port is `15673`; the local-only credentials match
-`compose.combat.yaml`. If its password or port differs in `backend/.env`,
-export the corresponding environment variables for the host-run Core process.
-Keep this flag off for normal development and k3d: the battle handoff,
-automatic application, and Combat cutover are not complete. Core's disposable
-dev schema reset removes inbox and registration rows, while the RabbitMQ
-sandbox volume may retain messages. A k3d Core image with these new tables
-requires an explicit schema reset before deployment; no live k3d deployment
-is part of this slice.
-
 ### Development database reset
 
 Until Flyway is introduced, the development and test profiles drop and
