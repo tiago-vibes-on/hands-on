@@ -35,6 +35,8 @@ spec:
                 secretKeyRef:
                   name: hero-association-k3d-credentials
                   key: CORE_DATABASE_PASSWORD
+            - name: HERO_ASSOCIATION_CORE_REDIS_URL
+              value: redis://redis-core:6379
             - name: HERO_ASSOCIATION_OIDC_AUTH_SERVER_URL
               value: http://keycloak:8080/realms/hero-association
             - name: HERO_ASSOCIATION_OTLP_ENDPOINT

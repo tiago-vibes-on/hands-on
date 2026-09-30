@@ -1,0 +1,22 @@
+spec:
+  template:
+    spec:
+      containers:
+        - name: core
+          env:
+            - name: HERO_ASSOCIATION_EXPEDITION_CORE_SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hero-association-expedition-credentials
+                  key: HERO_ASSOCIATION_EXPEDITION_CORE_SERVICE_KEY
+            - name: HERO_ASSOCIATION_CORE_EXPEDITION_ENABLED
+              value: "true"
+            - name: HERO_ASSOCIATION_EXPEDITION_RABBITMQ_HOST
+              value: rabbitmq-expedition
+            - name: HERO_ASSOCIATION_EXPEDITION_RABBITMQ_HOST_PORT
+              value: "5672"
+            - name: HERO_ASSOCIATION_CORE_SETTLEMENT_RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hero-association-expedition-credentials
+                  key: HERO_ASSOCIATION_CORE_SETTLEMENT_RABBITMQ_PASSWORD

@@ -5,18 +5,20 @@ WORKDIR /workspace
 COPY --chown=quarkus:quarkus mvnw ./mvnw
 COPY --chown=quarkus:quarkus .mvn .mvn
 COPY --chown=quarkus:quarkus pom.xml ./
+COPY --chown=quarkus:quarkus hero-association-bff/pom.xml ./hero-association-bff/pom.xml
+COPY --chown=quarkus:quarkus hero-association-combat/pom.xml ./hero-association-combat/pom.xml
+COPY --chown=quarkus:quarkus hero-association-expedition/pom.xml ./hero-association-expedition/pom.xml
+COPY --chown=quarkus:quarkus hero-association-lib ./hero-association-lib
+COPY --chown=quarkus:quarkus hero-association-core/pom.xml ./hero-association-core/pom.xml
+COPY --chown=quarkus:quarkus hero-association-core/src ./hero-association-core/src
 
 USER quarkus
 
-RUN ./mvnw --batch-mode dependency:go-offline
-
-COPY --chown=quarkus:quarkus src ./src
-
-RUN ./mvnw --batch-mode package -Dnative -DskipTests
+RUN ./mvnw --batch-mode -pl hero-association-core -am package -Dnative -DskipTests
 
 FROM scratch AS native-artifact
 
-COPY target/*-runner /application
+COPY hero-association-core/target/*-runner /application
 
 FROM quay.io/quarkus/ubi9-quarkus-micro-image:2.0 AS native-runtime-base
 
@@ -34,4 +36,4 @@ COPY --from=native-artifact --chown=1001:root --chmod=0755 /application /work/ap
 
 FROM native-runtime-base AS native-multistage
 
-COPY --from=native-build --chown=1001:root --chmod=0755 /workspace/target/*-runner /work/application
+COPY --from=native-build --chown=1001:root --chmod=0755 /workspace/hero-association-core/target/*-runner /work/application

@@ -2,6 +2,7 @@ package io.tiagovibeson.heroassociation.application;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.UUID;
 
@@ -10,6 +11,9 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.security.TestSecurity;
 import io.tiagovibeson.heroassociation.api.v1.agency.AgencyStateResponse;
 import io.tiagovibeson.heroassociation.application.exception.BorrowingFeeRejectedException;
+import io.tiagovibeson.heroassociation.domain.Hero;
+import io.tiagovibeson.heroassociation.domain.Quest;
+import io.tiagovibeson.heroassociation.domain.QuestCombatant;
 import io.tiagovibeson.heroassociation.domain.UuidV7;
 import io.tiagovibeson.heroassociation.repository.AgencyRepository;
 import io.tiagovibeson.heroassociation.repository.ManagerRepository;
@@ -95,6 +99,38 @@ class HeroBorrowingPaymentServiceTest {
 
         assertEquals(25, managerRepository.findById(SOREN_ID).getGold());
         assertEquals(startingAgencyGold, state.agency().gold());
+    }
+
+    @Test
+    @TestTransaction
+    void shouldRecoverHeroBeforePinningBattleStartResources() {
+        UUID questId = createQuest();
+        UUID partyId = createPartyWith(OAKSHIELD_ID, "Recovered borrowing");
+        entityManager.createNativeQuery("""
+                UPDATE hero
+                SET current_health = 10,
+                    current_mana = 0,
+                    stamina_milliseconds = 100000000,
+                    last_resource_synchronized_at = CURRENT_TIMESTAMP - INTERVAL '60 seconds'
+                WHERE id = :heroId
+                """)
+                .setParameter("heroId", OAKSHIELD_ID)
+                .executeUpdate();
+        entityManager.clear();
+
+        questStartService.startQuest(AGENCY_ID, questId, partyId, 0);
+
+        Hero hero = entityManager.find(Hero.class, OAKSHIELD_ID);
+        QuestCombatant snapshot = entityManager.find(Quest.class, questId).getCombat().getCombatants().stream()
+                .filter(combatant -> combatant.getHero() != null)
+                .findFirst()
+                .orElseThrow();
+        assertTrue(hero.getCurrentHealth() > 10);
+        assertTrue(hero.getCurrentMana() > 0);
+        assertTrue(hero.getStaminaMilliseconds() > 100000000);
+        assertEquals(hero.getCurrentHealth(), snapshot.getCurrentHealth());
+        assertEquals(hero.getCurrentMana(), snapshot.getCurrentMana());
+        assertEquals(hero.getStaminaMilliseconds(), snapshot.getStartingStaminaMilliseconds());
     }
 
     private UUID createQuest() {

@@ -185,6 +185,9 @@ UPDATE manager SET gold = 25 WHERE id = '019c4c00-0000-7000-8000-000000000202';
 UPDATE manager SET gold = 20 WHERE id = '019c4c00-0000-7000-8000-000000000203';
 UPDATE manager SET gold = 200 WHERE id = '019c4c00-0000-7000-8000-000000000204';
 
+-- Large local-only wallet for user2 to exercise game and market flows.
+UPDATE manager SET gold = 100000 WHERE id = '019c4c00-0000-7000-8000-000000000002';
+
 INSERT INTO agency (
     id,
     name,
@@ -349,6 +352,31 @@ INSERT INTO agency_member (id, agency_id, manager_id, role, joined_at) VALUES
 INSERT INTO party (id, name, agency_id, manager_id) VALUES
     ('019c4c00-0002-7000-8000-000000000001', 'Broken Pass Party',
      '019c4c00-0001-7000-8000-000000000001', '019c4c00-0000-7000-8000-000000000001');
+
+INSERT INTO party (id, name, agency_id, manager_id)
+VALUES ('019c4c00-0002-7000-8000-000000000002', 'Main Party',
+        '019c4c00-0001-7000-8000-000000000002', '019c4c00-0000-7000-8000-000000000002');
+
+-- One deterministic Main Party for every other seeded Manager except User1,
+-- whose existing Broken Pass Party is already their party.
+INSERT INTO party (id, name, agency_id, manager_id)
+SELECT ('019c4c00-0002-7001-8000-' || right(manager.id::text, 12))::uuid,
+       'Main Party', membership.agency_id, manager.id
+FROM manager
+JOIN agency_member AS membership ON membership.manager_id = manager.id
+WHERE manager.id NOT IN (
+    '019c4c00-0000-7000-8000-000000000001',
+    '019c4c00-0000-7000-8000-000000000002');
+
+INSERT INTO creature_definition (
+    id, name, version, base_experience, max_health, max_mana, attack_damage,
+    attack_interval_milliseconds, health_recovery_per_second,
+    mana_recovery_per_second, critical_chance, critical_damage_multiplier)
+VALUES
+    ('019c4c00-0005-7000-8000-000000000001', 'Troll', 1, 100, 2000, 100, 10,
+     1600, 0, 0, 0.1, 2),
+    ('019c4c00-0005-7000-8000-000000000002', 'Forest Wolf', 1, 100, 120, 100, 10,
+     1600, 0, 0, 0, 2);
 
 INSERT INTO quest (
     id,
@@ -756,6 +784,16 @@ VALUES
         NULL,
         NULL);
 
+UPDATE quest_combatant AS combatant
+SET hero_level = 1,
+    melee_level = 1,
+    distance_level = 1,
+    shield_level = 1,
+    starting_stamina_milliseconds = hero.stamina_milliseconds,
+    basic_attack_mana_cost = CASE WHEN combatant.hero_class = 'MAGE' THEN 20 ELSE 0 END
+FROM hero
+WHERE combatant.hero_id = hero.id;
+
 INSERT INTO rune (id, code, name, symbol, stats, description, effect, effect_value) VALUES
     ('019c4c00-0020-7000-8000-000000000001', 'attack-rune', 'Attack Rune', '✦', '+8 attack', 'A carved rune that strengthens every basic attack.', 'ATTACK', 8),
     ('019c4c00-0020-7000-8000-000000000002', 'guard-rune', 'Guard Rune', '◈', '+6 armor', 'A protective rune etched with an unbroken circle.', 'ARMOR', 6),
@@ -827,6 +865,25 @@ INSERT INTO hero_rune (id, hero_id, rune_id, slot_index) VALUES
     ('019c4c00-0040-7000-8000-000000000008', '019c4c00-0010-7000-8000-000000000003', '019c4c00-0020-7000-8000-000000000004', 1),
     ('019c4c00-0040-7000-8000-000000000009', '019c4c00-0010-7000-8000-000000000003', '019c4c00-0020-7000-8000-000000000006', 2);
 
+INSERT INTO quest_combatant_rune (
+    id, combatant_id, rune_id, slot_index, rune_code, effect, effect_value)
+SELECT snapshots.snapshot_id::uuid, combatant.id, rune.id, slot.slot_index,
+       rune.code, rune.effect, rune.effect_value
+FROM (VALUES
+    ('019c4c00-0052-7000-8000-000000000001', '019c4c00-0040-7000-8000-000000000001'),
+    ('019c4c00-0052-7000-8000-000000000002', '019c4c00-0040-7000-8000-000000000002'),
+    ('019c4c00-0052-7000-8000-000000000003', '019c4c00-0040-7000-8000-000000000003'),
+    ('019c4c00-0052-7000-8000-000000000004', '019c4c00-0040-7000-8000-000000000004'),
+    ('019c4c00-0052-7000-8000-000000000005', '019c4c00-0040-7000-8000-000000000005'),
+    ('019c4c00-0052-7000-8000-000000000006', '019c4c00-0040-7000-8000-000000000006'),
+    ('019c4c00-0052-7000-8000-000000000007', '019c4c00-0040-7000-8000-000000000007'),
+    ('019c4c00-0052-7000-8000-000000000008', '019c4c00-0040-7000-8000-000000000008'),
+    ('019c4c00-0052-7000-8000-000000000009', '019c4c00-0040-7000-8000-000000000009')
+) AS snapshots(snapshot_id, hero_rune_id)
+JOIN hero_rune AS slot ON slot.id = snapshots.hero_rune_id::uuid
+JOIN quest_combatant AS combatant ON combatant.hero_id = slot.hero_id
+JOIN rune ON rune.id = slot.rune_id;
+
 INSERT INTO feed_post (
     id,
     agency_id,
@@ -873,3 +930,10 @@ CROSS JOIN (VALUES
     (2, 'Mage', 'MAGE', 100, 500),
     (3, 'Archer', 'ARCHER', 200, 200)
 ) AS starter(slot, name, hero_class, health, mana);
+
+-- Seeded Main Parties start with their Managers three personal starter heroes.
+UPDATE hero AS starter SET party_id = party.id
+FROM party
+WHERE party.manager_id = starter.manager_id
+  AND party.name = 'Main Party'
+  AND starter.party_id IS NULL;

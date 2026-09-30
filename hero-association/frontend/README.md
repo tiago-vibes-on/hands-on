@@ -52,6 +52,21 @@ return through the browser-visible development proxy, as in the E2E workflow.
 Leave `VITE_ALLOWED_HOSTS` unset unless a controlled environment needs Vite to
 serve an additional host.
 
+The Map page is visible in the isolated k3d build. In ordinary local
+development it is hidden unless `VITE_EXPEDITION_ENABLED=true` is set when
+starting Vite or building the frontend. It loads the Manager's active
+Expedition, offers the fixed Troll Field to prepared personal-hero parties,
+sends UUIDv7 Start/Continue/Return commands with the existing CSRF token, and
+receives fight snapshots over a same-origin BFF WebSocket. It reconnects from
+the current server snapshot. On returning to Map or resuming a hidden tab,
+it drops queued hit animations and paints the current server frame immediately;
+only subsequent live events animate. The browser never calculates fight
+results or receives a Keycloak token. For a container image, pass
+`--build-arg VITE_EXPEDITION_ENABLED=true` to `docker build`; the image
+default remains false. The k3d build script enables it by default. Turning on
+the frontend flag alone does not enable the backend player API or socket. The existing Quest flow remains available; see the
+[Combat and Expedition plan](../COMBAT_EXPEDITION_PLAN.md).
+
 If the API cannot be reached, the frontend shows a visible notice and uses a
 static local fixture. A production deployment sends `/api` requests to the
 public BFF; the browser never calls Game Core directly.
@@ -63,16 +78,20 @@ Keycloak is available locally on `http://localhost:17180`. The frontend begins
 at a sign-in screen, uses the BFF's `/auth/login` redirect, and receives no
 Keycloak tokens in browser storage. The first signed-in visit provisions an
 Account and requires a unique Manager name before the game opens. A Manager
-without a membership sees an agency-creation form. The created Level 1 agency starts empty; the Manager already owns three starter
-heroes and can claim available NPCs into their personal roster.
+without a membership sees an agency-creation form. Manager onboarding creates
+a Main Party with three personal starter heroes; creating an agency attaches
+that Party. The Level 1 agency starts without agency-owned heroes. The Manager
+can claim available NPCs into their personal roster.
 
 For local testing, use `user1@mail.com` / `user1` or
 `user2@mail.com` / `user2`. Both have seeded agency memberships. Do not use
 these credentials outside local development.
 
-## Verify a production build
+## Verify the frontend
 
 ```bash
+npm test
+npm run lint
 npm run build
 ```
 
@@ -90,7 +109,10 @@ npm install
 npm run test:auth
 ```
 
-See [`../e2e/README.md`](../e2e/README.md) for the details.
+See [`../e2e/README.md`](../e2e/README.md) for the details. The
+local Map journey is a separate, opt-in `npm run test:expedition` from
+`../e2e`; it enables Expedition only inside that disposable test stack.
+Run `npm run test:k3d:map` for the visible k3d browser journey.
 
 ## Deploy to the isolated k3d lab
 
@@ -110,7 +132,8 @@ for cluster setup, local CA trust, and image-restart instructions.
 
 ## Current prototype
 
-- Side navigation for Overview, Heroes, Quests, Agency, Market, and Feed
+- Side navigation for Overview, Heroes, Quests, Agency, Market, and Feed;
+  Map is visible in k3d and opt-in for ordinary local development
 - Backend-loaded agency summary, roster, quest progress, upgrade levels, item
   and rune inventory, hero rune slots, agency feed posts, and market order
   book; the state refreshes every five seconds while the tab is visible
@@ -153,25 +176,16 @@ for cluster setup, local CA trust, and image-restart instructions.
 - Agency hero cards show current health and mana. Training recovers both at
   the base class rate, while Resting uses 2× that rate; stamina recovery is
   still pending.
-- Phaser-backed battlefield renderer inside every expanded active quest card
-- Starting a quest creates a backend combat snapshot from its party's current
-  resources, class combat values, and equipped Critical Chance and Critical
-  Damage Rune effects, plus one provisional creature per required objective.
-  The provisional creature profile uses 120 health, 10 damage, a
-  1.6-second attack interval, 100 mana, no recovery, and no critical chance.
-  While expanded, the frontend synchronizes the encounter every two seconds
-  through the combat-sync API; Phaser does not calculate combat outcomes and
-  replays only new server events as visual effects. A backend worker also
-  advances active combat every five seconds when the view is closed. Terminal
-  combat states become completed or failed quest cards and return the party's
-  heroes to Training; rewards and failure consequences remain pending.
-- Health and mana bars for Level 1 heroes and placeholder creatures
-- Server-calculated class recovery, mage spell mana costs and cooldowns, and
-  critical-hit values reflected in the synchronized snapshot
-- The initial party equips a Critical Chance Rune on every hero; placeholder
-  trolls have a 10% critical chance
-- Mage spell icons show server-provided cooldown state with radial
-  right-to-left cooldown sweeps
+- Quests shows available objectives and active or resolved progress; it no longer
+  embeds a battle or polls the legacy combat-sync endpoint.
+- Map is the k3d battle screen: server-authoritative Expedition snapshots arrive
+  over the BFF WebSocket, with reconnect, Continue, and Return controls. The
+  earlier Phaser scene animates ordered hits, criticals, recovery, spells,
+  cooldowns, Hero and creature resources, and equipped runes without deciding
+  the combat result.
+- The existing Core quest worker still advances older quest fixtures in the
+  background. Map battles are separate from Quest objectives for now; linking
+  them is deferred until Quest gameplay is redesigned.
 - Responsive layout for desktop and mobile screens
 
 The game rules and the intended gameplay model live in

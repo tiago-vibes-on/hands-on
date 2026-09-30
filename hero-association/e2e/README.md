@@ -14,7 +14,20 @@ npm test
 ```
 
 `npm test` runs the local Traefik suite and excludes k3d-only tests.
-`npm run test:auth` runs only `tests/authentication.spec.js`.
+`npm run test:auth` runs only `tests/authentication.spec.js`. The normal
+`npm test` excludes the pre-cutover Expedition test. Run that separate journey
+with `npm run test:expedition`. It adds dedicated Expedition Redis and RabbitMQ,
+builds the Expedition service and Map-enabled frontend, and enables the
+Core/Expedition/BFF integration flags only inside this disposable E2E project.
+The overlay first provisions RabbitMQ topology and separate Core and
+Expedition service users with only their publish/read permissions.
+
+The Playwright test prepares a personal Party, enters Troll Field, confirms
+WebSocket visuals and reconnect, explicitly continues, requests return during
+the next fight, disconnects the viewer, and waits for Core settlement. Do not
+run the normal and Expedition E2E commands simultaneously because both use
+the same disposable Compose project. This does not enable Expedition in normal
+local development or k3d.
 The runner uses Playwright's official Chromium Docker image at
 the version pinned in `package-lock.json`, so no host browser installation is
 required. The frontend image runs `npm ci` during its Docker build; frontend
@@ -31,7 +44,8 @@ cookie to both instances.
 
 The stack publishes diagnostic host ports `15432` (Core PostgreSQL), `16380`
 (Redis), `18080` and `18082` (BFF instances), `18081` (Core), `18180`
-(Keycloak), and `18443` (Traefik HTTPS). It has its own databases and Redis
+(Keycloak), and `18443` (Traefik HTTPS). The Expedition-only
+overlay also publishes `18083` for service diagnostics. It has its own databases and Redis
 state. Setup and teardown remove only the E2E Compose project and its volumes,
 including after a failed setup. The normal development data is never reset.
 
@@ -95,14 +109,25 @@ cancel a personal market order, and checks the Envoy market-order limit with
 two BFF Pods, two sessions for one user, and a second user with a separate
 budget. Manager 4 must exist in the k3d Keycloak realm with the UUIDv7 subject
 from the versioned [realm file](../backend/keycloak/realm/hero-association-realm.json).
-Keycloak does not reimport users
-into an existing realm when Core's database is reset; an older k3d realm must
-be synchronized or recreated separately before this test.
-Unlike `npm test`, it does not start Compose, flush Redis, or delete volumes.
-The Playwright container uses Docker host networking and maps both k3d
-hostnames to `127.0.0.1`, reaching the cluster's HTTPS port `443`. It ignores
-local certificate errors only inside this test browser; configure CA trust
-separately for a normal browser.
+Keycloak does not reimport clients or users into an existing realm when Core is
+reset. The [private Expedition integration](../deploy/k3d/EXPEDITION_INTEGRATION.md)
+synchronizes its client and audience mapper without resetting Keycloak.
+Unlike `npm test`, this k3d suite does not start Compose, flush Redis, or delete
+volumes. The Playwright container joins the isolated k3d Docker network and
+maps both hostnames to its load balancer, bypassing unrelated WSL port-443
+listeners. It ignores local certificate errors only inside the test browser.
+
+After enabling the k3d integration and deploying the Map-enabled frontend, run:
+
+```bash
+npm run test:k3d:expedition
+npm run test:k3d:map
+```
+
+The API test exercises seeded Manager 4. The browser test exercises User2's
+three-Hero Main Party and the visible Map menu in Chromium, including its
+Phaser canvas and WebSocket reconnect. It first returns any old User2 run, so
+it can be repeated. Both tests change Hero progress in the disposable lab.
 
 ## Measure the market order rate limit with k6
 

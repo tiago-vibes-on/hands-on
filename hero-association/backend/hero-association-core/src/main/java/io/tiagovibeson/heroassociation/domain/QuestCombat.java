@@ -62,7 +62,10 @@ public class QuestCombat extends UuidEntity {
     protected QuestCombat() {
     }
 
-    public static QuestCombat start(Quest quest, List<Hero> heroes) {
+    public static QuestCombat start(Quest quest, List<Hero> heroes, CreatureCombatProfile creatureProfile) {
+        if (!quest.getCreatureName().equals(creatureProfile.name())) {
+            throw new IllegalArgumentException("Creature definition does not match the quest.");
+        }
         QuestCombat combat = new QuestCombat();
         combat.quest = quest;
         combat.status = CombatStatus.IN_PROGRESS;
@@ -77,7 +80,7 @@ public class QuestCombat extends UuidEntity {
             combat.combatants.add(QuestCombatant.forHero(combat, hero, formationIndex));
         }
         for (int formationIndex = 0; formationIndex < quest.getCreaturesRequired(); formationIndex++) {
-            combat.combatants.add(QuestCombatant.forCreature(combat, quest.getCreatureName(), formationIndex));
+            combat.combatants.add(QuestCombatant.forCreature(combat, creatureProfile, formationIndex));
         }
         return combat;
     }

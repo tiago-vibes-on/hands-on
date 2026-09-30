@@ -70,4 +70,30 @@ class GameCoreProxyResourceTest {
                 .body("contentType", equalTo("application/json"))
                 .body("body", equalTo("{\"name\":\"Dawnwatch\"}"));
     }
+    @Test
+    void shouldRouteExpeditionReadsToExpedition() {
+        given()
+                .when().get("/api/v1/expeditions/active")
+                .then()
+                .statusCode(200)
+                .body("path", equalTo("/expedition/api/v1/expeditions/active"))
+                .body("authorization", equalTo("Bearer test-access-token"));
+    }
+
+    @Test
+    void shouldProtectAndForwardExpeditionCommands() {
+        Response session = given().when().get("/api/v1/session").then()
+                .statusCode(200).extract().response();
+        given()
+                .cookie("hero-association-csrf", session.getCookie("hero-association-csrf"))
+                .header("X-CSRF-TOKEN", session.jsonPath().getString("csrfToken"))
+                .contentType("application/json")
+                .body("{\"commandId\":\"019c4c00-0007-7000-8000-000000000001\",\"expectedVersion\":2}")
+                .when().post("/api/v1/expeditions/019c4c00-0007-7000-8000-000000000002/continue")
+                .then()
+                .statusCode(200)
+                .body("path", equalTo("/expedition/api/v1/expeditions/019c4c00-0007-7000-8000-000000000002/continue"))
+                .body("authorization", equalTo("Bearer test-access-token"))
+                .body("method", equalTo("POST"));
+    }
 }

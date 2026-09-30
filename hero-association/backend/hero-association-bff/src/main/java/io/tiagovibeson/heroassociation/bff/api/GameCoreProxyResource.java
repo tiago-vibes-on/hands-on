@@ -4,6 +4,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import io.tiagovibeson.heroassociation.bff.core.GameCoreClient;
+import io.tiagovibeson.heroassociation.bff.expedition.ExpeditionClient;
 import io.quarkus.oidc.AccessTokenCredential;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.security.Authenticated;
@@ -33,6 +34,9 @@ public class GameCoreProxyResource {
 
     @Inject
     GameCoreClient gameCoreClient;
+
+    @Inject
+    ExpeditionClient expeditionClient;
 
     @Inject
     SecurityIdentity securityIdentity;
@@ -90,6 +94,12 @@ public class GameCoreProxyResource {
                     .type(MediaType.APPLICATION_JSON)
                     .entity(Map.of("message", "An authenticated access token is required."))
                     .build();
+        }
+
+        if ("v1/expeditions".equals(path) || path != null && path.startsWith("v1/expeditions/")) {
+            return expeditionClient.forward(method, path, uriInfo.getRequestUri().getRawQuery(),
+                    headers.getHeaderString(HttpHeaders.ACCEPT),
+                    headers.getHeaderString(HttpHeaders.CONTENT_TYPE), accessToken, body);
         }
 
         return gameCoreClient.forward(

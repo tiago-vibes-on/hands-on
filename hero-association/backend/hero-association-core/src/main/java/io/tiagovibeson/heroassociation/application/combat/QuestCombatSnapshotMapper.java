@@ -57,7 +57,7 @@ public final class QuestCombatSnapshotMapper {
                 combatant.getCurrentHealth(),
                 combatant.getCurrentMana(),
                 combatant.getAttackDamage(),
-                combatant.getHeroClass() == null ? 0 : combatant.getHeroClass().getBasicAttackManaCost(),
+                combatant.getBasicAttackManaCost(),
                 combatant.getAttackIntervalMilliseconds(),
                 combatant.getHealthRecoveryPerSecond(),
                 combatant.getManaRecoveryPerSecond(),

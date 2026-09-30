@@ -16,7 +16,8 @@ decision changes.
 | [0001](0001-envoy-gateway-for-k3d-ingress.md) | Accepted | Envoy Gateway for k3d ingress. |
 | [0002](0002-market-order-rate-limit-in-bff.md) | Superseded by 0005 | Former shared BFF market-order limit. |
 | [0003](0003-market-service-boundary.md) | Route family accepted; owner payload under review | Market-centric API and target service ownership. |
-| [0004](0004-core-as-temporary-modular-monolith.md) | Accepted temporary Core direction; extraction order refined by 0007 | Keep Core temporarily while validating domain rules before service extraction. |
+| [0004](0004-core-as-temporary-modular-monolith.md) | Accepted temporary Core direction; extraction order refined by 0008 | Keep Core temporarily while validating domain rules before service extraction. |
 | [0005](0005-k3d-market-order-edge-auth.md) | Accepted and implemented in k3d | BFF-validated subject handoff to Envoy for the sole market-placement limit. |
 | [0006](0006-k3d-gateway-redis-sentinel.md) | Accepted for k3d only | Sentinel for the gateway rate-limit Redis. |
-| [0007](0007-combat-before-market-extraction.md) | Accepted plan; implementation pending | Extract Combat with a BFF WebSocket before Market. |
+| [0007](0007-combat-before-market-extraction.md) | Superseded by 0008 | Earlier standalone Combat-service plan. |
+| [0008](0008-combat-engine-in-expedition.md) | Accepted plan; implementation pending | Combat-engine library inside Expedition; settle accumulated progress on return. |

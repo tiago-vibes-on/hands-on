@@ -48,9 +48,13 @@ The seeded Broken Pass Party belongs to User 1. Its agency heroes remain
 assigned for the existing in-progress quest fixture. Available agency-owned
 heroes can now join a Manager's prepared party without changing ownership.
 Borrowing is free at assignment and charged only when the quest starts.
+Every other seeded Manager has a Main Party containing their personal Warrior,
+Mage, and Archer. In particular, User 2 can enter the Map immediately with
+their three-hero party. New Managers receive the same Main Party at Manager onboarding.
 
 | Manager | Personal gold | Personal items | Borrowing scenario |
 | --- | ---: | --- | --- |
+| User 2 | 100,000 | None | Large local-only wallet for game and market testing |
 | Soren (Core-only) | 25 | None | Exact payment for Emberveil |
 | Manager 2 | 25 | None | Exact payment for Emberveil |
 | Manager 3 | 20 | 2 Magic Crystals | Insufficient for Emberveil |

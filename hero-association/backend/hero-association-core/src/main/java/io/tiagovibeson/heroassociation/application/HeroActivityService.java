@@ -42,10 +42,10 @@ public class HeroActivityService {
                 .withLock(LockModeType.PESSIMISTIC_WRITE)
                 .firstResultOptional()
                 .orElseThrow(() -> new HeroNotFoundException(heroId));
-        if (hero.getParty() != null || hero.getActivity() == HeroActivity.ON_QUEST) {
+        if (hero.getParty() != null || hero.getActivity() == HeroActivity.ON_QUEST || hero.getActivity() == HeroActivity.ON_EXPEDITION) {
             throw new HeroOnQuestException(heroId);
         }
-        if (activity == null || activity == HeroActivity.ON_QUEST) {
+        if (activity == null || activity == HeroActivity.ON_QUEST || activity == HeroActivity.ON_EXPEDITION) {
             throw new InvalidHeroActivityException();
         }
 

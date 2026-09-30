@@ -26,6 +26,11 @@ services:
       file: compose.yaml
       service: redis-bff
 
+  redis-core:
+    extends:
+      file: compose.yaml
+      service: redis-core
+
   traefik:
     image: traefik:v3.7.13
     depends_on:

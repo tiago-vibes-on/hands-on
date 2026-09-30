@@ -111,7 +111,7 @@ public class PartyManagementService {
         if (isOnQuest(party)) {
             throw new PartyOnQuestException(party.getId());
         }
-        if (hero.getActivity() == HeroActivity.ON_QUEST || (hero.getParty() != null && isOnQuest(hero.getParty()))) {
+        if ((hero.getActivity() == HeroActivity.ON_QUEST || hero.getActivity() == HeroActivity.ON_EXPEDITION) || (hero.getParty() != null && isOnQuest(hero.getParty()))) {
             throw new HeroOnQuestException(hero.getId());
         }
         if (hero.getParty() != null && !hero.getParty().getId().equals(party.getId())) {

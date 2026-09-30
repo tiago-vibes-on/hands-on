@@ -13,6 +13,7 @@ import io.tiagovibeson.heroassociation.application.exception.PartyOnQuestExcepti
 import io.tiagovibeson.heroassociation.application.exception.QuestNotAvailableException;
 import io.tiagovibeson.heroassociation.application.exception.QuestNotFoundException;
 import io.tiagovibeson.heroassociation.domain.Agency;
+import io.tiagovibeson.heroassociation.domain.CreatureCombatProfile;
 import io.tiagovibeson.heroassociation.domain.Hero;
 import io.tiagovibeson.heroassociation.domain.HeroActivity;
 import io.tiagovibeson.heroassociation.domain.Manager;
@@ -52,6 +53,9 @@ public class QuestStartService {
     QuestCombatRepository questCombatRepository;
 
     @Inject
+    CreatureDefinitionResolver creatureDefinitionResolver;
+
+    @Inject
     AgencyStateService agencyStateService;
 
     @Inject
@@ -75,7 +79,7 @@ public class QuestStartService {
             throw new InvalidQuestPartySizeException(quest.getMinimumHeroes(), quest.getMaximumHeroes());
         }
         heroes.stream()
-                .filter(hero -> hero.getActivity() == HeroActivity.ON_QUEST)
+                .filter(hero -> hero.getActivity() == HeroActivity.ON_QUEST || hero.getActivity() == HeroActivity.ON_EXPEDITION)
                 .findFirst()
                 .ifPresent(hero -> {
                     throw new HeroOnQuestException(hero.getId());
@@ -90,8 +94,9 @@ public class QuestStartService {
         transferBorrowingFee(agencyId, manager, borrowingFeeGold);
 
         quest.startWith(party);
-        questCombatRepository.persist(QuestCombat.start(quest, heroes));
         heroes.forEach(hero -> hero.changeActivity(HeroActivity.ON_QUEST, party.getAgency().getRestLevel()));
+        CreatureCombatProfile creatureProfile = creatureDefinitionResolver.resolveLatest(quest.getCreatureName());
+        questCombatRepository.persist(QuestCombat.start(quest, heroes, creatureProfile));
         return agencyStateService.findState(agencyId);
     }
 

@@ -5,15 +5,27 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.util.UUID;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.security.TestSecurity;
 import io.restassured.http.ContentType;
+import io.tiagovibeson.heroassociation.repository.HeroRepository;
+import io.tiagovibeson.heroassociation.repository.PartyRepository;
+import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 @TestSecurity(user = "onboarding-player")
 class AccountControllerTest {
+
+    @Inject
+    PartyRepository partyRepository;
+
+    @Inject
+    HeroRepository heroRepository;
 
     @Test
     void shouldProvisionAnAccountAndCreateItsManager() {
@@ -26,7 +38,7 @@ class AccountControllerTest {
                 .body("manager", is(org.hamcrest.Matchers.nullValue()))
                 .extract().path("id");
 
-        given()
+        String managerId = given()
                 .contentType(ContentType.JSON)
                 .body("{\"displayName\":\"Wayfinder\"}")
                 .when().post("/api/v1/account/manager")
@@ -44,7 +56,11 @@ class AccountControllerTest {
                 .body("manager.heroes.magicLevel", everyItem(is(1)))
                 .body("manager.heroes.shieldLevel", everyItem(is(1)))
                 .body("manager.items.size()", is(0))
-                .body("manager.runes.size()", is(0));
+                .body("manager.runes.size()", is(0))
+                .extract().path("manager.id");
+        UUID managerUuid = UUID.fromString(managerId);
+        assertEquals(1, partyRepository.count("ownerManager.id = ?1 and agency is null", managerUuid));
+        assertEquals(3, heroRepository.count("ownerManager.id = ?1 and party.ownerManager.id = ?1", managerUuid));
 
         given()
                 .when().get("/api/v1/account")

@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import jakarta.persistence.Column;
@@ -236,11 +237,44 @@ public class Hero extends UuidEntity {
         lastResourceSynchronizedAt = synchronizedAt;
     }
 
+    public void applyExpeditionFinal(long finalExperience, Map<HeroSkill, BigDecimal> finalPoints,
+                                     int health, int mana, long stamina, Instant synchronizedAt) {
+        if (activity != HeroActivity.ON_EXPEDITION || finalExperience < 0 || stamina < 0
+                || stamina > HeroProgression.MAX_STAMINA_MILLISECONDS) {
+            throw new IllegalStateException("Hero is not reserved for a valid Expedition settlement.");
+        }
+        int level = HeroProgression.levelForExperience(finalExperience);
+        long maximumHealth = (long) heroClass.getBaseHealth()
+                + (long) (level - 1) * heroClass.getHealthGainPerLevel();
+        long maximumMana = (long) heroClass.getBaseMana()
+                + (long) (level - 1) * heroClass.getManaGainPerLevel();
+        if (health < 0 || mana < 0 || health > maximumHealth || mana > maximumMana) {
+            throw new IllegalArgumentException("Expedition Hero resources exceed their maximum.");
+        }
+        for (HeroSkill skill : HeroSkill.values()) {
+            BigDecimal value = finalPoints.get(skill);
+            if (value == null || value.signum() < 0 || value.scale() > 6) {
+                throw new IllegalArgumentException("Invalid Expedition Hero skill total.");
+            }
+        }
+        experience = finalExperience;
+        meleePoints = finalPoints.get(HeroSkill.MELEE).setScale(6);
+        distancePoints = finalPoints.get(HeroSkill.DISTANCE).setScale(6);
+        magicPoints = finalPoints.get(HeroSkill.MAGIC).setScale(6);
+        shieldPoints = finalPoints.get(HeroSkill.SHIELD).setScale(6);
+        currentHealth = health;
+        currentMana = mana;
+        staminaMilliseconds = stamina;
+        activity = HeroActivity.RESTING;
+        lastResourceSynchronizedAt = Objects.requireNonNull(synchronizedAt);
+    }
+
     public void recoverAgencyResourcesAt(Instant synchronizedAt, int restLevel) {
         if (restLevel < 1) {
             throw new IllegalArgumentException("Rest level must be positive.");
         }
-        if (activity == HeroActivity.ON_QUEST || !synchronizedAt.isAfter(lastResourceSynchronizedAt)) {
+        if (activity == HeroActivity.ON_QUEST || activity == HeroActivity.ON_EXPEDITION
+                || !synchronizedAt.isAfter(lastResourceSynchronizedAt)) {
             return;
         }
 

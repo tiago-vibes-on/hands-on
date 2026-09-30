@@ -3,6 +3,11 @@ set -euo pipefail
 
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$script_dir/.."
+map_enabled="${HERO_ASSOCIATION_FRONTEND_MAP_ENABLED:-false}"
+if [[ "$map_enabled" != true && "$map_enabled" != false ]]; then
+  printf 'HERO_ASSOCIATION_FRONTEND_MAP_ENABLED must be true or false.\n' >&2
+  exit 2
+fi
 
 usage() {
   printf 'Usage: %s [all|core|bff|frontend] [build-id]\n' "$0" >&2
@@ -45,14 +50,20 @@ done
 
 for service in "${services[@]}"; do
   case "$service" in
-    core|bff)
+    core)
+      backend_dir="$project_dir/backend"
+      (cd "$backend_dir" && ./mvnw --batch-mode -pl hero-association-core -am package)
+      docker build --file "$backend_dir/hero-association-core/Dockerfile" --tag "hero-association-core:$build_id" "$backend_dir"
+      ;;
+    bff)
       module_dir="$project_dir/backend/hero-association-$service"
       (cd "$module_dir" && ./mvnw --batch-mode package)
       docker build --tag "hero-association-$service:$build_id" "$module_dir"
       ;;
     frontend)
-      (cd "$project_dir/frontend" && npm ci && npm run lint && npm run build)
-      docker build --tag "hero-association-frontend:$build_id" "$project_dir/frontend"
+      (cd "$project_dir/frontend" && npm ci && npm run lint && VITE_EXPEDITION_ENABLED="$map_enabled" npm run build)
+      docker build --build-arg "VITE_EXPEDITION_ENABLED=$map_enabled" \
+        --tag "hero-association-frontend:$build_id" "$project_dir/frontend"
       ;;
   esac
 done

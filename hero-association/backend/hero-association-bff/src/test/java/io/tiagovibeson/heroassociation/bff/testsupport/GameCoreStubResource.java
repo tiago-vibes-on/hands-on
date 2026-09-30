@@ -21,10 +21,16 @@ public class GameCoreStubResource implements QuarkusTestResourceLifecycleManager
             server.createContext("/api/v1/agencies/", this::respondToEcho);
             server.createContext("/api/v1/recruits/", this::respondToEcho);
             server.createContext("/api/v1/market/", this::respondToEcho);
+            server.createContext("/expedition/api/v1/expeditions", this::respondToEcho);
+            server.createContext("/expedition/api/v1/expeditions/" + ExpeditionSocketFixture.OWNED_ID, ExpeditionSocketFixture::opening);
+            server.createContext("/expedition/api/v1/expeditions/" + ExpeditionSocketFixture.FOREIGN_ID, ExpeditionSocketFixture::opening);
+            server.createContext("/expedition/internal/v1/expedition-visuals/", ExpeditionSocketFixture::visual);
             server.start();
             return java.util.Map.of(
                     "hero-association.core.base-url",
-                    "http://localhost:" + server.getAddress().getPort());
+                    "http://localhost:" + server.getAddress().getPort(),
+                    "hero-association.expedition.base-url",
+                    "http://localhost:" + server.getAddress().getPort() + "/expedition");
         } catch (IOException exception) {
             throw new IllegalStateException("Unable to start the Game Core test server.", exception);
         }
@@ -39,7 +45,8 @@ public class GameCoreStubResource implements QuarkusTestResourceLifecycleManager
 
     private void respondToEcho(HttpExchange exchange) throws IOException {
         String body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-        String response = "{\"method\":\"" + exchange.getRequestMethod()
+        String response = "{\"path\":\"" + escape(exchange.getRequestURI().getPath())
+                + "\",\"method\":\"" + exchange.getRequestMethod()
                 + "\",\"query\":\"" + escape(exchange.getRequestURI().getRawQuery())
                 + "\",\"contentType\":\"" + escape(exchange.getRequestHeaders().getFirst("Content-Type"))
                 + "\",\"authorization\":\"" + escape(exchange.getRequestHeaders().getFirst("Authorization"))

@@ -1,0 +1,115 @@
+# Combat and Expedition implementation plan
+
+Status: in progress. The shared combat library, Expedition encounter loop,
+aggregate settlement handoff, and a player-facing k3d Map journey are live.
+Ordinary local development still keeps Map opt-in. Follow
+[ADR 0008](adr/0008-combat-engine-in-expedition.md). The current Core quest
+combat and the isolated Combat-service sandbox remain as described in
+[SPEC.md](SPEC.md) and [the sandbox contract](COMBAT_CONTRACT.md). This plan
+does not claim that they already use the new architecture.
+
+The current fight-timeline design is recorded in
+[COMBAT_TIMELINE.md](COMBAT_TIMELINE.md).
+
+This is the bounded sequence for subsequent `next` requests. Work only on
+Combat and Expedition and their required BFF, frontend, Core data-owner,
+Redis, RabbitMQ, local, and k3d integration. Do not move on to other domains
+after the final load-test report without a new explicit request.
+
+## Target behavior and ownership
+
+- `hero-association-lib` is a Maven aggregator; its `combat-engine` module is
+  a plain Java library with no service or infrastructure dependencies.
+- Expedition owns one active Map run per Manager and its compact current state
+  in a dedicated Redis keyspace. The first encounter may use a fixed seeded
+  Troll; a separate Map-service extraction is not part of this sequence.
+- A server worker runs each fight without browser input and stops at its
+  terminal outcome. No automatic next fight: the Manager must send Continue.
+  A wipe leaves the Party on the Map until explicit return. Return during a
+  fight waits for that fight to finish.
+- A finished fight changes only the current expedition state. Store enough
+  current Hero resources, XP and skill progress, stamina, carried assets,
+  encounter position, and lifecycle status for the next fight or return; drop
+  finished fight history. No per-attack or fixed-interval SQL writes and no
+  per-fight permanent Hero/Assets settlement.
+- At agency return, freeze and publish one aggregated settlement through a
+  Redis-backed pending queue to RabbitMQ. Core initially remains the owner of
+  permanent Hero and Assets data. Owners apply the settlement once by
+  expedition ID. Keep the Redis snapshot until required settlement is safe;
+  then remove it. Distinguish broker confirmation from owner application.
+- BFF owns the browser WebSocket and authorization. It streams temporary
+  authoritative visual state only to subscribers; no browser-calculated
+  results or durable per-hit messages.
+
+## Ordered work
+
+1. [x] Record the new architecture and supersede the standalone Combat
+   cutover plan without changing the live path. Keep the existing sandbox
+   clearly labeled; update the repository roadmap and contract pointers.
+2. [x] Create `backend/hero-association-lib/combat-engine` and move the pure
+   deterministic rules out of duplicated Core/Combat packages. Provide a
+   documented clean Maven build for Core and the library, retain engine tests,
+   and remove the parity script only when no duplicate engine remains. Do not
+   migrate live battle ownership in this step.
+3. [x] Define Expedition's minimal run contract and Redis state schema:
+   UUIDv7 identity, Party access, versioned pinned inputs, one run per Manager,
+   lifecycle states, atomic version checks, non-evictable active keys, and
+   restart behavior. Load persistent Hero/Assets baselines once at entry. See
+   [the Expedition contract](EXPEDITION_CONTRACT.md).
+4. [x] Implement the server-run encounter loop using the library: no viewer
+   required, no per-fight thread or database polling, bounded due-action
+   scheduling, current state updated at fight boundaries, explicit Continue,
+   wipe, return between fights, and deferred return during a fight. Verify
+   duplicate commands and multi-worker ownership.
+5. [x] Implement aggregate settlement on return. Atomically freeze final
+   Redis state and queue it for retry; publish through RabbitMQ with routing
+   and broker confirmation; apply it idempotently to Core-owned Hero/Assets;
+   reconcile failures before marking the run returned and removing Redis
+   state. Verify no XP, skill, stamina, or carried asset is lost or applied
+   twice during retries and restarts. The private component tests cover retry,
+   rebuild, broker routing, Core idempotency, and owner-ack cleanup; a real
+   two-service restart drill remains part of step 7.
+6. [x] Wire the private Core admission reservation to Expedition entry,
+   reconcile orphan reservations, then add authenticated BFF WebSocket and
+   frontend Map/Expedition flow. Stream only subscribed fights, reconnect
+   from a current snapshot, validate session and Origin, and exercise
+   explicit Continue. The internal Core admission API, Expedition client,
+   Redis cancellation fence, and disabled-by-default orphan scanner are in
+   place. Owner-scoped Expedition HTTP commands and BFF HTTP routing
+   now exist, but the API is disabled by default. The BFF has a dormant,
+   session- and Origin-checked WebSocket that sends an owner-checked snapshot
+   on connect/reconnect. A local scheduler pushes changed fight visuals from
+   Expedition's private Redis-only API to subscribed sockets without per-frame
+   Core reads. A feature-flagged frontend Map page now loads the active run,
+   enters the fixed Troll Field with a prepared personal-hero Party, renders
+   socket visuals, and sends explicit Continue/Return commands. The feature
+   flags remain off in ordinary local development. The isolated local journey passed
+   entry, live/reconnected visuals, Continue, deferred Return, and Core
+   settlement. The k3d API and visible Map browser journeys passed; the restart drill and routine pipeline promotion remain open.
+   The frontend Quest board now shows information and progress without the
+   old expanded combat view or its two-second sync polling.
+7. [ ] Validate local and k3d end-to-end behavior, including a two-service
+   restart drill, then switch the player-facing path. Retire the old Core
+   combat worker/sync path and isolated Combat-service sandbox only after no
+   supported flow depends on them. Keep unrelated Core behavior working and
+   document the final runtime commands.
+   Local Compose, isolated E2E, and k3d use separate RabbitMQ service accounts.
+   Private k3d Redis, RabbitMQ, and Expedition are healthy. The opt-in
+   integration command enables the authenticated Core/Expedition/BFF path,
+   which passed API and visible Map browser tests; restart and routine promotion remain open.
+8. [ ] Add and run repeatable load tests for **100, 500, and 1,000 concurrent
+   fights**, not merely 100/500/1,000 requests. Exercise fights with no
+   viewers and with WebSocket viewers, a disconnected browser, Continue, and
+   agency return. Record fight completion and settlement correctness,
+   duplicate/missing outcomes, event delay, CPU, memory, Redis operations,
+   combat-path SQL traffic, and generator saturation. Compare tiers under
+   fixed resources before changing scale. Report measured bottlenecks and
+   tune only those; a completed run is not by itself a production capacity
+   claim. Deferred at the user's request until the player-facing combat flow
+   and its normal promotion path are working reliably.
+
+## Stop condition
+
+For now, focus on the player-facing combat flow and report remaining cutover
+checks. Do not start step 8 until the user explicitly resumes load testing.
+A later bare `next` does not authorize work outside this plan.

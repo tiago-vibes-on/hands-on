@@ -17,6 +17,7 @@ CSRF protection; Game Core owns Account provisioning and Manager onboarding.
 | Redis BFF token state | Complete | Quarkus stores Keycloak token state in BFF-owned Redis; the `postgres-bff` service has been removed. |
 | Frontend integration | Complete | React bootstraps the BFF session, offers sign-in and sign-out, and sends CSRF headers for writes. |
 | Game Core token validation | Complete | The BFF forwards its server-held Keycloak access token and Game Core rejects anonymous, invalid, or incorrectly addressed tokens. |
+| Expedition token validation | Pre-cutover | BFF routes the Expedition API and forwards the same server-held token; Expedition requires its own audience and resolves the Manager through Core. The player API stays disabled. The disabled-by-default BFF WebSocket checks the session, exact Origin, and run ownership before its opening snapshot, then pushes subscribed Redis-backed visual updates; a feature-flagged Map UI passes isolated local browser E2E; k3d and cutover checks remain pending. |
 | Account and manager onboarding | Complete | The first authenticated account request provisions an `Account`; React then requires a unique Manager display name before opening the game. |
 | Agency authorization | Complete | `AgencyMember` binds Managers to agencies; every agency read and command requires membership, financial market commands require `LEADER`, and a Manager without a membership can create its first agency. |
 | Google sign-in | Deferred (post-MVP) | Keep native email/password sign-in for the MVP; configure Google as a Keycloak identity provider later. |
@@ -237,8 +238,9 @@ startup instructions are in [`backend/README.md`](backend/README.md#local-https-
 `backend/keycloak/realm/hero-association-realm.json` is a versioned startup
 import. It creates the `hero-association` realm, enables local email/password
 registration, and creates the confidential `hero-association-bff` client plus
-the `hero-association-core` resource-server audience. The BFF client mapper
-adds that audience only to access tokens. Its client secret is resolved from
+the `hero-association-core` and `hero-association-expedition`
+resource-server audiences. The BFF client mappers add both audiences only
+to access tokens. Its client secret is resolved from
 `HERO_ASSOCIATION_BFF_OIDC_CLIENT_SECRET` during the first import; it is never
 committed to the repository. Local email verification is disabled because SMTP
 is not configured. It registers callbacks for direct host development, the
@@ -257,7 +259,10 @@ or last name. Those optional Keycloak fields are hidden from end users and are
 set directly as deterministic seed data while the product is in its early
 stage.
 
-The realm is imported only when it does not yet exist. To deliberately recreate
+The realm is imported only when it does not yet exist. An existing local
+realm will not gain the Expedition audience mapper merely from a file edit;
+update it in Keycloak or deliberately recreate the local realm before
+enabling the Expedition player API. To deliberately recreate
 the local Keycloak realm, stop the infrastructure from `backend/` with
 `HERO_ASSOCIATION_DEV_HOST_ADDRESS="$(hostname -I | awk '{print $1}')" docker compose -f compose.infra.yaml down --volumes`,
 then start it again. Google is intentionally not configured until its social-login

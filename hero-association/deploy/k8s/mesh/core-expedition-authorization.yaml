@@ -1,0 +1,26 @@
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: core-from-expedition
+  namespace: hero-association
+spec:
+  selector:
+    matchLabels:
+      app: core
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/hero-association/sa/hero-association-expedition
+      to:
+        - operation:
+            methods: [GET]
+            paths:
+              - /internal/v1/expedition-admissions/me
+              - /internal/v1/expedition-admissions/reservations/orphan-candidates
+        - operation:
+            methods: [POST]
+            paths:
+              - /internal/v1/expedition-admissions/reservations
+              - /internal/v1/expedition-admissions/reservations/*/release-proven-absent

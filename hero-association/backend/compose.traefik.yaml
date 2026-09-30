@@ -7,6 +7,9 @@ services:
   redis-bff:
     ports: !override []
 
+  redis-core:
+    ports: !override []
+
   keycloak:
     environment:
       KC_HOSTNAME: https://auth.heroassociation.test

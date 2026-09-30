@@ -31,8 +31,8 @@ The backend is split into independently buildable services:
 
   - `domain`: JPA models for accounts, managers, agency memberships, agencies,
     heroes, parties, quests, runes, stackable items, feed posts, market orders, agency
-    inventory, and equipped hero runes; it also contains the pure, non-persistent
-    `domain.combat` rules engine
+    inventory, and equipped hero runes; it consumes the pure, non-persistent
+    `hero-association-lib/combat-engine` rules engine
   - `application`: game-state use cases
   - `application.exception`: application exceptions
   - `api.v1.agency`: HTTP resource and response models for agency state
@@ -80,14 +80,14 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
   the authenticated Keycloak subject. `POST /api/v1/account/manager` creates
   its one Manager with a unique, case-insensitive display name. Manager
   creation transactionally provisions one personally owned Level 1 Warrior,
-  Mage, and Archer (all skills Level 1). Re-reading the account does not
+  Mage, and Archer (all skills Level 1) in a new Manager-owned Main Party. Re-reading the account does not
   duplicate them. The account response includes the Manager's personal gold,
   hero roster, item inventory, and rune inventory; these are separate from
   agency assets.
 - `POST /api/v1/agencies` lets an onboarded Manager with no membership create
-  an empty Level 1 agency. Its 3-to-100-character name is unique
+  a Level 1 agency with no agency-owned heroes or gold. Its 3-to-100-character name is unique
   case-insensitively, the creator becomes its `LEADER`, and `201 Created`
-  returns its empty agency state.
+  returns its state with the Manager Main Party attached.
 - `GET /api/v1/recruits` lists globally available initial NPCs for an
   onboarded Manager. `POST /api/v1/recruits/{recruitId}/claim` claims one for
   that Manager, without requiring agency membership, and returns the personal
@@ -206,6 +206,13 @@ Its concrete upgrade effect is still to be defined. Quest heroes cannot change
 their agency activity or rune loadout and return `409 Conflict`.
 Prepared-party members remain at the agency and retain their `TRAINING` or
 `RESTING` activity until a quest starts. Each party has a Manager owner.
+A new Manager receives a Main Party containing their three personal starter
+heroes immediately at onboarding. Its agency is initially unset; creating an
+agency attaches the Party without changing hero ownership. Every seeded
+Manager also has one Party: User 1 retains Broken Pass Party, while the others
+have Main Party. There is no Party deletion operation, so Managers keep at
+least one Party. Creating additional parties remains supported but is not
+the primary flow for now.
 The owner can assign their own available personal heroes or available heroes
 owned by the same agency, and start a quest with that party. Agency-hero
 ownership does not change. Each agency hero has a leader-configured,
@@ -217,14 +224,17 @@ cannot be moved into the party; both return `409 Conflict`. Party names must
 be unique per Manager within an agency. Other game actions are still being
 specified.
 Quest definitions include a description, creature objective, party-size range,
-duration estimate, and gold reward. There is no Place entity, Place ID, or
-reusable dungeon floor definition in the current API. Planned Place data
-will define fields, dungeons, dungeon layouts, and possible creature
-encounters. Planned quests may count Creature defeats, require a boss defeat,
-or require completion of a dungeon. A quest may be location-independent,
-restricted to eligible Places, or tied to a specific dungeon; it is not
-required to have one Place. Quest retains objectives, party requirements,
-rewards, and per-run progress. See [GAME.md](GAME.md) and
+duration estimate, and gold reward. The Map is player-facing in the isolated
+k3d lab when Expedition integration and a Map-enabled frontend are deployed;
+ordinary local development keeps that path disabled by default.
+The planned Map domain will define fields, dungeons, reusable layouts, and
+possible encounters. Expedition will own one persistent Party per Manager and
+its Map run; a Quest will be an optional objective, never a prerequisite for
+entering a Map. The first Map path will accept personal heroes only, with
+agency-hero borrowing deferred. A wipe will end battle but leave the Party
+on the Map until the Manager explicitly requests return. A win waits
+for an explicit Continue command before another fight. This planned flow
+does not yet replace the current quest-based API. See [GAME.md](GAME.md) and
 [SERVICE_EXTRACTION.md](SERVICE_EXTRACTION.md).
 Starting a quest requires a prepared party whose member count is inside that
 quest's range. It changes the quest to
@@ -236,11 +246,21 @@ combat progresses through its persisted snapshot and the combat-sync command.
 The internal combat engine is deterministic: callers advance a supplied combat
 time and supply its random source. It resolves independent basic-attack
 timers, hero health and mana recovery, mage spell cooldowns and mana costs,
-critical hits, deaths, and battle completion. Every quest start creates a
-persisted, API-visible combat snapshot from the party's current resources,
-class combat values, and equipped Critical Chance and Critical Damage Rune
-effects, with one provisional creature per required objective. The snapshot
-retains its latest 100 server-generated combat events, including actions,
+critical hits, deaths, and battle completion. Quest start first applies
+agency recovery to each Hero, then persists a battle snapshot from the
+recovered resources. It pins Hero class, level and skill baselines, starting
+stamina, attack and recovery values, basic-attack mana cost, spell
+eligibility/cooldowns, effective critical bonuses, and equipped rune slot
+details. The API exposes the active combat state, not all internal pinned
+inputs. A newly started quest resolves its Creature definition by name through
+an optional Redis read-through cache and copies its versioned stats into each
+combatant snapshot; existing battles are not rebalanced. PostgreSQL remains
+authoritative. Cache entries expire after 60 seconds, so a changed definition
+may take up to a minute to appear in a new battle; Redis errors fall back to
+PostgreSQL. The canonical Troll starts with 2,000 health, while Forest Wolf
+keeps 120. Spell formulas are still compiled rules, not versioned data.
+The snapshot retains its latest 100 server-generated combat
+events, including actions,
 recovery, mana costs, hits, criticals, and defeats. A combat-sync command
 restores a snapshot into the engine, advances it by the time since its
 previous sync, and persists the result and any new events atomically. A
@@ -317,12 +337,38 @@ IDs must not be added for entities or exposed through the API.
 
 - PostgreSQL stores game state.
 - Database tables use singular entity names, including `agency`, `manager`,
-  `hero`, `party`, `quest`, `quest_combat`, `quest_combatant`,
-  `quest_combat_event`, `quest_combat_hit`, `rune`, `agency_rune`, `item`,
+  `hero`, `party`, `quest`, `creature_definition`, `quest_combat`, `quest_combatant`,
+  `quest_combatant_rune`, `quest_combat_event`, `quest_combat_hit`,
+  `rune`, `agency_rune`, `item`,
   `agency_item`, `manager_item`, `manager_rune`, `hero_rune`,
   `feed_post`, and `market_order`. A hero is either recruitable,
   agency-owned, or Manager-owned; personal heroes cannot be recruited by
   an agency.
+- An isolated pre-cutover Combat service owns a separate singular `battle`
+  table. Its private start endpoint validates a typed, engine-restorable
+  opening snapshot and ordered pinned Hero/Creature inputs (identity, class,
+  levels, stamina, rune slots, Creature definition/version, and base XP). It
+  persists canonical state with a UUIDv7-keyed `PREPARED` request. Identical
+  retries are idempotent; conflicting payloads return `409`. It requires a
+  Combat-audience JWT with the `combat:start` role. The only accepted ruleset
+  label is provisionally `core-v1`. It uses the same deterministic `hero-association-lib/combat-engine`
+  library as Core; there is no duplicate production engine or parity script. Its
+  separate database supports bounded manual advances that atomically persist
+  the new snapshot, ordered `battle_event` rows, and chronological facts in
+  `battle_progression_batch` outbox rows. Repeated target times do not duplicate
+  facts. An opt-in one-second worker advances due battles from a persisted
+  wall-clock anchor in at most ten-second steps. Row locks prevent duplicate
+  progression across replicas. The worker is off by default. A separate,
+  opt-in outbox worker publishes versioned progression batches to a durable
+  RabbitMQ queue with publisher confirms, then marks them published. A broker
+  failure leaves the row pending for retry. An opt-in Core RabbitMQ consumer
+  validates each batch and stores it once in the singular
+  `combat_progression_inbox` table before acknowledging it; invalid batches
+  are requeued. A manual, registration-gated Core applier can process contiguous
+  batches into Hero stamina, skills, XP, and final health/mana in one transaction
+  with its sequence cursor. Registration requires a Party outside a live Core
+  Quest and has no production caller yet. Run outcomes remain for their own
+  owner. No live traffic uses Combat; normal Core intake is disabled by default.
 - Until Flyway is introduced, Core's development and test profiles drop and
   recreate the schema on startup, then load deterministic state from
   `import.sql`. Packaged Docker Compose explicitly keeps this disposable
@@ -344,8 +390,9 @@ IDs must not be added for entities or exposed through the API.
   Broken Pass Party and its in-progress quest and initial Troll combat snapshot,
   Lost Courier, rune inventory, Magic Crystals, Iron Ingots, equipped runes,
   and two feed posts. See [TEST_DATA.md](TEST_DATA.md) for all credentials and
-  memberships. Seeded Managers normally have zero personal gold; Soren and
-  Manager 2 have 25 gold, Manager 3 has 20, and Manager 4 has 200 to exercise
+  memberships. Seeded Managers normally have zero personal gold; User 2 has
+  100,000 gold for local testing, Soren and Manager 2 have 25 gold, Manager 3
+  has 20, and Manager 4 has 200 to exercise
   exact, insufficient, and ample borrowing payments. All have empty personal
   item and rune inventories except Manager 3's Magic Crystals and Manager 4's
   Iron Ingots, and a distinct personal starter
@@ -359,13 +406,13 @@ IDs must not be added for entities or exposed through the API.
   The product is in an early stage, so local and pre-production schema and
   seed-data changes may be applied directly by resetting and recreating data;
   they do not require backwards compatibility before Flyway is introduced.
-- Local development runs the `postgres-core`, `postgres-keycloak`, and
-  `redis-bff` Docker Compose services plus Keycloak and Traefik through
-  `backend/compose.infra.yaml`. Game Core runs directly on the host at port
-  `17081`, the BFF at `17080`, and Vite at `15172`. The Core dev profile
-  connects to PostgreSQL at `localhost:15431`; the BFF session store connects
-  to Redis at `localhost:16379`. Quarkus Dev Services is disabled for Core
-  development but remains available to the test profiles.
+- Local development runs the `postgres-core`, `postgres-keycloak`,
+  `redis-bff`, and `redis-core` Docker Compose services plus Keycloak and
+  Traefik through `backend/compose.infra.yaml`. Game Core runs directly on
+  the host at port `17081`, the BFF at `17080`, and Vite at `15172`. Core
+  connects to PostgreSQL at `localhost:15431` and its disposable Creature
+  cache at `localhost:16380`; BFF sessions use Redis at `localhost:16379`.
+  Quarkus Dev Services is disabled for Core development but available to tests.
 - Traefik terminates local HTTPS at `heroassociation.test` and
   `auth.heroassociation.test`, proxying the first hostname to host-run Vite and
   BFF routes and the second to Keycloak. `backend/scripts/start-infra.sh`
@@ -411,7 +458,7 @@ IDs must not be added for entities or exposed through the API.
 - The first authenticated Account request provisions a UUIDv7 `account` row
   from the immutable Keycloak subject. React then requires the player to choose
   a unique Manager name. A Manager without an agency membership can create one
-  empty Level 1 agency and becomes its leader; `agency_member` controls access
+  Level 1 agency with no agency-owned assets and becomes its leader; `agency_member` controls access
   to agency state and commands. Both roles can run gameplay commands, while
   leaders alone can create or cancel agency-owned market orders. Any Manager
   can create or cancel their own personal orders.
@@ -421,7 +468,8 @@ IDs must not be added for entities or exposed through the API.
   seeded Manager names are `User 1` and `User 2`, so local sessions and game
   data are immediately distinguishable. They must never be used outside local
   development.
-- Docker Compose runs Core and Keycloak PostgreSQL services, Redis, Game Core, and
+- Docker Compose runs Core and Keycloak PostgreSQL services, separate Core
+  cache and BFF session Redis services, Game Core, and
   the BFF using JVM packages by default. Only the BFF publishes port `17080`;
   Core remains on the private Compose network. Keycloak publishes port `17180`
   for its local login and admin pages. The optional Traefik overlay instead
@@ -458,33 +506,60 @@ IDs must not be added for entities or exposed through the API.
   seconds while its browser tab is visible, and immediately when the tab becomes
   visible again. This keeps agency recovery, feed posts, market orders, and
   background quest progress current without requiring WebSocket or server-sent
-  event connections. This is the current behavior; the planned first real-time
-  Combat transport is a bidirectional browser-to-BFF WebSocket introduced
-  with the extracted Combat service, not a temporary Core WebSocket or SSE.
-- Clicking the primary in-progress quest expands an inline Phaser combat scene.
-  Phaser renders the server-provided active combat snapshot; it does not
-  calculate attacks, recovery, spells, critical hits, or outcomes. It replays
-  only new server-generated events while the scene is open. While expanded, the
-  frontend calls the combat-sync command every two seconds; the backend worker
-  continues combat when the view is closed.
-- The combat prototype starts the three seeded heroes at Level 1 and displays
-  their current health and mana beside their respective bars. Placeholder trolls
-  also display a 100-mana bar.
-- Resource values appear to the left of hero bars and to the right of creature
-  bars. Hero resource bars empty from the right; creature resource bars empty
-  from the left.
-- There is no base critical-hit chance. A Critical Chance Rune adds 1% critical
-  chance, and a Critical Damage Rune adds 10 percentage points to the
-  critical-damage multiplier: 200% damage becomes 210%. A new combat snapshot
-  sums its heroes' equipped critical rune effects before the server engine runs.
-- Elara Moonweaver is Magic Level 15 and has two displayed mage spell slots.
-  Fire Ball costs 20 mana, deals `10 + 150% of Magic Level` to one creature,
-  and has a three-second cooldown. Lightning Rail costs 40 mana, deals
-  `2 + 80% of Magic Level` to every living creature, and has a five-second
-  cooldown. The server engine auto-casts an available spell when its cooldown
-  is ready and Elara has sufficient mana. A dark radial overlay clears from
-  right to left across a spell icon to visualize the cooldown reported in the
-  latest snapshot.
+  event connections. This remains the normal Quest behavior. An opt-in browser-to-BFF
+  WebSocket now carries Expedition fight snapshots from the shared combat-engine
+  path; Start, Continue, and Return remain CSRF-protected HTTP commands. There
+  is no temporary Core WebSocket or SSE. See the
+  [Combat and Expedition plan](COMBAT_EXPEDITION_PLAN.md) and the
+  [planned run contract](EXPEDITION_CONTRACT.md). The contract reserves one
+  active Map run per Manager with a versioned, durable Redis snapshot; the
+  normal local-development frontend Map is still hidden. The private
+  `hero-association-expedition` module now keeps one active run per Manager in
+  dedicated Redis, calculates a pinned fight once with the shared engine,
+  and atomically commits only terminal Hero state. It waits for explicit
+  Continue after a win, parks a wipe, and defers Return until a current fight
+  ends. The private Return handoff now freezes one aggregate in Redis,
+  publishes it through RabbitMQ, and retains it until Core applies Hero and
+  Manager Assets once and sends a matching acknowledgment. Core now exposes a service-key-protected internal admission API: it resolves
+  the authenticated Manager, reserves a recovered Hero baseline including rune
+  effects, and can release a proven-absent orphan. Expedition has the server-side
+  Core client, entry coordinator, and atomic Redis cancellation fence; its
+  periodic orphan scanner is disabled by default. Expedition now validates a
+  dedicated Keycloak audience for owner-scoped Start, Get, Continue, Return,
+  and active-run HTTP commands. BFF routes only that API prefix to Expedition;
+  the Expedition player API remains disabled by default. A disabled-by-default BFF WebSocket
+  handshake checks session, exact Origin, and run ownership before sending
+  one current snapshot on connect or reconnect. Its scheduler pushes changed
+  Redis-backed fight visuals to locally subscribed sockets through a private
+  Expedition API without per-frame Core reads. The frontend has a feature-flagged Map page
+  for the first Troll Field, active-run recovery, live visuals, and explicit
+  Continue/Return. It is enabled in the isolated k3d frontend build; both settlement consumers
+  are enabled by k3d integration. Core Quest combat remains available for
+  players. An isolated, opt-in Playwright Compose overlay now verifies Map
+  entry, live and reconnected WebSocket visuals, explicit Continue, deferred
+  Return with no viewer, and Core settlement; it does not alter the normal
+  local player path. See [Expedition settlement](EXPEDITION_SETTLEMENT.md).
+  Broker setup creates settlement and acknowledgment topology before either
+  service starts. Core and Expedition use separate accounts with no configure
+  permission: each publishes only to its own exchange and reads only its queue.
+  Private k3d Redis, RabbitMQ, and Expedition are staged. An explicit
+  integration command enables Core admission/settlement, Expedition APIs, and
+  the BFF WebSocket; an authenticated k3d journey passed, with the frontend Map now enabled.
+- The Map screen is the player-facing battle view in k3d. It reuses the
+  Phaser battle renderer for the party and creatures, including health, mana,
+  rune slots, spells, timed hits, critical effects, and recovery animations.
+  Expedition calculates the current non-interactive fight once and stores its
+  event windows in Redis; visual reads do not rerun the engine. The BFF
+  WebSocket sends only the current state and recent ordered events. Reconnect
+  loads current state without replaying old hits. When the Map is reopened or
+  the tab resumes after a gap, the browser discards pending visual effects and
+  paints the current server frame immediately; only subsequent live events are
+  animated. Continue and Return remain explicit commands. The browser never decides attacks or outcomes. See
+  [the fight timeline](COMBAT_TIMELINE.md).
+- The Quests screen shows available objectives and active or resolved progress.
+  It no longer embeds the legacy Phaser scene or polls the combat-sync API.
+  Existing Core quest combat can continue server-side, but Map encounters do
+  not advance Quest objectives yet; that integration is deferred.
 - The Heroes screen shows the signed-in Manager's personal starter roster
   and gold separately from the agency roster. The Manager can create a party,
   assign or remove their personal heroes or available agency heroes, and send

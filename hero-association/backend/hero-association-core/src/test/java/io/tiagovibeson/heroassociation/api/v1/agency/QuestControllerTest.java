@@ -30,38 +30,30 @@ class QuestControllerTest {
 
     @Test
     void shouldStartAnAvailableQuestWithAnEligiblePreparedParty() {
-        String oversizedPartyId = createParty("Forest Vanguard")
-                .then()
-                .statusCode(200)
-                .extract()
-                .path("parties.find { it.name == 'Forest Vanguard' }.id");
-        addHero(oversizedPartyId, PERSONAL_WARRIOR_ID);
-        addHero(oversizedPartyId, PERSONAL_MAGE_ID);
-        addHero(oversizedPartyId, PERSONAL_ARCHER_ID);
+        String partyId = "019c4c00-0002-7001-8000-000000000003";
 
-        startQuest(oversizedPartyId)
+        startQuest(partyId)
                 .then()
                 .statusCode(400)
                 .body("message", is("Party must contain between 1 and 2 heroes to start this quest."));
 
         given()
                 .when()
-                .delete("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, oversizedPartyId, PERSONAL_WARRIOR_ID))
+                .delete("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, partyId, PERSONAL_MAGE_ID))
+                .then()
+                .statusCode(200);
+        given()
+                .when()
+                .delete("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, partyId, PERSONAL_ARCHER_ID))
                 .then()
                 .statusCode(200);
 
-        String courierPartyId = createParty("Courier Scouts")
-                .then()
-                .statusCode(200)
-                .extract()
-                .path("parties.find { it.name == 'Courier Scouts' }.id");
-        addHero(courierPartyId, PERSONAL_WARRIOR_ID);
-        startQuest(courierPartyId)
+        startQuest(partyId)
                 .then()
                 .statusCode(200)
                 .body("quests.find { it.id == '%s' }.status".formatted(LOST_COURIER_QUEST_ID), is("IN_PROGRESS"))
-                .body("quests.find { it.id == '%s' }.partyId".formatted(LOST_COURIER_QUEST_ID), is(courierPartyId))
-                .body("parties.find { it.id == '%s' }.quest.title".formatted(courierPartyId), is("Lost Courier"))
+                .body("quests.find { it.id == '%s' }.partyId".formatted(LOST_COURIER_QUEST_ID), is(partyId))
+                .body("parties.find { it.id == '%s' }.quest.title".formatted(partyId), is("Lost Courier"))
                 .body("quests.find { it.id == '%s' }.startedAt".formatted(LOST_COURIER_QUEST_ID), notNullValue())
                 .body("quests.find { it.id == '%s' }.combat.status".formatted(LOST_COURIER_QUEST_ID), is("IN_PROGRESS"))
                 .body("quests.find { it.id == '%s' }.combat.currentTimeMilliseconds".formatted(LOST_COURIER_QUEST_ID), is(0))
@@ -72,27 +64,12 @@ class QuestControllerTest {
                 .body("quests.find { it.id == '%s' }.expectedCompletionAt".formatted(LOST_COURIER_QUEST_ID), notNullValue())
                 .body("personalHeroes.find { it.id == '%s' }.activity".formatted(PERSONAL_WARRIOR_ID), is("ON_QUEST"));
 
-        startQuest(courierPartyId)
+        startQuest(partyId)
                 .then()
                 .statusCode(409)
                 .body("message", is("Quest with id %s is not available to start.".formatted(LOST_COURIER_QUEST_ID)));
     }
 
-    private Response createParty(String name) {
-        return given()
-                .contentType(ContentType.JSON)
-                .body("{\"name\":\"%s\"}".formatted(name))
-                .when()
-                .post("/api/v1/agencies/%s/parties".formatted(AGENCY_ID));
-    }
-
-    private void addHero(String partyId, String heroId) {
-        given()
-                .when()
-                .put("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, partyId, heroId))
-                .then()
-                .statusCode(200);
-    }
 
     private Response startQuest(String partyId) {
         return startQuest(partyId, 0);

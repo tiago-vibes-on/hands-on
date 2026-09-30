@@ -21,9 +21,16 @@ resulting state.
   Envoy Gateway and Istio in k3d, and BFF/Core scaling progress.
 - Follow [`SERVICE_EXTRACTION.md`](SERVICE_EXTRACTION.md) for the phased
   domain/service boundary work and its progress.
-- Next extraction order: pin battle inputs, extract Combat with the BFF
-  WebSocket, add Place and flexible Quest objectives, establish Assets
-  contracts in Core, then extract Market. See [ADR 0007](adr/0007-combat-before-market-extraction.md).
+- Current bounded work: the pure combat library and private Expedition
+  Redis encounter loop and private aggregate settlement are implemented; Core
+  combat remains live. Core admission, a disabled-by-default BFF WebSocket,
+  and a feature-flagged frontend Map flow are implemented. The isolated local browser
+  journey now passes. Next validate k3d, isolate broker permissions, and
+  switch only after the remaining cutover checks; then test 100/500/1,000
+  concurrent fights. Follow the ordered
+  [Combat and Expedition plan](COMBAT_EXPEDITION_PLAN.md) and
+  [ADR 0008](adr/0008-combat-engine-in-expedition.md). Quest objectives,
+  Market extraction, and other domains remain outside this sequence.
 
 ## Milestone 1 — Authoritative agency management
 
@@ -69,13 +76,16 @@ resulting state.
 - [ ] Define and implement quest cancellation rules and a cancellation command.
 - [x] Replace the frontend's fixed active quest and available quest cards with
   API data and persisted quest starts.
-- [ ] Add reusable `FIELD` and `DUNGEON` Place definitions, dungeon floor
-  layouts, and possible encounters referencing Creature IDs. Cities wait.
-- [ ] Support different Quest objectives: Creature kill count, specific boss
-  defeat, and dungeon completion. Place restrictions are optional; do not
-  require one Place per quest.
-- [ ] Advance each quest run from authoritative outcomes, pin the version of
-  each Place used, and keep run progress in Quest rather than Place.
+- [ ] Add versioned `FIELD` and `DUNGEON` Map definitions and possible
+  encounters. A Manager enters a Map through Expedition without requiring a Quest.
+- [ ] Add one persistent Party per Manager, seeded with personal starter heroes;
+  it is editable only at the agency and cannot be emptied. Map runs initially
+  accept personal heroes only. Agency-hero borrowing for Map runs waits.
+- [ ] Support explicit return from a Map. A return requested during battle
+  occurs after that battle; a win waits for an explicit Continue command;
+  a party wipe stops encounters but does not return automatically.
+- [ ] Later add optional Quest objectives: Creature kill count, boss defeat,
+  and dungeon completion, advanced from authoritative outcomes.
 
 ## Milestone 4 — Server-side automatic combat
 
@@ -88,6 +98,11 @@ resulting state.
   the initial mage spells in the server-side rules engine.
 - [x] Apply Critical Chance and Critical Damage Rune effects when a new combat
   snapshot is created.
+- [x] Pin recovered Hero resources, level/skills, class combat values, spell
+  eligibility, and full equipped rune slots when a new battle starts. Restore
+  basic-attack mana cost from the snapshot rather than current class values.
+- [ ] Version compiled spell/combat rules or drain active battles before a
+  rules-changing combat-engine deployment. See the [Combat and Expedition plan](COMBAT_EXPEDITION_PLAN.md).
 - [ ] Apply the remaining displayed rune effects: attack, armor, health, mana,
   and attack speed.
 - [x] Persist a compact quest-combat snapshot and bounded event history. The
@@ -278,7 +293,7 @@ Ordered implementation:
     and membership permissions. The isolated suite provisions `user3`, verifies
     its no-agency gate and first agency, and confirms User 2 cannot read
     Dawnwatch state.
-- [ ] As part of Combat extraction, add an authenticated, bidirectional
+- [ ] As part of the Expedition cutover, add an authenticated, bidirectional
   browser-to-BFF WebSocket, not a temporary Core endpoint. Stream
   server-authoritative snapshots and events; accept optional battle commands
   only when their mechanics exist.

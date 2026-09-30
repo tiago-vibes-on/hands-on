@@ -12,6 +12,8 @@ const composeFiles = [
   path.join(e2eDirectory, 'compose.e2e.yaml'),
 ]
 const archiveComposeFile = path.join(e2eDirectory, 'compose.archive.yaml')
+const expeditionMode = process.env.HERO_ASSOCIATION_E2E_EXPEDITION === 'true'
+if (expeditionMode) composeFiles.push(path.join(e2eDirectory, 'compose.expedition.e2e.yaml'))
 let activeArchive = null
 
 const e2eEnvironment = {
@@ -22,6 +24,11 @@ const e2eEnvironment = {
   HERO_ASSOCIATION_BFF_OIDC_CLIENT_SECRET: 'hero-association-e2e-client-secret-please-do-not-use-in-production',
   HERO_ASSOCIATION_BFF_OIDC_STATE_SECRET: 'hero-association-e2e-state-secret-please-do-not-use-in-production',
   HERO_ASSOCIATION_BFF_CSRF_TOKEN_SIGNATURE_KEY: 'hero-association-e2e-csrf-signing-key-please-do-not-use-in-production',
+  HERO_ASSOCIATION_E2E_EXPEDITION_CORE_SERVICE_KEY: 'e2e-only-expedition-core-service-key-2026',
+  HERO_ASSOCIATION_E2E_EXPEDITION_BFF_SERVICE_KEY: 'e2e-only-expedition-bff-service-key-2026',
+  HERO_ASSOCIATION_E2E_EXPEDITION_RABBITMQ_PASSWORD: 'e2e-only-expedition-rabbitmq-password',
+  HERO_ASSOCIATION_E2E_EXPEDITION_WORKER_RABBITMQ_PASSWORD: 'e2e-only-expedition-worker-rabbitmq-password',
+  HERO_ASSOCIATION_E2E_CORE_SETTLEMENT_RABBITMQ_PASSWORD: 'e2e-only-core-settlement-rabbitmq-password',
 }
 
 const keycloakUrl = 'http://localhost:18180'
@@ -32,8 +39,7 @@ function composeArguments(...argumentsAfterCompose) {
     'compose',
     '--project-name', 'hero-association-e2e',
     '--project-directory', backendDirectory,
-    '-f', composeFiles[0],
-    '-f', composeFiles[1],
+    ...composeFiles.flatMap((file) => ['-f', file]),
     ...(activeArchive ? ['-f', archiveComposeFile] : []),
     ...argumentsAfterCompose,
   ]
@@ -162,6 +168,9 @@ async function configureShortLivedE2ETokens() {
   }
 }
 export default async function globalSetup({ archive } = {}) {
+  if (archive && expeditionMode) {
+    throw new Error('Expedition E2E cannot run against the three-image Core/BFF/frontend archive.')
+  }
   activeArchive = archive ?? null
   if (activeArchive) {
     await verifyArchiveCompose()
@@ -176,6 +185,7 @@ export default async function globalSetup({ archive } = {}) {
     await Promise.all([
       waitForService('http://localhost:18081/api/v1/account', 'Game Core'),
       waitForService('http://localhost:18080/api/v1/session', 'BFF'),
+      ...(expeditionMode ? [waitForService('http://localhost:18083/q/health/ready', 'Expedition')] : []),
     ])
     if (activeArchive) {
       await verifyRunningImages()

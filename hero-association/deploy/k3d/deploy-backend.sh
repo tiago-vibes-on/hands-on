@@ -54,10 +54,10 @@ kubectl -n "$namespace" create configmap hero-association-k3d-theme \
   --from-file=hero-association.css="$script_dir/../../backend/keycloak/theme/hero-association/login/resources/css/hero-association.css" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-for dependency in postgres-core postgres-keycloak redis-bff; do
+for dependency in postgres-core postgres-keycloak redis-bff redis-core; do
   kubectl apply -f "$script_dir/../k8s/backend/$dependency.yaml"
 done
-for dependency in postgres-core postgres-keycloak redis-bff; do
+for dependency in postgres-core postgres-keycloak redis-bff redis-core; do
   kubectl -n "$namespace" rollout status "deployment/$dependency" --timeout=5m
 done
 

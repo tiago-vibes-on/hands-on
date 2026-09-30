@@ -1,0 +1,35 @@
+.map-notice, .map-entry, .map-fight { margin-top: 18px; }
+.map-entry { padding: 26px; }
+.map-entry h2 { margin: 8px 0 10px; }
+.map-entry p { color: var(--text-muted); }
+.map-entry__actions { display: flex; align-items: end; gap: 14px; margin-top: 24px; }
+.map-entry__actions label { display: grid; min-width: min(100%, 280px); gap: 7px; color: var(--text-muted); font-size: 12px; }
+.map-entry__actions select { height: 38px; padding: 0 10px; color: var(--text-strong); background: #101827; border: 1px solid #485875; border-radius: 6px; }
+.map-fight { padding: 26px; }
+.map-fight__heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.map-fight__heading h2 { margin: 6px 0 0; }
+.map-fight__time { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.map-fight__outcome { color: #e5bc63; }
+.map-fight__sides { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 22px; align-items: center; margin-top: 24px; }
+.map-fight__team h3 { margin: 0 0 14px; color: var(--text-muted); font-size: 13px; text-transform: uppercase; letter-spacing: .1em; }
+.map-fight__lineup { display: flex; flex-wrap: wrap; gap: 12px; }
+.map-fight__versus { color: #d6ad5c; font-family: var(--display-font); font-size: 24px; }
+.map-combatant { display: flex; flex: 1 1 155px; min-width: 155px; max-width: 240px; gap: 10px; padding: 14px; background: #101827; border: 1px solid var(--border-soft); border-radius: 9px; }
+.map-combatant--creature { border-color: #755844; }
+.map-combatant__portrait { display: grid; flex: 0 0 34px; height: 34px; place-items: center; color: #f3d38e; background: #483b31; border-radius: 7px; font-weight: 700; }
+.map-combatant__body { min-width: 0; flex: 1; }
+.map-combatant__body > strong, .map-combatant__body > small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-combatant__body > small { margin: 3px 0 10px; color: var(--text-muted); text-transform: capitalize; }
+.map-resource { margin-top: 7px; }
+.map-resource > span { display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.map-resource__track { height: 6px; overflow: hidden; background: #273347; border-radius: 6px; }
+.map-resource__fill { display: block; height: 100%; transition: width .2s ease-out; }
+.map-resource__fill--health { background: #c85654; }
+.map-resource__fill--mana { background: #5d91ce; }
+.map-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 20px; color: var(--text-muted); font-size: 13px; }
+.map-controls__connection { margin-right: auto; }
+@media (max-width: 800px) {
+  .map-fight__sides { grid-template-columns: 1fr; }
+  .map-fight__versus { text-align: center; }
+  .map-entry__actions { align-items: stretch; flex-direction: column; }
+}

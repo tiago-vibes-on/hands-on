@@ -1,7 +1,7 @@
 http:
   routers:
     bff:
-      rule: 'Host(`heroassociation.test`) && (PathPrefix(`/api`) || PathPrefix(`/auth`))'
+      rule: 'Host(`heroassociation.test`) && (PathPrefix(`/api`) || PathPrefix(`/auth`) || PathPrefix(`/ws`))'
       entryPoints: [websecure]
       service: bff
       tls: {}

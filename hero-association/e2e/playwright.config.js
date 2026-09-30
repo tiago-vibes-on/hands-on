@@ -2,7 +2,9 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './tests',
-  testIgnore: /k3d-.*\.spec\.js$/,
+  testIgnore: process.env.HERO_ASSOCIATION_E2E_EXPEDITION === 'true'
+    ? /k3d-.*\.spec\.js/
+    : /(?:k3d-.*|expedition)\.spec\.js/,
   fullyParallel: false,
   workers: 1,
   ...(process.env.E2E_EXTERNAL_STACK === 'true' ? {} : { globalSetup: './global-setup.js' }),

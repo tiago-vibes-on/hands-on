@@ -96,7 +96,7 @@ public class RuneLoadoutService {
     }
 
     private void validateHeroAvailableForLoadout(Hero hero) {
-        if (hero.getActivity() == HeroActivity.ON_QUEST) {
+        if (hero.getActivity() == HeroActivity.ON_QUEST || hero.getActivity() == HeroActivity.ON_EXPEDITION) {
             throw new HeroOnQuestException(hero.getId());
         }
     }

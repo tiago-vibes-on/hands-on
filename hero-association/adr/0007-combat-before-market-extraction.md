@@ -1,9 +1,13 @@
 # ADR 0007: Extract Combat before Market
 
 - Date: 2026-09-29
-- Status: Accepted plan; implementation pending
+- Status: Superseded by ADR 0008 for Combat and Expedition implementation
 
 ## Context
+
+This record preserves the earlier standalone Combat-service decision. Follow
+[ADR 0008](0008-combat-engine-in-expedition.md) and the current
+[Combat and Expedition plan](../COMBAT_EXPEDITION_PLAN.md) for new work.
 
 Game Core currently runs combat and market in one service. The frontend
 watches an expanded fight through two-second combat sync polling, while a
@@ -31,10 +35,14 @@ actions. Do not add a temporary WebSocket to Core or speculative future
 simulation. Keep Core's current combat path authoritative until the new
 service, BFF socket, frontend, and tests can switch together.
 
-After that cutover, add Place and flexible Quest objectives, establish Assets
-reservation/settlement contracts in Core, and then extract Market. This ADR
-revises only the extraction sequence in ADR 0004; Core's temporary role and
-the ownership decisions in ADR 0003 remain accepted.
+After that cutover, add Map and Expedition. Map owns reusable Field and
+Dungeon definitions. Expedition owns one persistent Party per Manager and
+its Map run; entering a Map does not require a Quest. Initially only personal
+heroes can join a Map run. A return during battle waits for that battle, while
+a wipe does not automatically return the Party. Add optional Quest objectives
+later, then establish Assets reservation/settlement contracts in Core and
+extract Market. This ADR revises the extraction sequence in ADR 0004;
+Core's temporary role and ADR 0003 remain accepted.
 
 ## Alternatives considered
 

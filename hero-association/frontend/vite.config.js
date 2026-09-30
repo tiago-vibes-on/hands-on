@@ -21,6 +21,11 @@ export default defineConfig(({ mode }) => {
           target: environment.VITE_API_PROXY_TARGET || 'http://localhost:17080',
           changeOrigin: shouldChangeProxyOrigin,
         },
+        '/ws': {
+          target: environment.VITE_API_PROXY_TARGET || 'http://localhost:17080',
+          changeOrigin: shouldChangeProxyOrigin,
+          ws: true,
+        },
       },
     },
   }

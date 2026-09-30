@@ -51,6 +51,7 @@ try {
     '--ipc', 'host',
     '--user', `${process.getuid()}:${process.getgid()}`,
     '--env', 'E2E_EXTERNAL_STACK=true',
+    '--env', 'HERO_ASSOCIATION_E2E_EXPEDITION=' + (process.env.HERO_ASSOCIATION_E2E_EXPEDITION ?? 'false'),
     '--volume', `${e2eDirectory}:/work`,
     '--workdir', '/work',
     playwrightImage,

@@ -12,13 +12,22 @@ to this service without changing the API contract. See
 
 ## Test
 
-From this directory, run:
+For a clean checkout, run `./mvnw -pl hero-association-core -am test` from
+`backend/`; this builds the shared combat engine too. To run the direct
+module commands below, first run
+`./mvnw -pl hero-association-lib -am install` from `backend/`. Then, from
+this directory, run:
 
 ```bash
 ./mvnw test
 ```
 
-The test suite starts PostgreSQL automatically through Quarkus Dev Services.
+The test suite starts temporary PostgreSQL and Redis containers through Quarkus
+Dev Services. Redis caches Creature combat profiles; PostgreSQL remains authoritative.
+The inbox consumer test also starts a temporary RabbitMQ container. The
+Redis-outage profile test runs in a separate Maven test fork so a Quarkus
+profile restart cannot reuse a stopped PostgreSQL Dev Services port.
+
 
 The k3d Core exports OTLP traces, HTTP/JVM metrics, and structured logs
 to the isolated collector. Normal host-run development and Docker Compose
@@ -27,9 +36,9 @@ keep telemetry disabled unless explicitly enabled; see
 
 ## Local development (default)
 
-Run PostgreSQL and Keycloak in Docker Compose, then run Quarkus directly on the
-host. This keeps the database lifecycle separate from the microservice and
-enables Quarkus hot reload without rebuilding a container.
+Run PostgreSQL, Keycloak, and the separate disposable Core Redis cache in
+Docker Compose, then run Quarkus directly on the host. This keeps dependency
+lifecycles separate from the microservice and enables hot reload.
 
 From the parent `backend/` directory, first create the ignored Keycloak
 environment file required by Compose:
@@ -50,13 +59,62 @@ cd hero-association-core
 ./mvnw quarkus:dev
 ```
 
-The development profile connects to the Compose database at `localhost:15431`
-with the seeded `hero_association` credentials and validates bearer tokens
-issued by Keycloak at `https://auth.heroassociation.test`. Quarkus Dev Services is disabled
-for this profile. Game Core listens on `http://localhost:17081`. Use the BFF at
-`http://localhost:17080` for browser requests; it forwards the server-held
-access token. The test profile continues to start its own temporary PostgreSQL
-container through Dev Services.
+The development profile connects to PostgreSQL at `localhost:15431` using the
+seeded `hero_association` credentials and to its Creature cache Redis at
+`localhost:16380`. Cache entries expire after 60 seconds. On a cache error,
+Core reads PostgreSQL; Redis is excluded from Core's readiness check because
+this cache is optional. Core validates bearer tokens issued by Keycloak at
+`https://auth.heroassociation.test` and listens on `http://localhost:17081`.
+Use the BFF at `http://localhost:17080` for browser requests; it forwards
+the server-held access token. Dev Services is disabled in dev mode; tests
+start their own temporary PostgreSQL and Redis containers.
+
+### Pre-cutover Expedition settlement (off by default)
+
+Core can reserve a personal-Hero Party under one UUIDv7 Expedition ID and
+stores the exact baseline in `expedition_reservation`. No browser or private
+entry route calls this method yet. A dedicated RabbitMQ consumer can apply one
+frozen Expedition aggregate to Hero and Manager Assets in the same transaction
+as the reservation receipt. Duplicate bytes are harmless; a changed baseline
+or conflicting payload is rejected. Core publishes a separate owner-applied
+acknowledgment only after SQL commit. This consumer remains disabled until
+authenticated admission is connected. See
+[Expedition settlement](../../EXPEDITION_SETTLEMENT.md) for the handoff and
+local broker settings.
+
+### Pre-cutover Combat inbox (off by default)
+
+Core has an isolated `combat_progression_inbox` table for versioned Combat
+fact batches. With `HERO_ASSOCIATION_CORE_COMBAT_INBOX_ENABLED=true`, it polls
+the optional RabbitMQ sandbox, validates and stores a batch, then acknowledges
+it only after the database commit. An identical redelivery is harmless;
+invalid or conflicting messages remain queued and require investigation.
+Gaps are stored but not applied. Intake alone does not modify live game
+state. A separate manual applier requires an explicit
+`combat_battle_registration` for a Party not attached to a Core Quest. It
+applies one contiguous batch to Hero stamina, skills, XP, and terminal
+health/mana with its sequence cursor and `applied_at` in one transaction.
+No production caller registers battles or invokes this applier, and it does
+not resolve Quest or Expedition outcomes.
+
+To exercise this intake locally, start `rabbitmq-combat` from `backend/`
+and restart Core with the flag from `hero-association-core/`:
+
+```bash
+docker compose -f compose.combat.yaml up --detach rabbitmq-combat
+cd hero-association-core
+HERO_ASSOCIATION_CORE_COMBAT_INBOX_ENABLED=true ./mvnw quarkus:dev
+```
+
+The default host AMQP port is `15673`; the local-only credentials match
+`compose.combat.yaml`. If its password or port differs in `backend/.env`,
+export the corresponding environment variables for the host-run Core process.
+Keep this flag off for normal development and k3d: the battle handoff,
+automatic application, and Combat cutover are not complete. Core's disposable
+dev schema reset removes inbox and registration rows, while the RabbitMQ
+sandbox volume may retain messages. A k3d Core image with these new tables
+requires an explicit schema reset before deployment; no live k3d deployment
+is part of this slice.
 
 ### Development database reset
 
@@ -69,14 +127,18 @@ rune definitions, Magic Crystals, Iron Ingots, agency rune inventory, the
 party's equipped runes, two feed posts, Ironridge Exchange, and its open market
 orders. It also seeds manager1 through manager10 across Dawnwatch, Ironridge,
 and Silverkeep Guild. Every seeded Manager has three personal starter heroes,
-most have zero personal gold, and Manager 3 and Manager 4 have small personal
-item stacks for market tests. Agency assets remain separate. New Manager
-onboarding provisions the same three heroes once with zero gold and no items.
+most have zero personal gold, and User 2 has 100,000 personal gold for
+local testing. Manager 3 and Manager 4 have small personal item stacks for
+market tests. Every seeded Manager owns one Party; User 1 has Broken Pass
+Party, and the others have a Main Party with their three personal heroes. Agency
+assets remain separate. New Manager onboarding provisions the same three
+heroes, a Main Party, zero gold, and no items before agency creation.
 `GET /api/v1/account` exposes these personal assets under `manager`.
 See the [test-data map](../../TEST_DATA.md). Do not use this configuration
 with data that must be retained.
 
-A party now belongs to the Manager who creates it, within their agency.
+A party belongs to its Manager. The onboarding Main Party is initially
+unattached and joins the Manager's agency when they create one.
 That Manager can assign or remove their available personal heroes or available
 agency-owned heroes and start a quest with their prepared party; other
 Managers cannot change or launch it.
@@ -129,6 +191,12 @@ The current development configuration drops and recreates the schema on every
 Quarkus startup, so the Compose volume does not preserve game data yet.
 
 ## Package
+
+The combat rules engine is shared with the isolated Combat sandbox through
+`../hero-association-lib/combat-engine`. For a clean build, run from
+`backend/`: `./mvnw -pl hero-association-core -am package`. To use the
+standalone `./mvnw` commands below (including dev mode), first run
+`./mvnw -pl hero-association-lib -am install` from `backend/`.
 
 The default package is a JVM fast-jar:
 
@@ -191,8 +259,11 @@ executable. The same Dockerfile also has a `native-multistage` target that
 compiles natively during the Docker build:
 
 ```bash
-docker build --file Dockerfile.native --target native-multistage --tag hero-association-core:native .
+docker build --file hero-association-core/Dockerfile.native --target native-multistage --tag hero-association-core:native .
 ```
+
+Run that Docker command from `backend/`, which supplies the shared library
+and Core as one build context.
 
 The multistage target skips tests because Docker builds cannot safely run the
 Testcontainers PostgreSQL workflow. Run `./mvnw test` separately before using

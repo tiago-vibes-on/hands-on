@@ -235,27 +235,41 @@ Gold costs increase exponentially for all agency upgrades and Agency Level
 advancement. The growth rate must be balanced so that progression remains
 meaningful without becoming excessively grindy.
 
-## Places
+## Maps and Expeditions
 
-A Place is a reusable location independent of any quest. The first planned
+A Map is a reusable location independent of any quest. The first planned
 types are `FIELD` and `DUNGEON`; cities can be added later. A field does not
-require floors. A dungeon owns its reusable floor or room layout. Places may
-define which Creature types can appear there by ID, but Creature owns their
-stats. Encounter generation and travel rules remain open.
+require floors. A dungeon owns its reusable floor or room layout. Maps may
+reference Creature types by ID, but Creature owns their stats. The first
+encounter can be a fixed Troll fight; procedural generation and travel wait.
 
-Several quests can use the same Place, and a quest need not be limited to one
-Place. Quest owns objectives, party rules, rewards, and each run's progress;
-Place owns reusable layouts. A run pins the version of each Place it uses so
-later map changes do not alter active progress. Combat owns the actual fight.
-No Place entity or API exists yet; current quests describe locations in text.
+Each Manager will have one persistent Party, initially containing their three
+personal starter heroes. The Party must retain at least one Hero. The Manager
+must belong to an agency to edit it or enter a Map; editing happens only while
+the Party is at the agency. The first Map run accepts personal heroes only.
+Agency-owned hero borrowing and its Map fee are deferred.
+
+Expedition owns the Party and at most one active Map run per Manager. A run has
+no time limit and pins its Map version. The Manager may return immediately
+between fights, or request return while fighting and leave after that fight.
+A party wipe ends the battle and stops new encounters but leaves the Party on
+the Map until the Manager explicitly chooses to return. A win leaves the Party
+waiting on the Map; only an explicit Continue command starts another fight.
+The combat-engine library resolves each fight inside Expedition. A Quest can
+later add optional objectives and rewards,
+but is never required to enter a Map. No Map or Expedition API exists yet;
+current Core quests still describe locations in text.
 
 ## Quests
 
-- Managers always send a party on a quest. A party can contain one hero or
-  multiple heroes.
-- A planned quest may be location-independent, allow several eligible Places,
-  or target a specific dungeon. It never owns a copy of Place layout. Quest
-  tracks run-specific progress, including the floor reached when relevant.
+The current Core flow requires a prepared Party to start a Quest and returns
+it after the Quest resolves. The future Map flow above does not require a Quest
+and does not automatically return a wiped Party.
+
+- The current Quest flow sends a Party of one or more heroes.
+- A future Quest may be location-independent, allow several eligible Maps,
+  or target a dungeon. It never owns a copy of Map layout. Quest tracks
+  optional objective progress; Expedition owns the Party and Map run.
 - A manager can prepare a party at the agency before choosing a quest. Its
   members remain at the agency and keep training or resting until the quest
   begins.
@@ -273,12 +287,12 @@ No Place entity or API exists yet; current quests describe locations in text.
   defeating every hero fails it. Either outcome records a completion time,
   releases the party, and returns its heroes to Training. Reward allocation,
   stamina costs, and experience/skill losses on defeat are not yet applied.
-- Today, newly started quests create creatures with a provisional profile:
-  120 health, 10 damage, a 1.6-second attack interval, 100 mana, no recovery,
-  and no critical chance. The seeded Troll encounter instead has 2,000-health
-  Trolls. The planned Creature catalog will use one canonical Troll starting
-  at 2,000 health; other stats are provisional data, not fixed Java rules.
-  New definition versions apply to future quest runs, not active battles.
+- Newly started quests use the latest seeded versioned Creature definition
+  and copy its stats into the combat snapshot. The canonical Troll has 2,000
+  health, 10 damage, a 1.6-second attack interval, 100 mana, and 10% critical
+  chance. Forest Wolf retains 120 health and no critical chance. Other values
+  remain provisional balancing data. New versions affect future battles,
+  not active ones.
 - Quest outcomes depend on the heroes' abilities and stamina.
 - A poorly matched or exhausted hero can fail a quest.
 - Quests can have different objectives: defeat a specified number of a
@@ -311,8 +325,9 @@ No Place entity or API exists yet; current quests describe locations in text.
 
 ## Combat
 
-- Combat is automatic; managers prepare heroes before a quest rather than
-  directly controlling each attack.
+- Combat is automatic; managers prepare heroes before entering a Map in the
+  planned flow, or before starting a Quest in the current Core flow, rather
+  than directly controlling each attack.
 - Planned combat may also allow optional, timed manager interactions while
   the fight runs, such as using a consumable item to buff the party. These
   commands supplement automatic combat; they do not make basic attacks

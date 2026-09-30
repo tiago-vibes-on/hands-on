@@ -1,0 +1,56 @@
+name: hero-association-expedition
+
+# Private, pre-cutover dependency. This does not replace live Core combat.
+services:
+  redis-expedition:
+    image: redis:7
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - always
+      - --maxmemory-policy
+      - noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "127.0.0.1:${HERO_ASSOCIATION_EXPEDITION_REDIS_HOST_PORT:-16381}:6379"
+    volumes:
+      - expedition_redis_data:/data
+
+  rabbitmq-expedition:
+    image: rabbitmq:4.2.9-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: hero_association_expedition
+      RABBITMQ_DEFAULT_PASS: ${HERO_ASSOCIATION_EXPEDITION_RABBITMQ_PASSWORD:-hero_association_expedition}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    ports:
+      - "127.0.0.1:${HERO_ASSOCIATION_EXPEDITION_RABBITMQ_HOST_PORT:-15675}:5672"
+      - "127.0.0.1:${HERO_ASSOCIATION_EXPEDITION_RABBITMQ_MANAGEMENT_HOST_PORT:-15676}:15672"
+    volumes:
+      - expedition_rabbitmq_data:/var/lib/rabbitmq
+
+  rabbitmq-expedition-setup:
+    image: node:24-alpine
+    depends_on:
+      rabbitmq-expedition:
+        condition: service_healthy
+    volumes:
+      - ./rabbitmq/prepare-expedition.mjs:/app/prepare-expedition.mjs:ro
+    command: [node, /app/prepare-expedition.mjs]
+    environment:
+      RABBITMQ_SETUP_ADMIN_PASSWORD: ${HERO_ASSOCIATION_EXPEDITION_RABBITMQ_PASSWORD:-hero_association_expedition}
+      RABBITMQ_SETUP_EXPEDITION_PASSWORD: ${HERO_ASSOCIATION_EXPEDITION_WORKER_RABBITMQ_PASSWORD:-hero_association_expedition_worker}
+      RABBITMQ_SETUP_CORE_PASSWORD: ${HERO_ASSOCIATION_CORE_SETTLEMENT_RABBITMQ_PASSWORD:-hero_association_core_settlement}
+
+volumes:
+  expedition_redis_data:
+  expedition_rabbitmq_data:

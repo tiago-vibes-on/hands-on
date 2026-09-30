@@ -5,6 +5,10 @@ K3s installation, and the later Floci/AWS lab. The first versioned cluster
 and Istio control-plane configurations are in `cluster.yaml` and
 `istio-operator.yaml`. Application deployment is tracked in
 [`../../DEPLOYMENT.md`](../../DEPLOYMENT.md).
+For private Combat/Expedition staging, see
+[EXPEDITION.md](EXPEDITION.md). For the player-facing Map build, integration,
+and browser test, see [EXPEDITION_INTEGRATION.md](EXPEDITION_INTEGRATION.md).
+
 For automatic builds and promotions of trusted `main` commits, see the
 [local Jenkins runbook](../../ci/jenkins/README.md).
 
@@ -270,8 +274,8 @@ To test and create local production-style build artifacts, run from the
 `hero-association` directory:
 
 ```bash
-cd backend/hero-association-core && ./mvnw package
-cd ../hero-association-bff && ./mvnw package
+cd backend && ./mvnw -pl hero-association-core -am package
+cd hero-association-bff && ./mvnw package
 cd ../../frontend && npm ci && npm run lint && npm run build
 ```
 
@@ -375,9 +379,11 @@ into k3d. If `k3d` is not on `PATH`, set `K3D_BIN=/absolute/path/to/k3d`.
 The deploy script refuses any context except the isolated
 `k3d-hero-association` context in `.kubeconfig`. It creates random credentials
 in the ignored `secrets/` directory, derives a k3d-only Keycloak realm from the
-versioned local realm, and deploys isolated Core and Keycloak PostgreSQL, BFF
-Redis, Keycloak, Core, and BFF. Core and BFF have Istio-injected Pods and
-private Services. If the Core schema is absent, the script first runs a
+versioned local realm, and deploys isolated Core and Keycloak PostgreSQL,
+BFF session Redis, disposable Core Creature cache Redis, Keycloak, Core, and
+BFF. Core's Redis entries expire after 60 seconds; PostgreSQL remains
+authoritative when the cache is unavailable. Core and BFF have Istio-injected
+Pods and private Services. If the Core schema is absent, the script first runs a
 one-shot bootstrap Job using the Core image to create the schema and load
 deterministic seed data. Normal Core Pods only validate the schema; redeploys
 and restarts preserve the database. To deliberately discard this lab's Core
@@ -647,10 +653,11 @@ npm ci
 npm run test:k3d
 ```
 
-The Playwright container uses Docker host networking and explicit hosts entries
-to reach k3d's loopback-bound HTTPS port `443`. It ignores the local CA warning for
-tests only. For a trusted Windows browser, import the development CA as
-described in [`../../backend/README.md`](../../backend/README.md#local-https-gateway).
+The Playwright container joins the isolated k3d Docker network and maps both
+public hostnames to the k3d load balancer, avoiding unrelated WSL port-443
+listeners. It ignores the local CA warning for tests only. For a trusted
+Windows browser, import the development CA as described in
+[`../../backend/README.md`](../../backend/README.md#local-https-gateway).
 
 To pause this lab without deleting its data, use
 `k3d cluster stop hero-association`; resume with

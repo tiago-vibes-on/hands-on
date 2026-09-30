@@ -1,0 +1,14 @@
+spec:
+  template:
+    spec:
+      containers:
+        - name: expedition
+          env:
+            - name: HERO_ASSOCIATION_EXPEDITION_PLAYER_API_ENABLED
+              value: "true"
+            - name: HERO_ASSOCIATION_EXPEDITION_VISUAL_API_ENABLED
+              value: "true"
+            - name: HERO_ASSOCIATION_EXPEDITION_SETTLEMENT_ENABLED
+              value: "true"
+            - name: HERO_ASSOCIATION_EXPEDITION_ADMISSION_RECONCILER_ENABLED
+              value: "true"

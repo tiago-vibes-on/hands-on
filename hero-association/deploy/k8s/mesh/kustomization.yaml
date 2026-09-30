@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
   - core-mtls.yaml
   - core-bff-authorization.yaml
+  - core-expedition-authorization.yaml

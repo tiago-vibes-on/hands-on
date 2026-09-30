@@ -1,15 +1,17 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { addHeroToParty, ApiRequestError, beginLogin, beginRegistration, cancelMarketOrder, changeHeroActivity, createAgency, createFeedPost, createManager, createMarketOrder, createParty, equipHeroRune, fetchAccount, fetchAgencyState, fetchMarketOrders, fetchRecruits, fetchSession, logout, recruitHero, recruitHeroForAgency, removeHeroFromParty, setHeroBorrowingFee, startQuest, synchronizeQuestCombat, transferGold, unequipHeroRune } from './api/agency'
+import { addHeroToParty, ApiRequestError, beginLogin, beginRegistration, cancelMarketOrder, changeHeroActivity, createAgency, createFeedPost, createManager, createMarketOrder, createParty, equipHeroRune, fetchAccount, fetchAgencyState, fetchMarketOrders, fetchRecruits, fetchSession, logout, recruitHero, recruitHeroForAgency, removeHeroFromParty, setHeroBorrowingFee, startQuest, transferGold, unequipHeroRune } from './api/agency'
 import { initialEquippedRunes, initialRunes } from './data/inventory'
 import { mageSpells } from './data/spells'
 import './App.css'
 
-const CombatScene = lazy(() => import('./combat/CombatScene'))
+const MapPage = lazy(() => import('./expedition/MapPage'))
+const expeditionEnabled = import.meta.env.VITE_EXPEDITION_ENABLED === 'true'
 
 const navigation = [
   { id: 'overview', label: 'Overview', icon: '◇' },
   { id: 'heroes', label: 'Heroes', icon: '♙' },
   { id: 'quests', label: 'Quests', icon: '⚔' },
+  ...(expeditionEnabled ? [{ id: 'map', label: 'Map', icon: '◈' }] : []),
   { id: 'agency', label: 'Agency', icon: '⌂' },
   { id: 'market', label: 'Market', icon: '⇄' },
   { id: 'feed', label: 'Feed', icon: '◌' },
@@ -576,39 +578,21 @@ function ResolvedQuestCard({ quest }) {
   )
 }
 
-function Quests({ activeParty, activeParties, availableQuests, resolvedQuests, preparedParties, heroes, managerGold, battle, isCombatExpanded, isSynchronizingCombat, isStartingQuest, questError, onStartQuest, onToggleCombat }) {
+function Quests({ activeParty, activeParties, availableQuests, resolvedQuests, preparedParties, heroes, managerGold, isStartingQuest, questError, onStartQuest }) {
   const quest = activeParty?.questState
-  const defeatedCreatures = battle
-    ? battle.creatures.filter((creature) => !creature.alive).length
-    : quest?.creaturesDefeated
-  const combatStatus = battle?.status ?? 'in-progress'
-
-  function handleQuestCardKeyDown(event) {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      onToggleCombat()
-    }
-  }
-
   return (
     <>
-      <PageHeading eyebrow="Quest board" title="Quests" description="Choose a party that can finish the job and return safely." action={<button className="button button--primary" type="button">Find quests</button>} />
+      <PageHeading eyebrow="Quest board" title="Quests" description={expeditionEnabled ? "Quest objectives and progress live here. Visit Map to watch battles." : "Quest objectives and progress live here."} />
       {questError && <p className="inline-error" role="alert">{questError}</p>}
       <section className="quest-list">
         {activeParty ? (
-          <article className={`panel quest-card quest-card--active ${isCombatExpanded ? 'quest-card--expanded' : ''}`}>
-            <div className="quest-card__trigger" role="button" tabIndex="0" aria-expanded={isCombatExpanded} onClick={onToggleCombat} onKeyDown={handleQuestCardKeyDown}>
-              <div><span className="status status--progress">{combatStatus === 'in-progress' ? 'In progress' : combatStatus}</span><h2>{quest.title}</h2><p>Defeat {quest.creaturesRequired} {quest.creatureName.toLowerCase()} to complete this quest.</p></div>
-              <div className="quest-card__facts"><span className="quest-card__fact"><b>{defeatedCreatures} / {quest.creaturesRequired}</b><small>defeated</small></span><span className="quest-card__fact"><b>{activeParty.heroIds?.length ?? 0}</b><small>heroes</small></span><span className="quest-card__fact"><b>Active</b><small>quest</small></span><span className="quest-card__expand-icon" aria-hidden="true">{isCombatExpanded ? '−' : '+'}</span></div>
+          <article className="panel quest-card quest-card--active">
+            <div className="quest-card__content">
+              <div><span className="status status--progress">In progress</span><h2>{quest.title}</h2><p>{quest.description}</p><p>Objective: Defeat {quest.creaturesRequired} {quest.creatureName.toLowerCase()}.</p></div>
+              <div className="quest-card__facts"><span className="quest-card__fact"><b>{quest.creaturesDefeated} / {quest.creaturesRequired}</b><small>defeated</small></span><span className="quest-card__fact"><b>{activeParty.heroIds?.length ?? 0}</b><small>heroes</small></span><span className="quest-card__fact"><b>Active</b><small>quest</small></span></div>
             </div>
-            {isCombatExpanded && (
-              <div className="combat-panel">
-                <div className="combat-panel__header"><div><p className="eyebrow">Current encounter</p></div>{battle ? <span className="combat-panel__hint">{isSynchronizingCombat ? 'Synchronizing…' : 'Server-synchronized every 2 seconds.'}</span> : null}</div>
-                {battle ? <Suspense fallback={<div className="combat-scene combat-scene--loading">Preparing the battlefield…</div>}><CombatScene battle={battle} /></Suspense> : <p className="combat-panel__hint">Combat data is not available for this quest yet.</p>}
-              </div>
-            )}
           </article>
-        ) : <article className="panel quest-card empty-state"><div><p className="eyebrow">No active quest</p><h2>Your agency has no party in the field</h2><p>Recruit heroes before preparing a party and starting a quest.</p></div></article>}
+        ) : <article className="panel quest-card empty-state"><div><p className="eyebrow">No active quest</p><h2>No quest in progress</h2><p>{expeditionEnabled ? "Choose an available quest below, or visit Map to battle without a quest." : "Choose an available quest below."}</p></div></article>}
         {activeParties.slice(1).map((party) => <article className="panel quest-card" key={party.id}><div className="quest-card__content"><div><span className="status status--progress">In progress</span><h2>{party.quest}</h2><p>{party.questState.description}</p></div><div className="quest-card__facts"><span className="quest-card__fact"><b>{party.questState.creaturesDefeated} / {party.questState.creaturesRequired}</b><small>defeated</small></span><span className="quest-card__fact"><b>{party.heroIds.length}</b><small>heroes</small></span></div></div></article>)}
         {availableQuests.map((availableQuest) => <AvailableQuestCard quest={availableQuest} preparedParties={preparedParties} heroes={heroes} managerGold={managerGold} isStartingQuest={isStartingQuest} onStartQuest={onStartQuest} key={availableQuest.id} />)}
         {resolvedQuests.map((resolvedQuest) => <ResolvedQuestCard quest={resolvedQuest} key={resolvedQuest.id} />)}
@@ -859,8 +843,6 @@ function App() {
   const [accountRefresh, setAccountRefresh] = useState(0)
   const [runeInventory, setRuneInventory] = useState(() => initialRunes.map((rune) => ({ ...rune })))
   const [equippedRunes, setEquippedRunes] = useState(() => Object.fromEntries(Object.entries(initialEquippedRunes).map(([hero, runes]) => [hero, [...runes]])))
-  const [isCombatExpanded, setIsCombatExpanded] = useState(false)
-  const [isSynchronizingCombat, setIsSynchronizingCombat] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState(null)
   const [isUpdatingLoadout, setIsUpdatingLoadout] = useState(false)
   const [loadoutError, setLoadoutError] = useState(null)
@@ -885,10 +867,7 @@ function App() {
   const [availableRecruits, setAvailableRecruits] = useState([])
   const [isRecruitingHero, setIsRecruitingHero] = useState(false)
   const [recruitmentError, setRecruitmentError] = useState(null)
-  const combatSyncInFlight = useRef(false)
   const stateRefreshInFlight = useRef(false)
-  const activeQuestId = gameState.activeParty?.questState?.id
-  const activeCombatStatus = gameState.activeParty?.questState?.combat?.status
 
   useEffect(() => {
     let cancelled = false
@@ -1006,43 +985,6 @@ function App() {
     setRuneInventory(state.runeInventory)
     setEquippedRunes(state.equippedRunes)
   }
-
-  useEffect(() => {
-    if (activePage !== 'quests' || !isCombatExpanded || apiStatus !== 'ready' || !activeQuestId || activeCombatStatus !== 'in-progress') {
-      return undefined
-    }
-
-    let cancelled = false
-    async function synchronizeCombat() {
-      if (combatSyncInFlight.current) {
-        return
-      }
-      combatSyncInFlight.current = true
-      setIsSynchronizingCombat(true)
-      try {
-        const state = await synchronizeQuestCombat({ agencyId: gameState.agency.id, questId: activeQuestId })
-        if (!cancelled) {
-          applyRemoteAgencyState(state)
-        }
-      } catch (error) {
-        if (!cancelled) {
-          setQuestError(error.message)
-        }
-      } finally {
-        combatSyncInFlight.current = false
-        if (!cancelled) {
-          setIsSynchronizingCombat(false)
-        }
-      }
-    }
-
-    synchronizeCombat()
-    const intervalId = window.setInterval(synchronizeCombat, 2_000)
-    return () => {
-      cancelled = true
-      window.clearInterval(intervalId)
-    }
-  }, [activeCombatStatus, activePage, activeQuestId, apiStatus, gameState.agency.id, isCombatExpanded])
 
   function equipRuneLocally(rune) {
     if (!selectedSlot || rune.quantity === 0) {
@@ -1538,11 +1480,11 @@ function App() {
     return <AgencyAccessGate managerName={account?.manager?.displayName} agencyName={agencyName} error={agencyError} isSubmitting={isCreatingAgency} onAgencyNameChange={setAgencyName} onSubmit={handleCreateAgency} onSignOut={handleLogout} />
   }
 
-  const battle = gameState.activeParty?.questState?.combat
   const pages = {
     overview: <Overview agency={gameState.agency} metrics={gameState.metrics} activeParty={gameState.activeParty} questHeroes={gameState.questHeroes} onNavigate={setActivePage} />,
     heroes: <Heroes agency={gameState.agency} manager={account?.manager} heroes={gameState.heroes} activeParties={gameState.activeParties} agencyHeroes={gameState.agencyHeroes} preparedParties={gameState.preparedParties.filter((party) => party.ownerManagerId === account?.manager?.id)} runes={equippedRunes} availableRecruits={availableRecruits} isRecruitingHero={isRecruitingHero} recruitmentError={recruitmentError} isUpdatingActivity={isUpdatingActivity} activityError={activityError} isUpdatingParty={isUpdatingParty} partyError={partyError} isCreatingParty={isCreatingParty} partyName={partyName} onPartyNameChange={setPartyName} onCreateParty={handleCreateParty} onCancelCreateParty={cancelCreatingParty} onStartCreateParty={startCreatingParty} onRecruitHero={handleRecruitHero} onSelectRuneSlot={(hero, slotIndex) => { setLoadoutError(null); setSelectedSlot({ hero, slotIndex }) }} onChangeActivity={updateHeroActivity} onAddToParty={assignHeroToParty} onRemoveFromParty={removeHeroFromPreparedParty} onSetBorrowingFee={updateHeroBorrowingFee} isUpdatingBorrowingFee={isUpdatingBorrowingFee} borrowingFeeError={borrowingFeeError} />,
-    quests: <Quests activeParty={gameState.activeParty} activeParties={gameState.activeParties} availableQuests={gameState.availableQuests} resolvedQuests={gameState.resolvedQuests} preparedParties={gameState.preparedParties.filter((party) => party.ownerManagerId === account?.manager?.id)} heroes={gameState.heroes} managerGold={account?.manager?.gold ?? 0} battle={battle} isCombatExpanded={isCombatExpanded} isSynchronizingCombat={isSynchronizingCombat} isStartingQuest={isStartingQuest} questError={questError} onStartQuest={handleStartQuest} onToggleCombat={() => setIsCombatExpanded((expanded) => !expanded)} />,
+    quests: <Quests activeParty={gameState.activeParty} activeParties={gameState.activeParties} availableQuests={gameState.availableQuests} resolvedQuests={gameState.resolvedQuests} preparedParties={gameState.preparedParties.filter((party) => party.ownerManagerId === account?.manager?.id)} heroes={gameState.heroes} managerGold={account?.manager?.gold ?? 0} isStartingQuest={isStartingQuest} questError={questError} onStartQuest={handleStartQuest} />,
+    ...(expeditionEnabled ? { map: <Suspense fallback={<p role="status">Loading Map…</p>}><MapPage key={gameState.agency.id} agencyId={gameState.agency.id} managerId={account?.manager?.id} heroes={gameState.heroes} preparedParties={gameState.preparedParties} /></Suspense> } : {}),
     agency: <Agency agency={gameState.agency} manager={account?.manager} canTransferAgencyGold={account?.agencyMemberships?.some((membership) => membership.agencyId === gameState.agency.id && membership.role === 'LEADER')} upgrades={gameState.upgrades} runeInventory={runeInventory} itemInventory={gameState.itemInventory} isTransferringGold={isTransferringGold} transferError={transferError} transferNotice={transferNotice} onTransferGold={handleTransferGold} />,
     market: <Market agency={gameState.agency} manager={account?.manager} canTradeAgency={account?.agencyMemberships?.some((membership) => membership.agencyId === gameState.agency.id && membership.role === 'LEADER')} itemInventory={gameState.itemInventory} marketOrders={marketOrders} isSubmittingOrder={isSubmittingMarketOrder} marketError={marketError} onCreateOrder={handleCreateMarketOrder} onCancelOrder={handleCancelMarketOrder} />,
     feed: <Feed agency={gameState.agency} heroes={gameState.heroes.filter((hero) => !hero.ownerManagerId)} feedPosts={gameState.feedPosts} itemInventory={gameState.itemInventory} isPostingFeed={isPostingFeed} feedError={feedError} onCreatePost={handleCreateFeedPost} />,

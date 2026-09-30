@@ -19,6 +19,7 @@ import io.tiagovibeson.heroassociation.repository.HeroRepository;
 import io.tiagovibeson.heroassociation.repository.ManagerItemRepository;
 import io.tiagovibeson.heroassociation.repository.ManagerRuneRepository;
 import io.tiagovibeson.heroassociation.repository.ManagerRepository;
+import io.tiagovibeson.heroassociation.repository.PartyRepository;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,9 @@ class SeededManagerFixtureTest {
 
     @Inject
     ManagerRepository managerRepository;
+
+    @Inject
+    PartyRepository partyRepository;
 
     @Inject
     AgencyMemberRepository agencyMemberRepository;
@@ -60,6 +64,7 @@ class SeededManagerFixtureTest {
             Manager manager = managerRepository.findByAccountId(account.getId()).orElseThrow();
             assertEquals("Manager %d".formatted(number), manager.getDisplayName());
             assertEquals(7, manager.getId().version());
+            assertEquals(1, partyRepository.count("ownerManager.id", manager.getId()));
             assertEquals(switch (number) {
                 case 2 -> 25;
                 case 3 -> 20;
@@ -103,6 +108,20 @@ class SeededManagerFixtureTest {
         assertEquals(4, agencyMemberRepository.count("agency.id", UUID.fromString(IRONRIDGE_ID)));
         assertEquals(3, agencyMemberRepository.count("agency.id", UUID.fromString(SILVERKEEP_ID)));
         assertEquals(3, heroRepository.listRecruitable().size());
+    }
+
+    @Test
+    @TestSecurity(user = "019c4c00-0100-7000-8000-000000000002")
+    void shouldSeedUser2WithLargePersonalWallet() {
+        given()
+                .when().get("/api/v1/account")
+                .then().statusCode(200)
+                .body("manager.gold", is(100000));
+        given()
+                .when().get("/api/v1/agencies/%s/state".formatted(IRONRIDGE_ID))
+                .then().statusCode(200)
+                .body("parties.find { it.id == '019c4c00-0002-7000-8000-000000000002' }.name", is("Main Party"))
+                .body("parties.find { it.id == '019c4c00-0002-7000-8000-000000000002' }.heroIds.size()", is(3));
     }
 
     @Test

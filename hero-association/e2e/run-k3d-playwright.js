@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -8,12 +8,20 @@ const packageLock = JSON.parse(await readFile(path.join(e2eDirectory, 'package-l
 const playwrightVersion = packageLock.packages['node_modules/@playwright/test'].version
 const playwrightImage = `mcr.microsoft.com/playwright:v${playwrightVersion}-noble`
 const configFile = process.env.HERO_ASSOCIATION_K3D_PLAYWRIGHT_CONFIG || 'playwright.k3d.config.js'
+const k3dNetwork = 'k3d-hero-association'
+const gatewayIp = execFileSync('docker', [
+  'inspect', 'k3d-hero-association-serverlb', '--format',
+  '{{(index .NetworkSettings.Networks "k3d-hero-association").IPAddress}}',
+], { encoding: 'utf8' }).trim()
+if (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(gatewayIp)) {
+  throw new Error(`Invalid k3d load balancer IPv4 address: ${gatewayIp}`)
+}
 
 const argumentsForDocker = [
   'run', '--rm', '--init',
-  '--network', 'host',
-  '--add-host', 'k3d.heroassociation.test:127.0.0.1',
-  '--add-host', 'auth.k3d.heroassociation.test:127.0.0.1',
+  '--network', k3dNetwork,
+  '--add-host', `k3d.heroassociation.test:${gatewayIp}`,
+  '--add-host', `auth.k3d.heroassociation.test:${gatewayIp}`,
   '--ipc', 'host',
   '--user', `${process.getuid()}:${process.getgid()}`,
   '--volume', `${e2eDirectory}:/work`,
@@ -22,6 +30,7 @@ const argumentsForDocker = [
   '--env', `HERO_ASSOCIATION_K3D_LOAD_CLIENTS=${process.env.HERO_ASSOCIATION_K3D_LOAD_CLIENTS || ''}`,
   '--env', `HERO_ASSOCIATION_K3D_MIXED_SECONDS=${process.env.HERO_ASSOCIATION_K3D_MIXED_SECONDS || ''}`,
   '--env', `HERO_ASSOCIATION_K3D_MIXED_CLIENTS=${process.env.HERO_ASSOCIATION_K3D_MIXED_CLIENTS || ''}`,
+  '--env', `HERO_ASSOCIATION_K3D_CLEANUP_EXPEDITION_ID=${process.env.HERO_ASSOCIATION_K3D_CLEANUP_EXPEDITION_ID || ''}`,
   playwrightImage,
   'npx', 'playwright', 'test', '--config', configFile,
   ...process.argv.slice(2),

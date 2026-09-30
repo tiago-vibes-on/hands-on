@@ -13,11 +13,13 @@ import io.tiagovibeson.heroassociation.domain.AgencyMember;
 import io.tiagovibeson.heroassociation.domain.Hero;
 import io.tiagovibeson.heroassociation.domain.HeroClass;
 import io.tiagovibeson.heroassociation.domain.Manager;
+import io.tiagovibeson.heroassociation.domain.Party;
 import io.tiagovibeson.heroassociation.repository.AccountRepository;
 import io.tiagovibeson.heroassociation.repository.AgencyMemberRepository;
 import io.tiagovibeson.heroassociation.repository.HeroRepository;
 import io.tiagovibeson.heroassociation.repository.ManagerItemRepository;
 import io.tiagovibeson.heroassociation.repository.ManagerRepository;
+import io.tiagovibeson.heroassociation.repository.PartyRepository;
 import io.tiagovibeson.heroassociation.repository.ManagerRuneRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -31,6 +33,9 @@ public class AccountService {
 
     @Inject
     ManagerRepository managerRepository;
+
+    @Inject
+    PartyRepository partyRepository;
 
     @Inject
     AgencyMemberRepository agencyMemberRepository;
@@ -65,6 +70,8 @@ public class AccountService {
 
         Manager manager = new Manager(account, displayName, displayNameNormalized);
         managerRepository.persist(manager);
+        Party defaultParty = new Party(null, manager, "Main Party");
+        partyRepository.persist(defaultParty);
         for (HeroClass heroClass : HeroClass.values()) {
             String className = heroClass.name().toLowerCase(Locale.ROOT);
             String alias = "starter-" + manager.getId().toString().substring(24) + "-" + className;
@@ -73,6 +80,7 @@ public class AccountService {
                     alias,
                     heroClass,
                     manager);
+            hero.assignToParty(defaultParty);
             heroRepository.persist(hero);
         }
         return responseFor(account, manager);

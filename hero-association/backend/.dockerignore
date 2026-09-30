@@ -1,0 +1,8 @@
+**/.git
+**/.idea
+**/target
+!hero-association-core/target
+hero-association-core/target/*
+!hero-association-core/target/*-runner
+**/.env
+**/README.md

@@ -159,7 +159,7 @@ export async function cancelMarketOrder({ orderId }) {
   })
 }
 
-async function request(path, options = {}, expectJson = true) {
+export async function request(path, options = {}, expectJson = true) {
   const headers = new Headers(options.headers)
   headers.set('X-Requested-With', 'JavaScript')
 
@@ -176,5 +176,6 @@ async function request(path, options = {}, expectJson = true) {
     throw new ApiRequestError(error?.message ?? `Unable to complete the request (${response.status}).`, response.status)
   }
 
-  return expectJson ? response.json() : undefined
+  if (!expectJson) return undefined
+  return response.status === 204 ? null : response.json()
 }

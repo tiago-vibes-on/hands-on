@@ -16,4 +16,5 @@ fi
 
 kubectl -n hero-association rollout status deployment/bff --timeout=5m
 kubectl apply -k "$script_dir/../k8s/frontend"
+kubectl -n hero-association rollout restart deployment/frontend
 kubectl -n hero-association rollout status deployment/frontend --timeout=5m

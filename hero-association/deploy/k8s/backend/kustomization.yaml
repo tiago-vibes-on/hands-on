@@ -6,6 +6,7 @@ resources:
   - postgres-core.yaml
   - postgres-keycloak.yaml
   - redis-bff.yaml
+  - redis-core.yaml
   - keycloak.yaml
   - core.yaml
   - bff.yaml

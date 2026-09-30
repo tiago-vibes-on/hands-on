@@ -16,8 +16,8 @@ public class Party extends UuidEntity {
     @Column(nullable = false, length = 100)
     private String name;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "agency_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "agency_id")
     private Agency agency;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -50,6 +50,13 @@ public class Party extends UuidEntity {
 
     public Agency getAgency() {
         return agency;
+    }
+
+    public void attachToAgency(Agency agency) {
+        if (this.agency != null) {
+            throw new IllegalStateException("Party already belongs to an agency.");
+        }
+        this.agency = agency;
     }
 
     public Manager getOwnerManager() {

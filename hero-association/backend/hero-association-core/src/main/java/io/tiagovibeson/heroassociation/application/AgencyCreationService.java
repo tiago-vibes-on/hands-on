@@ -10,8 +10,10 @@ import io.tiagovibeson.heroassociation.domain.Agency;
 import io.tiagovibeson.heroassociation.domain.AgencyMember;
 import io.tiagovibeson.heroassociation.domain.AgencyMemberRole;
 import io.tiagovibeson.heroassociation.domain.Manager;
+import io.tiagovibeson.heroassociation.domain.Party;
 import io.tiagovibeson.heroassociation.repository.AgencyMemberRepository;
 import io.tiagovibeson.heroassociation.repository.AgencyRepository;
+import io.tiagovibeson.heroassociation.repository.PartyRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -27,6 +29,9 @@ public class AgencyCreationService {
 
     @Inject
     AgencyMemberRepository agencyMemberRepository;
+
+    @Inject
+    PartyRepository partyRepository;
 
     @Inject
     AgencyStateService agencyStateService;
@@ -47,6 +52,9 @@ public class AgencyCreationService {
         Agency agency = new Agency(name, nameNormalized, leader);
         agencyRepository.persist(agency);
         agencyMemberRepository.persist(new AgencyMember(agency, leader, AgencyMemberRole.LEADER));
+        for (Party party : partyRepository.list("ownerManager.id = ?1 and agency is null", leader.getId())) {
+            party.attachToAgency(agency);
+        }
         agencyRepository.flush();
         return agencyStateService.findState(agency.getId());
     }

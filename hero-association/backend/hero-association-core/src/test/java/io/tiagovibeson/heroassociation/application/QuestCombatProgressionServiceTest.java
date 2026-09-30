@@ -12,15 +12,19 @@ import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.tiagovibeson.heroassociation.application.combat.CombatProgressionApplier;
 import io.tiagovibeson.heroassociation.domain.Agency;
+import io.tiagovibeson.heroassociation.domain.CreatureCombatProfile;
+import io.tiagovibeson.heroassociation.domain.CreatureDefinition;
 import io.tiagovibeson.heroassociation.domain.Hero;
 import io.tiagovibeson.heroassociation.domain.HeroActivity;
 import io.tiagovibeson.heroassociation.domain.HeroClass;
 import io.tiagovibeson.heroassociation.domain.HeroProgression;
+import io.tiagovibeson.heroassociation.domain.HeroRune;
 import io.tiagovibeson.heroassociation.domain.HeroSkill;
 import io.tiagovibeson.heroassociation.domain.Party;
 import io.tiagovibeson.heroassociation.domain.Quest;
 import io.tiagovibeson.heroassociation.domain.QuestCombat;
 import io.tiagovibeson.heroassociation.domain.QuestCombatant;
+import io.tiagovibeson.heroassociation.domain.Rune;
 import io.tiagovibeson.heroassociation.domain.UuidV7;
 import io.tiagovibeson.heroassociation.domain.combat.CombatAction;
 import io.tiagovibeson.heroassociation.domain.combat.CombatEvent;
@@ -80,6 +84,13 @@ class QuestCombatProgressionServiceTest {
         Fixture reloaded = reload(fixture);
 
         assertEquals(warriorStamina - 1_000, reloaded.warrior().getStaminaMilliseconds());
+        QuestCombatant reloadedWarrior = reloaded.combat().getCombatants().stream()
+                .filter(combatant -> combatant.getHero() != null
+                        && combatant.getHero().getId().equals(reloaded.warrior().getId()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(1, reloadedWarrior.getRuneSnapshots().size());
+        assertEquals("attack-rune", reloadedWarrior.getRuneSnapshots().getFirst().getRuneCode());
         assertEquals(0, reloaded.warrior().getSkillPoints(HeroSkill.MELEE).compareTo(BigDecimal.ONE));
         assertEquals(0, reloaded.mage().getSkillPoints(HeroSkill.MAGIC)
                 .compareTo(new BigDecimal("4059")));
@@ -197,6 +208,11 @@ class QuestCombatProgressionServiceTest {
         Party party = new Party(agency, agency.getLeader(), "Progression " + UuidV7.next());
         entityManager.persist(party);
         Hero warrior = createHero(agency, party, HeroClass.WARRIOR);
+        Rune attackRune = entityManager.find(Rune.class,
+                UUID.fromString("019c4c00-0020-7000-8000-000000000001"));
+        HeroRune equippedRune = new HeroRune(warrior, attackRune, 0);
+        entityManager.persist(equippedRune);
+        warrior.getRuneSlots().add(equippedRune);
         Hero mage = createHero(agency, party, HeroClass.MAGE);
         Hero archer = createHero(agency, party, HeroClass.ARCHER);
         mage.addSkillPoints(HeroSkill.MAGIC, new BigDecimal("4058"));
@@ -221,7 +237,10 @@ class QuestCombatProgressionServiceTest {
                 .setParameter("partyId", party.getId())
                 .executeUpdate();
         Quest quest = entityManager.find(Quest.class, questId);
-        QuestCombat combat = QuestCombat.start(quest, List.of(warrior, mage, archer));
+        CreatureDefinition troll = entityManager.find(CreatureDefinition.class,
+                UUID.fromString("019c4c00-0005-7000-8000-000000000001"));
+        QuestCombat combat = QuestCombat.start(quest, List.of(warrior, mage, archer),
+                CreatureCombatProfile.from(troll));
         entityManager.persist(combat);
         entityManager.flush();
         return new Fixture(combat, warrior, mage, archer);

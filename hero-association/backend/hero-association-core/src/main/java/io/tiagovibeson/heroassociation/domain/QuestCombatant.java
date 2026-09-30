@@ -1,10 +1,14 @@
 package io.tiagovibeson.heroassociation.domain;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 
 import io.tiagovibeson.heroassociation.domain.combat.CombatTeam;
 import io.tiagovibeson.heroassociation.domain.combat.CombatSpell;
 import io.tiagovibeson.heroassociation.domain.combat.CombatantSnapshot;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -12,6 +16,8 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 
 @Entity
@@ -26,6 +32,16 @@ public class QuestCombatant extends UuidEntity {
     @JoinColumn(name = "hero_id")
     private Hero hero;
 
+    @OneToMany(mappedBy = "combatant", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OrderBy("slotIndex")
+    private List<QuestCombatantRune> runeSnapshots = new ArrayList<>();
+
+    @Column(name = "creature_definition_id")
+    private UUID creatureDefinitionId;
+
+    @Column(name = "creature_definition_version")
+    private Integer creatureDefinitionVersion;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private CombatTeam team;
@@ -39,6 +55,21 @@ public class QuestCombatant extends UuidEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "hero_class", length = 20)
     private HeroClass heroClass;
+
+    @Column(name = "hero_level")
+    private Integer heroLevel;
+
+    @Column(name = "melee_level")
+    private Integer meleeLevel;
+
+    @Column(name = "distance_level")
+    private Integer distanceLevel;
+
+    @Column(name = "shield_level")
+    private Integer shieldLevel;
+
+    @Column(name = "starting_stamina_milliseconds")
+    private Long startingStaminaMilliseconds;
 
     @Column(name = "magic_level", nullable = false)
     private int magicLevel;
@@ -60,6 +91,10 @@ public class QuestCombatant extends UuidEntity {
 
     @Column(name = "attack_damage", nullable = false)
     private int attackDamage;
+
+    @Column(name = "basic_attack_mana_cost", nullable = false)
+    @org.hibernate.annotations.ColumnDefault("0")
+    private int basicAttackManaCost;
 
     @Column(name = "attack_interval_milliseconds", nullable = false)
     private long attackIntervalMilliseconds;
@@ -97,6 +132,11 @@ public class QuestCombatant extends UuidEntity {
         combatant.formationIndex = formationIndex;
         combatant.name = hero.getAlias();
         combatant.heroClass = heroClass;
+        combatant.heroLevel = hero.getLevel();
+        combatant.meleeLevel = hero.getSkillLevel(HeroSkill.MELEE);
+        combatant.distanceLevel = hero.getSkillLevel(HeroSkill.DISTANCE);
+        combatant.shieldLevel = hero.getSkillLevel(HeroSkill.SHIELD);
+        combatant.startingStaminaMilliseconds = hero.getStaminaMilliseconds();
         combatant.magicLevel = hero.getMagicLevel();
         combatant.baseExperience = 0;
         combatant.maxHealth = hero.getMaxHealth();
@@ -104,11 +144,15 @@ public class QuestCombatant extends UuidEntity {
         combatant.maxMana = hero.getMaxMana();
         combatant.currentMana = hero.getCurrentMana();
         combatant.attackDamage = heroClass.getBaseAttackDamage();
+        combatant.basicAttackManaCost = heroClass.getBasicAttackManaCost();
         combatant.attackIntervalMilliseconds = heroClass.getAttackIntervalMilliseconds();
         combatant.healthRecoveryPerSecond = heroClass.getHealthRecoveryPerSecond();
         combatant.manaRecoveryPerSecond = heroClass.getManaRecoveryPerSecond();
-        combatant.criticalChance = Math.min(1, runeEffectValue(hero, RuneEffect.CRITICAL_CHANCE));
-        combatant.criticalDamageMultiplier = 2 + runeEffectValue(hero, RuneEffect.CRITICAL_DAMAGE);
+        hero.getRuneSlots().stream()
+                .map(slot -> QuestCombatantRune.from(combatant, slot))
+                .forEach(combatant.runeSnapshots::add);
+        combatant.criticalChance = Math.min(1, runeEffectValue(combatant.runeSnapshots, RuneEffect.CRITICAL_CHANCE));
+        combatant.criticalDamageMultiplier = 2 + runeEffectValue(combatant.runeSnapshots, RuneEffect.CRITICAL_DAMAGE);
         combatant.nextBasicAttackAt = 480 + (formationIndex * 170L);
         if (heroClass == HeroClass.MAGE && hero.getMagicLevel() >= CombatSpell.FIRE_BALL.getRequiredMagicLevel()) {
             combatant.fireBallNextCastAt = 900L;
@@ -119,38 +163,44 @@ public class QuestCombatant extends UuidEntity {
         return combatant;
     }
 
-    static QuestCombatant forCreature(QuestCombat combat, String name, int formationIndex) {
+    static QuestCombatant forCreature(QuestCombat combat, CreatureCombatProfile definition, int formationIndex) {
         QuestCombatant combatant = new QuestCombatant();
         combatant.combat = combat;
         combatant.team = CombatTeam.CREATURES;
         combatant.formationIndex = formationIndex;
-        combatant.name = name;
+        combatant.name = definition.name();
+        combatant.creatureDefinitionId = definition.definitionId();
+        combatant.creatureDefinitionVersion = definition.version();
         combatant.magicLevel = 0;
-        combatant.baseExperience = 100;
-        combatant.maxHealth = 120;
-        combatant.currentHealth = 120;
-        combatant.maxMana = 100;
-        combatant.currentMana = 100;
-        combatant.attackDamage = 10;
-        combatant.attackIntervalMilliseconds = 1_600;
-        combatant.healthRecoveryPerSecond = 0;
-        combatant.manaRecoveryPerSecond = 0;
-        combatant.criticalChance = 0;
-        combatant.criticalDamageMultiplier = 2;
+        combatant.baseExperience = definition.baseExperience();
+        combatant.maxHealth = definition.maxHealth();
+        combatant.currentHealth = definition.maxHealth();
+        combatant.maxMana = definition.maxMana();
+        combatant.currentMana = definition.maxMana();
+        combatant.attackDamage = definition.attackDamage();
+        combatant.basicAttackManaCost = 0;
+        combatant.attackIntervalMilliseconds = definition.attackIntervalMilliseconds();
+        combatant.healthRecoveryPerSecond = definition.healthRecoveryPerSecond();
+        combatant.manaRecoveryPerSecond = definition.manaRecoveryPerSecond();
+        combatant.criticalChance = definition.criticalChance();
+        combatant.criticalDamageMultiplier = definition.criticalDamageMultiplier();
         combatant.nextBasicAttackAt = 760 + (formationIndex * 160L);
         return combatant;
     }
 
-    private static double runeEffectValue(Hero hero, RuneEffect effect) {
-        return hero.getRuneSlots().stream()
-                .map(HeroRune::getRune)
+    private static double runeEffectValue(List<QuestCombatantRune> runes, RuneEffect effect) {
+        return runes.stream()
                 .filter(rune -> rune.getEffect() == effect)
-                .mapToDouble(Rune::getEffectValue)
+                .mapToDouble(QuestCombatantRune::getEffectValue)
                 .sum();
     }
 
     public Hero getHero() {
         return hero;
+    }
+
+    public List<QuestCombatantRune> getRuneSnapshots() {
+        return List.copyOf(runeSnapshots);
     }
 
     public CombatTeam getTeam() {
@@ -165,12 +215,40 @@ public class QuestCombatant extends UuidEntity {
         return name;
     }
 
+    public UUID getCreatureDefinitionId() {
+        return creatureDefinitionId;
+    }
+
+    public Integer getCreatureDefinitionVersion() {
+        return creatureDefinitionVersion;
+    }
+
     public HeroClass getHeroClass() {
         return heroClass;
     }
 
     public int getMagicLevel() {
         return magicLevel;
+    }
+
+    public Integer getHeroLevel() {
+        return heroLevel;
+    }
+
+    public Integer getMeleeLevel() {
+        return meleeLevel;
+    }
+
+    public Integer getDistanceLevel() {
+        return distanceLevel;
+    }
+
+    public Integer getShieldLevel() {
+        return shieldLevel;
+    }
+
+    public Long getStartingStaminaMilliseconds() {
+        return startingStaminaMilliseconds;
     }
 
     public int getBaseExperience() {
@@ -195,6 +273,10 @@ public class QuestCombatant extends UuidEntity {
 
     public int getAttackDamage() {
         return attackDamage;
+    }
+
+    public int getBasicAttackManaCost() {
+        return basicAttackManaCost;
     }
 
     public long getAttackIntervalMilliseconds() {

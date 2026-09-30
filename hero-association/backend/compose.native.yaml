@@ -60,10 +60,21 @@ services:
     ports:
       - "${HERO_ASSOCIATION_NATIVE_BFF_REDIS_HOST_PORT:-19679}:6379"
 
+  redis-core:
+    image: redis:8.4.1-alpine
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "${HERO_ASSOCIATION_NATIVE_CORE_REDIS_HOST_PORT:-19680}:6379"
+
   core:
     build:
-      context: ./hero-association-core
-      dockerfile: Dockerfile.native
+      context: .
+      dockerfile: hero-association-core/Dockerfile.native
       target: native-runtime
     depends_on:
       postgres-core:
@@ -77,6 +88,7 @@ services:
       QUARKUS_HIBERNATE_ORM_SCHEMA_MANAGEMENT_STRATEGY: drop-and-create
       QUARKUS_HIBERNATE_ORM_SQL_LOAD_SCRIPT: import.sql
       HERO_ASSOCIATION_OIDC_AUTH_SERVER_URL: http://keycloak:8080/realms/hero-association
+      HERO_ASSOCIATION_CORE_REDIS_URL: redis://redis-core:6379
       HERO_ASSOCIATION_OIDC_ISSUER: http://localhost:${HERO_ASSOCIATION_NATIVE_KEYCLOAK_HTTP_PORT:-19180}/realms/hero-association
     expose:
       - "8081"

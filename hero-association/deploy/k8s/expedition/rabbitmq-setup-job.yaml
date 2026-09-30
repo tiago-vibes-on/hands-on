@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: rabbitmq-expedition-setup-
+  namespace: hero-association
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 180
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: rabbitmq-expedition-setup
+        sidecar.istio.io/inject: "false"
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: setup
+          image: node:24-alpine
+          command: [node, /app/prepare-expedition.mjs]
+          env:
+            - name: RABBITMQ_SETUP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hero-association-expedition-credentials
+                  key: HERO_ASSOCIATION_EXPEDITION_RABBITMQ_PASSWORD
+            - name: RABBITMQ_SETUP_EXPEDITION_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hero-association-expedition-credentials
+                  key: HERO_ASSOCIATION_EXPEDITION_WORKER_RABBITMQ_PASSWORD
+            - name: RABBITMQ_SETUP_CORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hero-association-expedition-credentials
+                  key: HERO_ASSOCIATION_CORE_SETTLEMENT_RABBITMQ_PASSWORD
+          volumeMounts:
+            - name: setup-script
+              mountPath: /app
+              readOnly: true
+      volumes:
+        - name: setup-script
+          configMap:
+            name: hero-association-expedition-rabbitmq-setup

@@ -1,0 +1,15 @@
+spec:
+  template:
+    spec:
+      containers:
+        - name: bff
+          env:
+            - name: HERO_ASSOCIATION_EXPEDITION_BASE_URL
+              value: http://expedition:8083
+            - name: HERO_ASSOCIATION_EXPEDITION_WEBSOCKET_ENABLED
+              value: "true"
+            - name: HERO_ASSOCIATION_EXPEDITION_BFF_SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hero-association-expedition-credentials
+                  key: HERO_ASSOCIATION_EXPEDITION_BFF_SERVICE_KEY

@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { useEffect, useRef } from 'react'
+import { MAX_LIVE_GAP_MILLISECONDS, selectLiveBattleEvents } from './liveBattleEvents'
 
 const COMBAT_HEIGHT = 330
 
@@ -34,14 +35,20 @@ function CombatScene({ battle }) {
         this.eventQueue = []
         this.isReplayingEvents = false
         this.lastEventSequence = -1
+        this.lastSnapshotTime = 0
+        this.currentEventAt = null
+        this.replayTimer = null
+        this.needsResync = false
+        this.transientPopups = new Set()
       }
 
       create() {
         this.field = this.add.graphics()
-        this.add.text(22, 20, 'DAWNWATCH PARTY', labelStyle()).setOrigin(0, 0)
+        this.add.text(22, 20, 'PARTY', labelStyle()).setOrigin(0, 0)
         this.enemyLabel = this.add.text(0, 20, 'CREATURES', labelStyle()).setOrigin(1, 0)
         this.createCombatants(battleRef.current)
         this.lastEventSequence = latestEventSequence(battleRef.current.events)
+        this.lastSnapshotTime = battleRef.current.currentTimeMilliseconds
         this.latestBattle = battleRef.current
         this.scale.on('resize', this.resizeHandler)
         this.layout()
@@ -117,11 +124,24 @@ function CombatScene({ battle }) {
       }
 
       updateBattle(snapshot) {
+        if (snapshot.currentTimeMilliseconds < this.lastSnapshotTime) return
+        const playback = selectLiveBattleEvents(this.lastSnapshotTime, this.lastEventSequence,
+          snapshot, !document.hidden)
         this.latestBattle = snapshot
-        const newEvents = (snapshot.events ?? [])
-          .filter((event) => event.sequenceNumber > this.lastEventSequence)
-          .sort((left, right) => left.sequenceNumber - right.sequenceNumber)
+        this.lastSnapshotTime = snapshot.currentTimeMilliseconds
+        const oldestQueuedAt = this.eventQueue[0]?.occurredAtMilliseconds ?? this.currentEventAt
+        if (this.needsResync || playback.resync
+          || (oldestQueuedAt !== null && oldestQueuedAt !== undefined
+            && snapshot.currentTimeMilliseconds - oldestQueuedAt > MAX_LIVE_GAP_MILLISECONDS)) {
+          this.cancelReplay()
+          this.lastEventSequence = playback.latestSequence
+          this.needsResync = false
+          this.applySnapshot(snapshot)
+          return
+        }
 
+        const newEvents = playback.events
+        this.lastEventSequence = playback.latestSequence
         if (newEvents.length === 0) {
           if (!this.isReplayingEvents) {
             this.applySnapshot(snapshot)
@@ -129,23 +149,48 @@ function CombatScene({ battle }) {
           return
         }
 
-        this.lastEventSequence = newEvents[newEvents.length - 1].sequenceNumber
         this.eventQueue.push(...newEvents)
-        this.replayNextEvent()
+        if (!this.isReplayingEvents) this.replayNextEvent()
+      }
+
+      pauseVisuals() {
+        this.needsResync = true
+        this.cancelReplay()
+        this.lastEventSequence = Math.max(this.lastEventSequence,
+          latestEventSequence(this.latestBattle.events))
+        this.applySnapshot(this.latestBattle)
+      }
+
+      cancelReplay() {
+        this.replayTimer?.remove(false)
+        this.replayTimer = null
+        this.eventQueue = []
+        this.currentEventAt = null
+        this.isReplayingEvents = false
+        this.tweens.killAll()
+        this.transientPopups.forEach((popup) => popup.destroy())
+        this.transientPopups.clear()
+        this.heroes.concat(this.creatures).forEach((combatant) => combatant.view.container.setScale(1))
+        this.layout()
       }
 
       replayNextEvent() {
         const event = this.eventQueue.shift()
         if (!event) {
           this.isReplayingEvents = false
+          this.currentEventAt = null
           this.applySnapshot(this.latestBattle)
           return
         }
 
         this.isReplayingEvents = true
+        this.currentEventAt = event.occurredAtMilliseconds
         this.renderEvent(event)
         const delay = event.action === 'RECOVERY' ? 90 : event.hits.length > 1 ? 260 : 170
-        this.time.delayedCall(delay, () => this.replayNextEvent())
+        this.replayTimer = this.time.delayedCall(delay, () => {
+          this.replayTimer = null
+          this.replayNextEvent()
+        })
       }
 
       renderEvent(event) {
@@ -219,6 +264,7 @@ function CombatScene({ battle }) {
           text,
           { color, fontFamily: 'system-ui, sans-serif', fontSize: `${fontSize}px`, fontStyle: 'bold' },
         ).setOrigin(0.5).setDepth(10)
+        this.transientPopups.add(popup)
         this.tweens.add({
           targets: popup,
           x: popup.x + (xOffset === 0 ? 0 : Math.sign(xOffset) * 10),
@@ -226,7 +272,10 @@ function CombatScene({ battle }) {
           alpha: 0,
           duration: 680,
           ease: 'Cubic.Out',
-          onComplete: () => popup.destroy(),
+          onComplete: () => {
+            this.transientPopups.delete(popup)
+            popup.destroy()
+          },
         })
       }
 
@@ -332,9 +381,14 @@ function CombatScene({ battle }) {
       backgroundColor: '#121b2e',
       scene: BattleScene,
     })
+    const onVisibilityChange = () => {
+      if (document.hidden) sceneRef.current?.pauseVisuals()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
     const resizeObserver = new ResizeObserver(() => game.scale.resize(Math.max(host.clientWidth, 320), COMBAT_HEIGHT))
     resizeObserver.observe(host)
     return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
       resizeObserver.disconnect()
       sceneRef.current = null
       game.destroy(true)

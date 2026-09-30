@@ -4,6 +4,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+ARG VITE_EXPEDITION_ENABLED=false
 RUN npm run build
 
 FROM nginx:1.29-alpine
