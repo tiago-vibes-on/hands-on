@@ -235,10 +235,27 @@ Gold costs increase exponentially for all agency upgrades and Agency Level
 advancement. The growth rate must be balanced so that progression remains
 meaningful without becoming excessively grindy.
 
+## Places
+
+A Place is a reusable location independent of any quest. The first planned
+types are `FIELD` and `DUNGEON`; cities can be added later. A field does not
+require floors. A dungeon owns its reusable floor or room layout. Places may
+define which Creature types can appear there by ID, but Creature owns their
+stats. Encounter generation and travel rules remain open.
+
+Several quests can use the same Place, and a quest need not be limited to one
+Place. Quest owns objectives, party rules, rewards, and each run's progress;
+Place owns reusable layouts. A run pins the version of each Place it uses so
+later map changes do not alter active progress. Combat owns the actual fight.
+No Place entity or API exists yet; current quests describe locations in text.
+
 ## Quests
 
 - Managers always send a party on a quest. A party can contain one hero or
   multiple heroes.
+- A planned quest may be location-independent, allow several eligible Places,
+  or target a specific dungeon. It never owns a copy of Place layout. Quest
+  tracks run-specific progress, including the floor reached when relevant.
 - A manager can prepare a party at the agency before choosing a quest. Its
   members remain at the agency and keep training or resting until the quest
   begins.
@@ -256,13 +273,20 @@ meaningful without becoming excessively grindy.
   defeating every hero fails it. Either outcome records a completion time,
   releases the party, and returns its heroes to Training. Reward allocation,
   stamina costs, and experience/skill losses on defeat are not yet applied.
-- Until per-creature difficulty is designed, newly created creatures use a
-  shared provisional profile: 120 health, 10 damage, a 1.6-second attack
-  interval, 100 mana, no recovery, and no critical chance.
+- Today, newly started quests create creatures with a provisional profile:
+  120 health, 10 damage, a 1.6-second attack interval, 100 mana, no recovery,
+  and no critical chance. The seeded Troll encounter instead has 2,000-health
+  Trolls. The planned Creature catalog will use one canonical Troll starting
+  at 2,000 health; other stats are provisional data, not fixed Java rules.
+  New definition versions apply to future quest runs, not active battles.
 - Quest outcomes depend on the heroes' abilities and stamina.
 - A poorly matched or exhausted hero can fail a quest.
-- Quests take time to complete and can require objectives such as killing a
-  specified number of creatures or another defined objective.
+- Quests can have different objectives: defeat a specified number of a
+  Creature (for example, 1,000 Trolls), defeat a particular boss, or complete
+  a named dungeon. They may require multiple encounters and time to finish;
+  winning one battle does not automatically complete every quest.
+- Only authoritative combat and quest outcomes advance an active party's
+  objective. The browser cannot report its own kills or dungeon completion.
 - Quest rewards can eventually include gold, chests, and items dropped by
   creatures. Economic rewards and payout rules are deferred until the game
   domains are separated; creature defeats can drive XP and skill tests now
@@ -289,6 +313,11 @@ meaningful without becoming excessively grindy.
 
 - Combat is automatic; managers prepare heroes before a quest rather than
   directly controlling each attack.
+- Planned combat may also allow optional, timed manager interactions while
+  the fight runs, such as using a consumable item to buff the party. These
+  commands supplement automatic combat; they do not make basic attacks
+  player-controlled. Item effects, availability, costs, and timing rules
+  remain to be designed and are not part of the current combat prototype.
 - Heroes are displayed side by side using simple placeholder representations at
   first.
 - Creatures are displayed on the opposing side.
@@ -433,6 +462,7 @@ The following details are intentionally not defined yet:
 - Invitations, permissions, and shared agency-management rules.
 - Detailed abilities, equipment, strengths, and weaknesses for each hero
   class.
+- Field and dungeon encounter generation, travel, and entry rules.
 - Quest duration, progression, difficulty, and failure consequences.
 - Combat damage, targeting, attack-speed, and creature-ability rules.
 - Which additional item categories can be exchanged through the market.

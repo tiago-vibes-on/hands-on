@@ -19,6 +19,11 @@ resulting state.
   and Game Core boundary work.
 - Follow [`DEPLOYMENT.md`](DEPLOYMENT.md) for the local Traefik migration,
   Envoy Gateway and Istio in k3d, and BFF/Core scaling progress.
+- Follow [`SERVICE_EXTRACTION.md`](SERVICE_EXTRACTION.md) for the phased
+  domain/service boundary work and its progress.
+- Next extraction order: pin battle inputs, extract Combat with the BFF
+  WebSocket, add Place and flexible Quest objectives, establish Assets
+  contracts in Core, then extract Market. See [ADR 0007](adr/0007-combat-before-market-extraction.md).
 
 ## Milestone 1 — Authoritative agency management
 
@@ -64,6 +69,13 @@ resulting state.
 - [ ] Define and implement quest cancellation rules and a cancellation command.
 - [x] Replace the frontend's fixed active quest and available quest cards with
   API data and persisted quest starts.
+- [ ] Add reusable `FIELD` and `DUNGEON` Place definitions, dungeon floor
+  layouts, and possible encounters referencing Creature IDs. Cities wait.
+- [ ] Support different Quest objectives: Creature kill count, specific boss
+  defeat, and dungeon completion. Place restrictions are optional; do not
+  require one Place per quest.
+- [ ] Advance each quest run from authoritative outcomes, pin the version of
+  each Place used, and keep run progress in Quest rather than Place.
 
 ## Milestone 4 — Server-side automatic combat
 
@@ -198,11 +210,12 @@ Ordered implementation:
   and `DELETE /api/v1/market/orders/{orderId}`; market mutations return order
   state, while clients refresh agency state separately. See
   [ADR 0003](adr/0003-market-service-boundary.md).
-- [ ] Extract Market as an independently buildable and deployable service with
-  its own order data store. Keep Core authoritative for agency membership,
-  gold, and inventory; define idempotent reservation/settlement and failure
-  recovery before moving matching out of Core. Route `/api/v1/market/**` from
-  BFF to Market while retaining the k3d Envoy per-user rate limit. Follow the
+- [ ] After the Combat cutover and Assets contract in Core, extract Market as
+  an independently buildable and deployable service with its own order data
+  store. Keep Core authoritative for agency membership, gold, and inventory;
+  define idempotent reservation/settlement and failure recovery before moving
+  matching out of Core. Route `/api/v1/market/**` from BFF to Market while
+  retaining the k3d Envoy per-user rate limit. Follow the
   [Market service extraction plan](MARKET_ARCHITECTURE.md).
 - [ ] Add market history.
 
@@ -265,9 +278,14 @@ Ordered implementation:
     and membership permissions. The isolated suite provisions `user3`, verifies
     its no-agency gate and first agency, and confirms User 2 cannot read
     Dawnwatch state.
-- [ ] Add WebSocket or server-sent event updates only for features that need
-  near-real-time changes, such as combat progress, matched market orders, and
-  new feed posts.
+- [ ] As part of Combat extraction, add an authenticated, bidirectional
+  browser-to-BFF WebSocket, not a temporary Core endpoint. Stream
+  server-authoritative snapshots and events; accept optional battle commands
+  only when their mechanics exist.
+  Specify command IDs, ordering, acknowledgments, reconnects, authorization,
+  and session expiry; validate local and k3d gateway behavior and browser E2E.
+  Current polling remains in place until this is implemented. Choose transport
+  for market and feed independently when those features need live updates.
 
 ## Milestone 10 — Delivery topology
 
@@ -444,3 +462,13 @@ These do not all block the current combat-progression slice.
 - [ ] Define any refund policy if quest cancellation is later introduced.
 - [ ] Define additional tradable item categories.
 - [ ] Define agency invitation, ownership transfer, and permission rules.
+
+## Deferred — Shared Raydow Games deployments repository
+
+- [ ] Follow [the shared deployments repository plan](DEPLOYMENTS_REPOSITORY.md)
+  after the current implementation work: extract the public Hero Association
+  project into `raydowgames/hero-association` and create one public
+  `raydowgames/deployments` repository for shared k3d infrastructure and all
+  games' non-secret deployment manifests. Keep other games' source private,
+  preserve local development, and verify build, browser E2E, market k6,
+  and deployment gates before retiring Hero Association-owned k3d paths.

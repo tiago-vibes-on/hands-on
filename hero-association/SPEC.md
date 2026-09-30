@@ -217,8 +217,17 @@ cannot be moved into the party; both return `409 Conflict`. Party names must
 be unique per Manager within an agency. Other game actions are still being
 specified.
 Quest definitions include a description, creature objective, party-size range,
-duration estimate, and gold reward. Starting a quest requires a prepared party
-whose member count is inside that quest's range. It changes the quest to
+duration estimate, and gold reward. There is no Place entity, Place ID, or
+reusable dungeon floor definition in the current API. Planned Place data
+will define fields, dungeons, dungeon layouts, and possible creature
+encounters. Planned quests may count Creature defeats, require a boss defeat,
+or require completion of a dungeon. A quest may be location-independent,
+restricted to eligible Places, or tied to a specific dungeon; it is not
+required to have one Place. Quest retains objectives, party requirements,
+rewards, and per-run progress. See [GAME.md](GAME.md) and
+[SERVICE_EXTRACTION.md](SERVICE_EXTRACTION.md).
+Starting a quest requires a prepared party whose member count is inside that
+quest's range. It changes the quest to
 `IN_PROGRESS`, links it to the party, and changes every party member to
 `ON_QUEST`. It persists `startedAt` and `expectedCompletionAt`, calculated
 from the quest duration. A quest that is not `AVAILABLE` returns `409
@@ -449,7 +458,9 @@ IDs must not be added for entities or exposed through the API.
   seconds while its browser tab is visible, and immediately when the tab becomes
   visible again. This keeps agency recovery, feed posts, market orders, and
   background quest progress current without requiring WebSocket or server-sent
-  event connections.
+  event connections. This is the current behavior; the planned first real-time
+  Combat transport is a bidirectional browser-to-BFF WebSocket introduced
+  with the extracted Combat service, not a temporary Core WebSocket or SSE.
 - Clicking the primary in-progress quest expands an inline Phaser combat scene.
   Phaser renders the server-provided active combat snapshot; it does not
   calculate attacks, recovery, spells, critical hits, or outcomes. It replays
@@ -497,8 +508,11 @@ IDs must not be added for entities or exposed through the API.
   Critical Damage Rune effects, plus one creature for every required objective.
   Until per-creature difficulty is designed, new creatures use a shared
   provisional profile: 120 health, 10 damage, a 1.6-second attack
-  interval, 100 mana, no recovery, and no critical chance. Phaser renders any
-  active quest snapshot. `HERO_VICTORY` completes a quest and
+  interval, 100 mana, no recovery, and no critical chance. The planned
+  Creature catalog will start with one Troll definition at 2,000 health;
+  other stat values remain provisional and data-driven. Seeded Trolls
+  already have 2,000 health, while newly started quests still use 120.
+  Phaser renders any active quest snapshot. `HERO_VICTORY` completes a quest and
   `CREATURE_VICTORY` fails it. Either result sets `finishedAt`, releases the
   party, and returns its heroes to Training. Economic rewards and the planned
   non-permanent defeat penalty remain unimplemented.

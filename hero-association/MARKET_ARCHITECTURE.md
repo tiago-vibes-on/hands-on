@@ -36,6 +36,12 @@ databases and credentials. Neither service should have access to the other's
 database. Separate PostgreSQL instances can be considered later without
 changing these ownership rules.
 
+This describes Market's first extraction boundary, not Core's permanent
+ownership of wallets and inventories. The [domain plan](SERVICE_EXTRACTION.md)
+names this responsibility Assets, currently in Core and planned for
+extraction as `hero-association-assets`. Market must use a reservation and
+settlement contract, not read Assets storage directly.
+
 Market is private: the browser still calls the BFF. BFF authenticates the
 browser, enforces CSRF, and routes market paths to Market. The k3d Envoy
 Gateway enforces the per-user placement limit before the BFF. Core currently

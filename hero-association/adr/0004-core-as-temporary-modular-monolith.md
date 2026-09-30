@@ -1,7 +1,7 @@
 # ADR 0004: Keep Game Core temporarily while defining domain boundaries
 
 - Date: 2026-09-28
-- Status: Accepted architectural direction; domain extraction is not implemented
+- Status: Accepted temporary Core direction; extraction order refined by ADR 0007
 
 ## Context
 
@@ -47,4 +47,5 @@ remove the need to design safe runtime transactions.
 Before implementing personal ownership, resolve the open product rules in
 [GAME.md](../GAME.md) and [Milestone 12](../ROADMAP.md#milestone-12--personal-progression-and-shared-agencies).
 Do not start Market extraction merely because its public routes are already
-market-centric.
+market-centric. [ADR 0007](0007-combat-before-market-extraction.md) revises
+the extraction order while keeping Core temporary.
