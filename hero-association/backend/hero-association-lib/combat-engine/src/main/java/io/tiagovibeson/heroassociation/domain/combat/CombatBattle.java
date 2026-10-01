@@ -88,6 +88,9 @@ public final class CombatBattle {
         List<CombatEvent> events = new ArrayList<>();
         while (status == CombatStatus.IN_PROGRESS) {
             long nextActionAt = nextActionAt();
+            if (nextActionAt <= currentTimeMilliseconds) {
+                throw new IllegalStateException("A combat action did not advance beyond the current time.");
+            }
             if (nextActionAt > targetTimeMilliseconds) {
                 break;
             }
@@ -168,8 +171,11 @@ public final class CombatBattle {
 
     private void resolveSpells(List<CombatEvent> events, CombatRandom random) {
         for (Combatant hero : heroes) {
-            if (!hero.isAlive() || status != CombatStatus.IN_PROGRESS) {
+            if (status != CombatStatus.IN_PROGRESS) {
                 return;
+            }
+            if (!hero.isAlive()) {
+                continue;
             }
 
             for (CombatSpell spell : CombatSpell.values()) {

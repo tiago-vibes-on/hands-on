@@ -48,7 +48,8 @@ for service in "${services[@]}"; do
   image_refs+=("$image_ref")
 done
 
-"$project_dir/deploy/k3d/require-full-k3d.sh"
+# Candidate images and component tests use disposable dependencies, not daily app Pods.
+# Promotion still requires full k3d through its own preflight.
 if [[ "$component" != frontend ]]; then
   "$project_dir/deploy/k3d/test-isolated-components.sh" "$component"
 fi

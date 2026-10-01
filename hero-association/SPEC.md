@@ -562,8 +562,16 @@ IDs must not be added for entities or exposed through the API.
 - The Map screen is the player-facing battle view in k3d. It reuses the
   Phaser battle renderer for the party and three Trolls, including health,
   mana, equipped rune slots, Mage spell slots, timed hits, critical effects,
-  and recovery animations. Spell slots remain visible but locked below their
-  required Magic Level. User 2's seeded personal party has equipped runes
+  and recovery animations. The first seeded Troll has 2,000 HP and 4 attack
+  damage so its three-creature encounter remains playable. Spell slots remain visible but locked below their
+  required Magic Level. An accessible panel near the battle names equipped
+  runes and their effects and shows Mage spell requirements, mana cost, and
+  current cooldown or readiness. On narrow screens the three-Troll field
+  scrolls horizontally rather than overlapping the combatants. The Map also
+  shows current Hero XP, skill points, stamina, and carried assets from the
+  authoritative run; Hero totals include progress from before entry, and
+  changes are permanently saved only on return. The first Troll Field does
+  not yet award carried loot. User 2's seeded personal party has equipped runes
   and a Magic Level 15 Mage for this battle demonstration. Expedition
   calculates the current non-interactive fight once and stores its
   event windows in Redis; visual reads do not rerun the engine. The BFF
@@ -573,7 +581,9 @@ IDs must not be added for entities or exposed through the API.
   paints the current server frame immediately; only subsequent live events are
   animated. Continue and Return remain server commands; the optional Map
   auto-continue control sends Continue 1.5 seconds after a victory while the
-  page is open. The browser never decides attacks or outcomes. See
+  page is open. Simultaneous Continue and Return submissions are guarded in
+  the browser, while the server enforces idempotency and state versions. The
+  browser never decides attacks or outcomes. See
   [the fight timeline](COMBAT_TIMELINE.md).
 - The Quests screen shows available objectives and active or resolved progress.
   It no longer embeds the legacy Phaser scene or polls the combat-sync API.

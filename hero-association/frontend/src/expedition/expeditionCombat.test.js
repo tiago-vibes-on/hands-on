@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { shouldAutoContinue, toPhaserBattle } from './expeditionCombat.js'
+import { shouldAutoContinue, spellAvailability, toLoadoutHeroes, toPhaserBattle } from './expeditionCombat.js'
 
 test('Map adapts authoritative events and resources for the old animated scene', () => {
   const rune = { symbol: '✦' }
@@ -51,6 +51,25 @@ test('Map shows locked Mage spell slots before their required Magic Levels', () 
   const battle = toPhaserBattle(run, [])
   assert.deepEqual(battle.heroes[0].spells.map((spell) => spell.locked), [true, true])
   assert.equal(battle.heroes[0].runes.length, 5)
+})
+
+test('Map keeps Mage spells and rune details visible between encounters', () => {
+  const rune = { id: 'rune', name: 'Mana Rune', symbol: '♦', stats: '+30 mana' }
+  const run = { heroes: [{ heroId: 'mage', name: 'Mage', heroClass: 'MAGE', health: 90, mana: 450 }] }
+  const [mage] = toLoadoutHeroes(run, [{ id: 'mage', magicLevel: 15, runeSlots: [rune] }])
+  assert.deepEqual(mage.runes, [rune])
+  assert.deepEqual(mage.spells.map((spell) => spell.name), ['Fire Ball', 'Lightning Rail'])
+  assert.equal(mage.spells.every((spell) => !spell.locked), true)
+})
+
+test('Spell details distinguish locked, cooling, low-mana, and ready states', () => {
+  const spell = { id: 'fire-ball', requiredMagicLevel: 10, manaCost: 20, locked: false }
+  assert.equal(spellAvailability({ ...spell, locked: true }, { currentMana: 100 }, 0),
+    'Requires Magic Level 10')
+  assert.equal(spellAvailability(spell, { currentMana: 100, nextSpellCastAt: { 'fire-ball': 2_100 } }, 1_000),
+    '2s cooldown')
+  assert.equal(spellAvailability(spell, { currentMana: 10 }, 0), 'Needs 20 mana')
+  assert.equal(spellAvailability(spell, { currentMana: 20 }, 0), 'Ready')
 })
 
 test('Auto-continue only commands a living victory while enabled and idle', () => {

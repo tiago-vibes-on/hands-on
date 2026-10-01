@@ -373,7 +373,7 @@ INSERT INTO creature_definition (
     attack_interval_milliseconds, health_recovery_per_second,
     mana_recovery_per_second, critical_chance, critical_damage_multiplier)
 VALUES
-    ('019c4c00-0005-7000-8000-000000000001', 'Troll', 1, 100, 2000, 100, 10,
+    ('019c4c00-0005-7000-8000-000000000001', 'Troll', 1, 100, 2000, 100, 4,
      1600, 0, 0, 0.1, 2),
     ('019c4c00-0005-7000-8000-000000000002', 'Forest Wolf', 1, 100, 120, 100, 10,
      1600, 0, 0, 0, 2);

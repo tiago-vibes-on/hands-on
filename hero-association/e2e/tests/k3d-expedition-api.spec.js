@@ -38,6 +38,7 @@ async function snapshotOverSocket(page, expeditionId) {
 }
 
 test('authenticated k3d Expedition enters, streams, reconnects, continues, and settles', async ({ page }) => {
+  test.setTimeout(360_000)
   await page.goto('/')
   await page.getByRole('button', { name: 'Sign in' }).click()
   await page.locator('#username').fill('manager4@mail.com')
@@ -56,7 +57,7 @@ test('authenticated k3d Expedition enters, streams, reconnects, continues, and s
     })
     expect(cleanup.ok(), await cleanup.text()).toBeTruthy()
     await expect.poll(async () => (await page.request.get('/api/v1/expeditions/active')).status(), {
-      timeout: 90_000, intervals: [1_000],
+      timeout: 150_000, intervals: [1_000],
     }).toBe(204)
   } else {
     expect(previous.status()).toBe(204)
@@ -114,14 +115,25 @@ test('authenticated k3d Expedition enters, streams, reconnects, continues, and s
     const response = await page.request.get('/api/v1/expeditions/active')
     finished = await response.json()
     return finished.phase
-  }, { timeout: 90_000, intervals: [1_000] }).toBe('AWAITING_CONTINUE')
+  }, { timeout: 150_000, intervals: [1_000] }).toBe('AWAITING_CONTINUE')
+  const continueCommandId = uuidV7()
   const continuedResponse = await page.request.post(`/api/v1/expeditions/${expeditionId}/continue`, {
-    headers, data: { commandId: uuidV7(), expectedVersion: finished.stateVersion },
+    headers, data: { commandId: continueCommandId, expectedVersion: finished.stateVersion },
   })
   expect(continuedResponse.status(), await continuedResponse.text()).toBe(200)
   const continued = await continuedResponse.json()
   expect(continued.phase).toBe('FIGHTING')
   expect(continued.encounterIndex).toBe(2)
+  const duplicate = await page.request.post(`/api/v1/expeditions/${expeditionId}/continue`, {
+    headers, data: { commandId: continueCommandId, expectedVersion: finished.stateVersion },
+  })
+  expect(duplicate.status(), await duplicate.text()).toBe(200)
+  expect((await duplicate.json()).stateVersion).toBe(continued.stateVersion)
+  const stale = await page.request.post(`/api/v1/expeditions/${expeditionId}/continue`, {
+    headers, data: { commandId: uuidV7(), expectedVersion: finished.stateVersion },
+  })
+  expect(stale.status()).toBe(409)
+  expect((await (await page.request.get('/api/v1/expeditions/active')).json()).encounterIndex).toBe(2)
 
   const returnResponse = await page.request.post(`/api/v1/expeditions/${expeditionId}/return`, {
     headers, data: { commandId: uuidV7(), expectedVersion: continued.stateVersion },
@@ -130,7 +142,7 @@ test('authenticated k3d Expedition enters, streams, reconnects, continues, and s
   expect((await returnResponse.json()).returnRequested).toBe(true)
 
   await expect.poll(async () => (await page.request.get('/api/v1/expeditions/active')).status(), {
-    timeout: 90_000, intervals: [1_000],
+    timeout: 150_000, intervals: [1_000],
   }).toBe(204)
   const after = await (await page.request.get(`/api/v1/agencies/${agencyId}/state`)).json()
   expect(after.personalHeroes.find(hero => hero.id === warrior.id).experience)

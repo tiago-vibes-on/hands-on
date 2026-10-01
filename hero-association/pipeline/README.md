@@ -2,8 +2,10 @@
 
 This local pipeline builds once, verifies the archived images, and can deploy
 them to k3d or store them in Floci S3 for a later AWS-lab deployment. The
-daily Vite/Quarkus hot-reload workflow shares this cluster, but candidate
-build and promotion require all four original k3d application Pods restored.
+daily Vite/Quarkus hot-reload workflow shares this cluster. Build-only
+candidates can run while a daily service is in hybrid mode because component
+tests use disposable dependencies; promotion still requires all four original
+k3d application Pods restored.
 
 The [local Jenkins setup](../ci/jenkins/README.md) has independent Core, BFF,
 Expedition, and frontend worktree builds and trusted-`main` builds, plus a deploy-local job
@@ -42,7 +44,7 @@ Testcontainers host override is needed for this pipeline.
 ## Build and verify in separate stages
 
 From `hero-association/pipeline`, with Docker, Java 25, Node.js 24, npm,
-`kubectl`, and all four application services restored to full k3d mode,
+`kubectl`, and the k3d cluster available for disposable component tests,
 build the three JVM services and the frontend image in one run:
 
 ```bash

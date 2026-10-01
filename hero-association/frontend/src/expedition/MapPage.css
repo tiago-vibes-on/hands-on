@@ -10,6 +10,29 @@
 .map-fight__heading h2 { margin: 6px 0 0; }
 .map-fight__time { color: var(--text-muted); font-variant-numeric: tabular-nums; }
 .map-fight__outcome { color: #e5bc63; }
+.map-fight__canvas-scroll { max-width: 100%; margin-top: 18px; overflow-x: auto; }
+.map-fight__canvas-scroll .combat-scene { box-sizing: border-box; min-width: 760px; }
+.map-loadout { margin-top: 20px; }
+.map-loadout h3, .map-progress h3 { margin: 0 0 10px; color: var(--text-strong); font-size: 15px; }
+.map-loadout__heroes, .map-progress__heroes { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.map-loadout__hero, .map-progress__heroes article { min-width: 0; padding: 14px; background: #101827; border: 1px solid var(--border-soft); border-radius: 9px; }
+.map-loadout__hero h4 { margin: 0 0 10px; color: var(--text-strong); font-size: 14px; }
+.map-loadout__hero p { margin: 12px 0 6px; color: var(--text-muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
+.map-loadout__hero ul, .map-progress__heroes ul, .map-progress__loot { margin: 0; padding: 0; list-style: none; }
+.map-loadout__hero li { margin-top: 6px; font-size: 12px; }
+.map-loadout__hero li strong { color: var(--text-strong); }
+.map-loadout__hero small { display: block; margin-left: 20px; color: var(--text-muted); font-size: 11px; }
+.map-progress { margin-top: 18px; }
+.map-progress__heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 18px; }
+.map-progress__heading p, .map-progress__heroes p { margin: 0 0 12px; color: var(--text-muted); font-size: 12px; }
+.map-progress__carried { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 16px 0; }
+.map-progress__carried > div { padding: 10px 12px; background: #101827; border: 1px solid var(--border-soft); border-radius: 8px; }
+.map-progress__carried span, .map-progress__carried strong { display: block; }
+.map-progress__carried span { color: var(--text-muted); font-size: 11px; }
+.map-progress__carried strong { margin-top: 3px; color: var(--text-strong); font-size: 18px; }
+.map-progress__loot { display: flex; flex-wrap: wrap; gap: 7px 14px; margin-bottom: 16px; color: var(--text-muted); font-size: 12px; }
+.map-progress__heroes li { display: flex; justify-content: space-between; gap: 10px; margin-top: 5px; color: var(--text-muted); font-size: 11px; }
+.map-progress__heroes li strong { color: var(--text-strong); font-weight: 500; font-variant-numeric: tabular-nums; }
 .map-fight__sides { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 22px; align-items: center; margin-top: 24px; }
 .map-fight__team h3 { margin: 0 0 14px; color: var(--text-muted); font-size: 13px; text-transform: uppercase; letter-spacing: .1em; }
 .map-fight__lineup { display: flex; flex-wrap: wrap; gap: 12px; }
@@ -35,4 +58,7 @@
   .map-fight__sides { grid-template-columns: 1fr; }
   .map-fight__versus { text-align: center; }
   .map-entry__actions { align-items: stretch; flex-direction: column; }
+}
+@media (max-width: 480px) {
+  .map-progress__carried { grid-template-columns: 1fr; }
 }

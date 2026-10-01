@@ -261,7 +261,7 @@ docker run --rm --init --network k3d-hero-association --ipc host \
   "$playwright_image" \
   npx playwright test --config playwright.k3d.isolated.config.js \
     --grep 'User2 default party enters Troll Field'
-core_logs="$(kc -n "$namespace" logs deployment/core -c core --since=3m)"
+core_logs="$(kc -n "$namespace" logs deployment/core -c core --since=10m)"
 if [[ "$core_logs" != *'Creature cache read failed for Troll; using PostgreSQL'* ]]; then
   printf 'Map journey passed without evidence of Core PostgreSQL creature fallback.\n' >&2
   exit 1

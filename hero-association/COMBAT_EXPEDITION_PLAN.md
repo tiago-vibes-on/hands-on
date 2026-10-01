@@ -10,10 +10,12 @@ inbox have been retired; [SPEC.md](SPEC.md) documents the remaining runtime.
 The current fight-timeline design is recorded in
 [COMBAT_TIMELINE.md](COMBAT_TIMELINE.md).
 
-This is the bounded sequence for subsequent `next` requests. Work only on
-Combat and Expedition and their required BFF, frontend, Core data-owner,
-Redis, RabbitMQ, local, and k3d integration. Do not move on to other domains
-after the final load-test report without a new explicit request.
+This records the bounded Combat and Expedition sequence and its required BFF,
+frontend, Core data-owner, Redis, RabbitMQ, local, and k3d integration. The
+player-facing follow-ups below are complete; load testing remains deferred
+until explicitly resumed.
+Do not move on to other domains after the final load-test report without a
+new explicit request.
 
 ## Target behavior and ownership
 
@@ -99,6 +101,58 @@ after the final load-test report without a new explicit request.
    Quest start still creates a persisted `QuestCombat` for the Core worker.
    Retire that Quest worker/sync path only with a separate Quest redesign.
    Runtime commands are in the backend and k3d runbooks.
+
+## Player-facing follow-ups (complete)
+
+Complete these in order before returning to step 8. Keep the first Map path
+limited to the Troll Field and the existing personal Party; Quest redesign,
+new Map content, and additional microservice extraction are not part of this
+queue.
+
+- [x] **A — Validate the latest build in k3d.** Check Core, Expedition, and
+   frontend changes in an isolated k3d browser journey. Recreate only the
+   disposable Core test data
+   needed for User 2's new loadout, then verify three Trolls appear side by
+   side, both Mage spells and equipped runes are visible, a victory pauses,
+   auto-continue starts another fight when enabled, and manual Continue still
+   works when it is disabled. Record any discrepancy before promotion; do
+   not reset a shared database as an implicit test setup step.
+- [x] **B — Explain the battle loadout.** Make it understandable without
+   guessing from symbols: show equipped rune names/effects and Mage spell
+   names, requirements,
+   and cooldown state in accessible UI near the canvas. Preserve the existing
+   animation and check the three-creature layout at narrow and wide widths.
+   Keep combat calculations authoritative on the server.
+- [x] **C — Show current Expedition gains.** Beside the battle, show each Hero's
+   authoritative XP, skill progress, and stamina, plus carried gold and
+   items. Show only the latest encounter outcome and current aggregate, not
+   a growing fight history. Confirm the same aggregate is applied once when
+   the Party returns to the agency; do not persist each encounter to SQL.
+- [x] **D — Automate the browser journey.** Extend the k3d Playwright Map
+   journey and focused frontend tests. Assert the authoritative fight has
+   three distinct Trolls, User 2's personal party exposes the seeded runes
+   and Mage spells, and the
+   auto-continue toggle sends one Continue after victory. Also prove that
+   disabling the toggle leaves the run waiting and that a return request or
+   party wipe never starts another encounter. Check that the current gains
+   match the eventual agency settlement. Use API/state assertions for
+   canvas-only details instead of fragile pixel matching.
+- [x] **E — Verify lifecycle and recovery.** Refresh or leave the Map during a
+   fight, reconnect after a WebSocket interruption, retry a stale Continue,
+   and return during or after a fight. Add regression coverage for any defect
+   found. The browser must never calculate results or cause duplicate XP,
+   loot, skill progress, or settlement; no per-fight SQL writes are added.
+
+The `battle-followups-20261001-c` four-image archive passed the isolated k3d
+gate: all 11 browser/API cases, a repeated Map journey with Core Redis down
+and PostgreSQL creature fallback, BFF session/restart/outage checks, and the
+existing market rate-limit k6 thresholds. The isolated namespace was removed
+after verification. This did not promote the archive to the daily hybrid
+environment or reset its database. The 100/500/1,000-fight load tests below
+were not run.
+
+## Deferred performance work
+
 8. [ ] Add and run repeatable load tests for **100, 500, and 1,000 concurrent
    fights**, not merely 100/500/1,000 requests. Exercise fights with no
    viewers and with WebSocket viewers, a disconnected browser, Continue, and
@@ -112,6 +166,6 @@ after the final load-test report without a new explicit request.
 
 ## Stop condition
 
-The player-facing Map cutover is complete. Do not start step 8 until the user
-explicitly resumes load testing. A later bare `next` does not authorize work
+The player-facing Map follow-ups are complete. Do not start step 8 until the
+user explicitly resumes load testing; a bare `next` does not authorize work
 outside this plan.

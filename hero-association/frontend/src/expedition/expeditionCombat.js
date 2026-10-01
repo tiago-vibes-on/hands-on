@@ -8,14 +8,10 @@ export function shouldAutoContinue(run, enabled, pendingAction) {
     && !run.returnRequested && run.heroes?.some((hero) => hero.health > 0))
 }
 
-/** Only adapts authoritative visual data; it never runs combat mechanics. */
-export function toPhaserBattle(run, knownHeroes) {
-  const visual = run.fight?.visual
-  if (!visual) return null
-
+export function toLoadoutHeroes(run, knownHeroes, visual = run.fight?.visual) {
   const knownById = new Map(knownHeroes.map((hero) => [hero.id, hero]))
-  const visualById = new Map(visual.heroes.map((hero) => [hero.id, hero]))
-  const heroes = run.heroes.map((hero) => {
+  const visualById = new Map((visual?.heroes ?? []).map((hero) => [hero.id, hero]))
+  return run.heroes.map((hero) => {
     const current = visualById.get(hero.heroId)
     const known = knownById.get(hero.heroId)
     const magicLevel = current?.magicLevel ?? known?.magicLevel ?? 1
@@ -40,6 +36,22 @@ export function toPhaserBattle(run, knownHeroes) {
       nextSpellCastAt: current?.nextSpellCastAt ?? {},
     }
   })
+}
+
+export function spellAvailability(spell, hero, currentTimeMilliseconds) {
+  if (spell.locked) return `Requires Magic Level ${spell.requiredMagicLevel}`
+  const remaining = (hero.nextSpellCastAt?.[spell.id] ?? 0) - currentTimeMilliseconds
+  if (remaining > 0) return `${Math.ceil(remaining / 1_000)}s cooldown`
+  if (hero.currentMana < spell.manaCost) return `Needs ${spell.manaCost} mana`
+  return 'Ready'
+}
+
+/** Only adapts authoritative visual data; it never runs combat mechanics. */
+export function toPhaserBattle(run, knownHeroes) {
+  const visual = run.fight?.visual
+  if (!visual) return null
+
+  const heroes = toLoadoutHeroes(run, knownHeroes, visual)
   const creatures = visual.creatures.map((creature, index) => ({
     id: creature.id,
     name: run.creature.name,

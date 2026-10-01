@@ -9,6 +9,7 @@ export default defineConfig({
     'market-ownership.spec.js',
     'k3d-isolated-market-rate-limit.spec.js',
     'expedition.spec.js',
+    'k3d-expedition-api.spec.js',
   ],
   fullyParallel: false,
   workers: 1,

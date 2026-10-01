@@ -19,10 +19,12 @@ run from `hero-association/`:
 ```
 
 Or from `e2e/`, run `npm run test:isolated -- ../pipeline/artifacts/<build-id>/all`.
-The candidate build requires all four daily application Deployments restored
-to full k3d mode, but tests and identity data stay in disposable namespaces.
+The candidate can be built while daily development runs in hybrid mode;
+tests and identity data stay in disposable namespaces. Manual promotion
+still requires restoring all four daily application Deployments to full k3d
+mode.
 The runner checks the archive checksum and all five running application Pod
-image IDs before and after BFF replacement. It runs ten browser cases,
+image IDs before and after BFF replacement. It runs eleven browser/API cases,
 Core-cache-off Map replay, BFF session/outage and expiry checks, RabbitMQ
 cross-role denial, and market k6 thresholds. It marks
 `k3d-e2e-verification.json` passed only after the namespace is deleted.
@@ -72,8 +74,11 @@ npm run test:k3d:map
 
 The API test exercises seeded Manager 4. The browser test exercises User2's
 three-Hero Main Party and the visible Map menu in Chromium, including its
-Phaser canvas and WebSocket reconnect. It first returns any old User2 run, so
-it can be repeated. Both tests change Hero progress in the disposable lab.
+three-Troll Phaser canvas, seeded runes and Mage spells, current progress,
+auto-continue, manual Continue, and WebSocket reconnect. It first returns
+any old User2 run, so it can be repeated. The journey can take several minutes
+because three complete encounters run at their real combat speed. Both tests
+change Hero progress in the disposable lab.
 
 ## Measure the market order rate limit with k6
 

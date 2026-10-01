@@ -35,8 +35,14 @@ visuals only to local subscribers, reading the private Redis-only Expedition
 visual API at most once per subscribed run per second, without per-frame Core reads.
 Expedition plans each non-interactive fight once and projects five-second event
 windows from its Redis timeline; see [the timeline design](../COMBAT_TIMELINE.md).
-Each Troll Field encounter has three Trolls. The Map shows equipped rune slots
-and both Mage spell slots (locked until the required Magic Level). The
+Each Troll Field encounter has three seeded Trolls (2,000 HP and 4 attack
+damage each). The Map shows equipped rune slots
+and both Mage spell slots (locked until the required Magic Level). An
+accessible panel names the runes and their effects and explains spell
+requirements, mana cost, and cooldown; narrow layouts can scroll the battle
+horizontally. A separate panel shows the current authoritative Hero totals
+and carried assets. Hero changes settle only on return, and creature loot is
+not yet awarded in the first Troll Field. The
 auto-continue toggle is off by default; when enabled, the open Map page sends
 the normal Continue command 1.5 seconds after a victory. Leaving the page,
 a wipe, or a return request does not continue the run. User 2's disposable

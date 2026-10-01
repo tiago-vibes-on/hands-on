@@ -48,6 +48,8 @@ The seeded Broken Pass Party belongs to User 1. Its agency heroes remain
 assigned for the existing in-progress quest fixture. Available agency-owned
 heroes can now join a Manager's prepared party without changing ownership.
 Borrowing is free at assignment and charged only when the quest starts.
+The seeded Troll used by the first Map field has 2,000 HP, 4 attack damage,
+and 100 base XP; this balances the three-creature starter encounter.
 Every other seeded Manager has a Main Party containing their personal Warrior,
 Mage, and Archer. In particular, User 2 can enter the Map immediately with
 their three-hero party. User 2's personal Mage is a deliberate Magic Level 15

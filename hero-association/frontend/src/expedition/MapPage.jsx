@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiRequestError } from '../api/agency'
 import { commandExpedition, connectExpedition, fetchActiveExpedition, startExpedition } from '../api/expedition'
 import CombatScene from '../combat/CombatScene'
-import { shouldAutoContinue, toPhaserBattle } from './expeditionCombat'
+import { shouldAutoContinue, spellAvailability, toLoadoutHeroes, toPhaserBattle } from './expeditionCombat'
 import './MapPage.css'
 
 const phases = {
@@ -12,8 +12,12 @@ const phases = {
   SETTLEMENT_PENDING: 'Returning to agency',
 }
 
+const skills = [['MELEE', 'Melee'], ['DISTANCE', 'Distance'], ['MAGIC', 'Magic'], ['SHIELD', 'Shield']]
+
 async function sendAction({ action, agencyId, partyId, expeditionId, stateVersion },
-  acceptRun, setError, setPendingAction) {
+  acceptRun, setError, setPendingAction, inFlightRef) {
+  if (inFlightRef.current) return
+  inFlightRef.current = action
   setPendingAction(action)
   setError(null)
   try {
@@ -27,6 +31,7 @@ async function sendAction({ action, agencyId, partyId, expeditionId, stateVersio
     }
     setError(failure.message)
   } finally {
+    inFlightRef.current = null
     setPendingAction(null)
   }
 }
@@ -36,18 +41,67 @@ function FightView({ run, knownHeroes, lastBattle }) {
   const displayed = currentBattle ? { fightId: run.fight.fightId, battle: currentBattle }
     : run.lastOutcome?.fightId === lastBattle?.fightId
       ? { fightId: lastBattle.fightId, battle: toPhaserBattle(lastBattle.run, knownHeroes) } : null
+  const loadoutHeroes = displayed?.battle.heroes ?? toLoadoutHeroes(run, knownHeroes)
+  const combatTime = displayed?.battle.currentTimeMilliseconds ?? 0
   return <section className="panel map-fight" aria-label="Current encounter">
     <div className="map-fight__heading">
       <div><p className="eyebrow">Troll Field · Encounter {run.encounterIndex}</p><h2>{phases[run.phase] ?? run.phase}</h2></div>
       {currentBattle && <span className="map-fight__time">{Math.floor(currentBattle.currentTimeMilliseconds / 1000)}s</span>}
     </div>
     {run.lastOutcome && <p className="map-fight__outcome">Last fight: {run.lastOutcome.status === "HERO_VICTORY" ? "Victory" : "Defeat"}</p>}
-    {displayed ? <CombatScene key={displayed.fightId} battle={displayed.battle} />
+    {displayed ? <div className="map-fight__canvas-scroll" role="region" aria-label="Battle field" tabIndex={0}>
+      <CombatScene key={displayed.fightId} battle={displayed.battle} />
+    </div>
       : <p className="map-fight__outcome">Waiting for the next encounter.</p>}
+    <section className="map-loadout" aria-label="Party loadout">
+      <h3>Party loadout</h3>
+      <div className="map-loadout__heroes">
+        {loadoutHeroes.map((hero) => <article className="map-loadout__hero" key={hero.id}>
+          <h4>{hero.name}</h4>
+          <p>Runes</p>
+          <ul>{hero.runes.map((rune, slot) => rune && <li key={slot}>
+            <span aria-hidden="true">{rune.symbol}</span> <strong>{rune.name}</strong>
+            <small>{rune.stats}</small>
+          </li>)}</ul>
+          {!hero.runes.some(Boolean) && <small>No runes equipped</small>}
+          {hero.spells.length > 0 && <><p>Spells</p><ul>{hero.spells.map((spell) => <li key={spell.id}>
+            <span aria-hidden="true">{spell.symbol}</span> <strong>{spell.name}</strong>
+            <small>{spell.target} · Magic Level {spell.requiredMagicLevel} · {spell.manaCost} mana · {spell.cooldown / 1_000}s cooldown</small>
+            <small>{spellAvailability(spell, hero, combatTime)}</small>
+          </li>)}</ul></>}
+        </article>)}
+      </div>
+    </section>
   </section>
 }
 
-export default function MapPage({ agencyId, managerId, heroes, preparedParties }) {
+function ProgressView({ run, itemInventory, runeInventory }) {
+  const itemNames = new Map(itemInventory.map((item) => [item.id, item.name]))
+  const runeNames = new Map(runeInventory.map((rune) => [rune.id, rune.name]))
+  const carriedItems = Object.entries(run.carried?.items ?? {})
+  const carriedRunes = Object.entries(run.carried?.runes ?? {})
+  return <section className="panel map-progress" aria-label="Expedition progress">
+    <div className="map-progress__heading"><h2>Expedition progress</h2>
+      <p>Hero totals update after each fight. Expedition changes are saved when the party returns.</p></div>
+    <div className="map-progress__carried">
+      <div><span>Carried gold</span><strong>{run.carried?.gold ?? 0}</strong></div>
+      <div><span>Items</span><strong>{carriedItems.reduce((sum, [, count]) => sum + count, 0)}</strong></div>
+      <div><span>Runes</span><strong>{carriedRunes.reduce((sum, [, count]) => sum + count, 0)}</strong></div>
+    </div>
+    {(carriedItems.length > 0 || carriedRunes.length > 0) && <ul className="map-progress__loot">
+      {carriedItems.map(([id, count]) => <li key={id}>{itemNames.get(id) ?? `Item ${id.slice(0, 8)}`} × {count}</li>)}
+      {carriedRunes.map(([id, count]) => <li key={id}>{runeNames.get(id) ?? `Rune ${id.slice(0, 8)}`} × {count}</li>)}
+    </ul>}
+    <div className="map-progress__heroes">{run.heroes.map((hero) => <article key={hero.heroId}>
+      <h3>{hero.name}</h3>
+      <p>XP {hero.experience} · Stamina {(hero.staminaMilliseconds / 3_600_000).toFixed(1)}h / 48h</p>
+      <ul>{skills.map(([key, label]) => <li key={key}><span>{label}</span>
+        <strong>{hero.skillPoints?.[key] ?? 0} points</strong></li>)}</ul>
+    </article>)}</div>
+  </section>
+}
+
+export default function MapPage({ agencyId, managerId, heroes, preparedParties, itemInventory, runeInventory }) {
   const [run, setRun] = useState(null)
   const [lastBattle, setLastBattle] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -59,6 +113,7 @@ export default function MapPage({ agencyId, managerId, heroes, preparedParties }
   const [socketStatus, setSocketStatus] = useState('connecting')
   const [autoContinue, setAutoContinue] = useState(false)
   const autoContinueAttemptRef = useRef(null)
+  const inFlightRef = useRef(null)
   const expeditionId = run?.expeditionId
 
   const acceptRun = useCallback((next) => {
@@ -92,7 +147,10 @@ export default function MapPage({ agencyId, managerId, heroes, preparedParties }
     const socket = connectExpedition(expeditionId)
     socket.onopen = () => {
       if (!active) socket.close()
-      else setSocketStatus('connected')
+      else {
+        setSocketStatus('connected')
+        setError(null)
+      }
     }
     socket.onmessage = (event) => {
       try {
@@ -138,9 +196,9 @@ export default function MapPage({ agencyId, managerId, heroes, preparedParties }
 
   const stateVersion = run?.stateVersion
   function submit(action) {
-    if (pendingAction) return
+    if (inFlightRef.current) return
     sendAction({ action, agencyId, partyId, expeditionId, stateVersion },
-      acceptRun, setError, setPendingAction)
+      acceptRun, setError, setPendingAction, inFlightRef)
   }
 
   const autoContinueReady = shouldAutoContinue(run, autoContinue, pendingAction)
@@ -149,9 +207,10 @@ export default function MapPage({ agencyId, managerId, heroes, preparedParties }
     const attemptKey = [expeditionId, stateVersion].join(':')
     if (autoContinueAttemptRef.current === attemptKey) return undefined
     const timer = window.setTimeout(() => {
+      if (inFlightRef.current) return
       autoContinueAttemptRef.current = attemptKey
       sendAction({ action: 'continue', agencyId, partyId, expeditionId, stateVersion },
-        acceptRun, setError, setPendingAction)
+        acceptRun, setError, setPendingAction, inFlightRef)
     }, 1_500)
     return () => window.clearTimeout(timer)
   }, [autoContinueReady, agencyId, partyId, expeditionId, stateVersion, acceptRun])
@@ -171,6 +230,7 @@ export default function MapPage({ agencyId, managerId, heroes, preparedParties }
     </section>}
     {run && <>
       <FightView run={run} knownHeroes={heroes} lastBattle={lastBattle} />
+      <ProgressView run={run} itemInventory={itemInventory} runeInventory={runeInventory} />
       <div className="map-controls">
         <span className="map-controls__connection" role="status">{socketStatus === 'connected' ? 'Live' : 'Reconnecting to battle…'}</span>
         <label className="map-controls__auto">

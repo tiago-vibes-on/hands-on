@@ -8,6 +8,7 @@ import static org.hamcrest.Matchers.is;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 class CombatBattleTest {
 
@@ -60,6 +61,27 @@ class CombatBattleTest {
         assertThat(spellEvents.get(1).hits().getFirst().damage(), is(14));
         assertThat(spellEvents.get(1).manaSpent(), is(40));
         assertThat(mage.getCurrentMana(), is(430));
+    }
+
+    @Test
+    @Timeout(5)
+    void shouldKeepCastingAfterTheFirstHeroFalls() {
+        Combatant warrior = combatant(
+                "warrior", CombatTeam.HEROES, 300, 50, 1, 50, 0, 0, 1_300, 0, 0, 0, 0, 2, List.of());
+        Combatant mage = combatant(
+                "mage", CombatTeam.HEROES, 100, 500, 100, 500, 0, 20, 1_700, 2, 10, 15, 0, 2,
+                List.of(CombatSpell.FIRE_BALL, CombatSpell.LIGHTNING_RAIL));
+        Combatant troll = combatant(
+                "troll", CombatTeam.CREATURES, 1_000, 100, 1_000, 100, 10, 0, 10_000, 0, 0, 0, 0, 2, List.of());
+
+        CombatBattle battle = CombatBattle.start(List.of(warrior, mage), List.of(troll));
+        List<CombatEvent> events = battle.advanceTo(1_350, () -> 0.99);
+
+        assertThat(warrior.isAlive(), is(false));
+        assertThat(events.stream().filter(event -> event.actorId().equals("mage")
+                        && event.action() != CombatAction.RECOVERY)
+                .map(CombatEvent::action).toList(), contains(
+                        CombatAction.BASIC_ATTACK, CombatAction.FIRE_BALL, CombatAction.LIGHTNING_RAIL));
     }
 
     @Test
