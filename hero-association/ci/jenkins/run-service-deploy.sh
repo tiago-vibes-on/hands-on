@@ -24,5 +24,5 @@ grep -qx "promote_component=${component}$" "$artifact/manifest.txt" ||
 project="$(realpath -- "$HERO_ASSOCIATION_SOURCE_REPO")/hero-association"
 node "$project/pipeline/deploy-k3d.mjs" "$artifact"
 mkdir -p "$WORKSPACE/evidence"
-cp "$artifact/manifest.txt" "$artifact/e2e-verification.json" "$artifact/k3d-promotion.json" "$WORKSPACE/evidence/"
+cp "$artifact/manifest.txt" "$artifact/k3d-e2e-verification.json" "$artifact/k3d-promotion.json" "$WORKSPACE/evidence/"
 printf 'Deployed %s artifact %s to k3d.\n' "$component" "$artifact_id"

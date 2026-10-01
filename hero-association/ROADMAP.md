@@ -17,8 +17,10 @@ resulting state.
   supported behavior or local workflows.
 - Follow [`AUTHENTICATION.md`](AUTHENTICATION.md) for account, Keycloak, BFF,
   and Game Core boundary work.
-- Follow [`DEPLOYMENT.md`](DEPLOYMENT.md) for the local Traefik migration,
-  Envoy Gateway and Istio in k3d, and BFF/Core scaling progress.
+- Follow [`LOCAL_ENVIRONMENT_PLAN.md`](LOCAL_ENVIRONMENT_PLAN.md) and
+  [`LOCAL_DEVELOPMENT.md`](LOCAL_DEVELOPMENT.md) for the active Envoy/k3d
+  workflow. [`DEPLOYMENT.md`](DEPLOYMENT.md) records the earlier rollout,
+  including retired Traefik milestones.
 - Follow [`SERVICE_EXTRACTION.md`](SERVICE_EXTRACTION.md) for the phased
   domain/service boundary work and its progress.
 - Current bounded work: the pure combat library and private Expedition

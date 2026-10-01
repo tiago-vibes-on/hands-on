@@ -81,20 +81,13 @@ fixture test verifies the membership mapping and personal starter assets.
 
 ## Refreshing disposable environments
 
-Core's local development and test profiles recreate the schema and load
-`import.sql` on startup. Keycloak imports its realm only when the realm does
-not already exist: changing the versioned JSON will **not** add users to an
-existing Keycloak database. To pick up the new accounts in a disposable local
-Compose environment, stop running host services and the k3d cluster if it is
-using ports 80/443, then from `backend/` run:
-
-```bash
-docker compose -f compose.infra.yaml down --volumes
-./scripts/start-infra.sh
-```
-
-This deletes the local Core and Keycloak database volumes, including any
-manually created local users or game data. Do not run it against data you want
-to keep. Existing k3d Keycloak data likewise needs an isolated-lab reset or
-manual account creation; a normal Pod restart will not reimport the realm.
-No running environment is reset merely by changing these fixture files.
+Direct local Maven test profiles can recreate the schema and load
+`import.sql`; hybrid Quarkus dev mode validates the shared k3d schema and does
+not reseed it. Keycloak imports its realm only when it does not already exist:
+editing the versioned JSON does **not** add users to the existing k3d realm.
+Use the disposable k3d E2E namespace to validate new fixtures without touching
+daily accounts. To change daily Core game data, use the explicit Core
+reset/reseed workflow in [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md); this
+does not reset Keycloak. Recreating the daily Keycloak realm requires a
+separately planned, backed-up k3d lab reset or an explicit account update.
+A normal Pod restart will not reimport the realm.

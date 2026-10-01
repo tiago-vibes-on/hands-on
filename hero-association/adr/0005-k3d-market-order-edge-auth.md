@@ -1,7 +1,7 @@
 # ADR 0005: k3d gateway identity handoff for market placement
 
 - Date: 2026-09-28
-- Status: Accepted and implemented in k3d
+- Status: Accepted and implemented in full k3d and hybrid local modes
 
 ## Context
 
@@ -9,12 +9,13 @@ The browser has an opaque BFF session cookie. Envoy Gateway cannot derive a
 trustworthy Keycloak subject from that cookie or from a browser-supplied header.
 [ADR 0002](0002-market-order-rate-limit-in-bff.md) initially placed the
 limit in the BFF. We now want Envoy Gateway to own the limit in k3d without
-changing browser login. Local Traefik development will have no market limit.
+changing browser login. The former separate Traefik development mode was
+retired on 2026-10-01; hybrid mode uses the same Envoy policy.
 
 ## Decision
 
 Keep Keycloak OIDC, access tokens, logout, CSRF, and the browser session in the
-BFF. In k3d only, an exact market-placement HTTPRoute
+BFF. In full k3d and hybrid local modes, an exact market-placement HTTPRoute
 (`POST /api/v1/market/orders`, including a trailing slash) requires Envoy
 Gateway HTTP external authorization. Envoy sends the session cookie and CSRF
 header to the BFF's private `/internal/market-order-identity` endpoint. The
@@ -41,7 +42,7 @@ store OIDC token state only.
   player reliably; the latter is spoofable.
 - Keep the BFF limit as a second layer. This complicates the effective
   request budget and hides gateway failure; this study deployment accepts
-  no market limit in normal local Traefik development.
+  the same market limit in hybrid local development.
 
 ## Consequences and follow-up
 
@@ -59,4 +60,4 @@ The lab now uses three Redis/Sentinel Pods with quorum and Pod anti-affinity;
 a single primary failure can briefly cause fail-closed 500s during election
 and client reconnection. This is not production availability on one computer.
 See [ADR 0006](0006-k3d-gateway-redis-sentinel.md) for the lab HA choice and
-remaining hardening. Local Traefik remains without a market rate limit.
+remaining hardening. Hybrid development now uses this same Envoy limit.

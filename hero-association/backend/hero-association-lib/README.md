@@ -10,7 +10,7 @@ From backend/, test it and install the artifact for standalone Core or
 Expedition builds:
 
 ~~~bash
-./mvnw --batch-mode -pl hero-association-lib -am install
+./mvnw --batch-mode -pl hero-association-lib/combat-engine -am install
 ~~~
 
 For a clean build of a consuming service without a separate install, use

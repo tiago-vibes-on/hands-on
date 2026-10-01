@@ -44,7 +44,7 @@ spec:
             - name: HERO_ASSOCIATION_OTEL_DISABLED
               value: "false"
             - name: HERO_ASSOCIATION_OIDC_ISSUER
-              value: https://auth.k3d.heroassociation.test/realms/hero-association
+              value: https://auth.heroassociation.test/realms/hero-association
           ports:
             - name: http
               containerPort: 8081

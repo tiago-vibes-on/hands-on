@@ -1,0 +1,10 @@
+- op: replace
+  path: /spec/parentRefs
+  value:
+    - name: hero-association
+      namespace: hero-association
+      sectionName: e2e-app
+- op: replace
+  path: /spec/hostnames
+  value:
+    - app.e2e.heroassociation.test

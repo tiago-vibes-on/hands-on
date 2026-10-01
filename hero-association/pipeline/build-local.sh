@@ -48,21 +48,26 @@ for service in "${services[@]}"; do
   image_refs+=("$image_ref")
 done
 
+"$project_dir/deploy/k3d/require-full-k3d.sh"
+if [[ "$component" != frontend ]]; then
+  "$project_dir/deploy/k3d/test-isolated-components.sh" "$component"
+fi
+
 for service in "${services[@]}"; do
   case "$service" in
     core)
       backend_dir="$project_dir/backend"
-      (cd "$backend_dir" && ./mvnw --batch-mode -pl hero-association-core -am package)
+      (cd "$backend_dir" && ./mvnw --batch-mode -pl hero-association-core -am -DskipTests package)
       docker build --file "$backend_dir/hero-association-core/Dockerfile" --tag "hero-association-core:$build_id" "$backend_dir"
       ;;
     bff)
       module_dir="$project_dir/backend/hero-association-$service"
-      (cd "$module_dir" && ./mvnw --batch-mode package)
+      (cd "$module_dir" && ./mvnw --batch-mode -DskipTests package)
       docker build --tag "hero-association-$service:$build_id" "$module_dir"
       ;;
     expedition)
       backend_dir="$project_dir/backend"
-      (cd "$backend_dir" && ./mvnw --batch-mode -pl hero-association-expedition -am package)
+      (cd "$backend_dir" && ./mvnw --batch-mode -pl hero-association-expedition -am -DskipTests package)
       docker build --file "$backend_dir/hero-association-expedition/Dockerfile" --tag "hero-association-expedition:$build_id" "$backend_dir"
       ;;
     frontend)

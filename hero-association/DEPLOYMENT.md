@@ -1,5 +1,11 @@
 # Local Delivery and Scaling Plan
 
+This document is a historical record of the earlier separate Compose and
+k3d rollout. Its Traefik and Compose instructions are retired; do not use
+them for current setup. The active workflow is in
+[Local Development](LOCAL_DEVELOPMENT.md), and remaining verification is in
+[Local Development Environment Consolidation Plan](LOCAL_ENVIRONMENT_PLAN.md).
+
 This checklist tracks the completed Traefik local migration and isolated k3d
 lab. Checkboxes reflect verified work; a manual k3d browser check remains.
 

@@ -10,23 +10,20 @@ private, authenticated, TLS protected, and encrypted at rest.
 
 ## Run locally
 
-Before the first run, create `backend/.env` from `.env.example` and replace all
-placeholders. Start the shared local infrastructure from `backend/`:
+Shared Keycloak, BFF Redis, Core, and Envoy Gateway stay in k3d. From
+`hero-association/deploy/k3d`, run:
 
 ```bash
-./scripts/start-infra.sh
+k3d cluster start hero-association
+./hybrid.sh run bff
 ```
 
-Then, from `backend/`, run the BFF on port `17080`:
-
-```bash
-./scripts/run-bff-dev.sh
-```
-
-The BFF forwards requests to `http://localhost:17081` by default. Its local
-session Redis defaults to `localhost:16379`. Set
-`HERO_ASSOCIATION_BFF_REDIS_HOST_PORT` in `backend/.env` to use another
-address.
+The command stops only the BFF k3d workload, forwards private dependencies,
+and runs BFF in Quarkus dev mode with hot reload on port `17080`.
+The browser stays at `https://heroassociation.test` through Envoy.
+Press Ctrl-C to restore the original BFF replicas, Service route, and HPA.
+The [local development guide](../../LOCAL_DEVELOPMENT.md) covers mixed-service
+mode, ports, secrets, and interruption recovery.
 
 `GET /api/v1/session` is public and returns the signed-in Keycloak identity
 summary plus a CSRF token. `GET /auth/login` redirects to Keycloak, and
@@ -44,15 +41,15 @@ The BFF does not rate-limit `POST /api/v1/market/orders`. In k3d, Envoy
 Gateway limits placement to five attempts per second per authenticated
 Keycloak subject across sessions and gateway replicas. It returns `429` with
 `Retry-After: 1` on excess requests and fails closed if gateway rate-limit
-state is unavailable. Normal local Traefik development has no market limit.
+state is unavailable. Full k3d and hybrid development both use the same
+Envoy market limit.
 BFF Redis continues to store OIDC session state. Core validates order data
 and permissions.
 
 In the k3d lab, BFF exports OTLP traces, HTTP/JVM metrics, and structured
 logs. Its Core proxy creates a client span and forwards W3C trace context
-without putting the server-held access token in telemetry. Normal dev mode
-and normal Docker Compose keep telemetry disabled unless explicitly
-enabled; see
+without putting the server-held access token in telemetry. Standalone
+packaged Compose keeps telemetry disabled unless explicitly enabled; see
 [`../README.md`](../README.md#isolated-k3d-jvm-deployment).
 
 ## Test

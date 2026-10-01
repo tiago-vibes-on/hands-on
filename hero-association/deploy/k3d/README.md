@@ -1,16 +1,20 @@
-# Isolated k3d lab
+# k3d-backed local development
 
-This lab is separate from normal Docker Compose development, the existing WSL
-K3s installation, and the later Floci/AWS lab. The first versioned cluster
-and Istio control-plane configurations are in `cluster.yaml` and
-`istio-operator.yaml`. Application deployment is tracked in
-[`../../DEPLOYMENT.md`](../../DEPLOYMENT.md).
-For private Combat/Expedition staging, see
-[EXPEDITION.md](EXPEDITION.md). For the player-facing Map build, integration,
-and browser test, see [EXPEDITION_INTEGRATION.md](EXPEDITION_INTEGRATION.md).
+This cluster is the active local development environment. Shared infrastructure and
+Envoy Gateway stay in k3d; Core, BFF, Expedition, and frontend can each run
+either in k3d or on WSL with hot reload. See the
+[local development guide](../../LOCAL_DEVELOPMENT.md) for switching and
+recovery. The versioned cluster and Istio control-plane configurations are
+in `cluster.yaml` and `istio-operator.yaml`. Application deployment is
+tracked in [the delivery plan](../../DEPLOYMENT.md). For private
+Combat/Expedition staging, see [EXPEDITION.md](EXPEDITION.md); for the
+player-facing Map journey, see [EXPEDITION_INTEGRATION.md](EXPEDITION_INTEGRATION.md).
 
-For automatic builds and promotions of trusted `main` commits, see the
-[local Jenkins runbook](../../ci/jenkins/README.md).
+For manual service builds and explicit promotion of verified artifacts, see
+the [local Jenkins runbook](../../ci/jenkins/README.md). Core, BFF, and
+Expedition component tests use disposable k3d PostgreSQL, Redis, and RabbitMQ
+through `./test-isolated-components.sh [core|bff|expedition|all]`. Backend
+candidate builds invoke the matching lane before packaging.
 
 ## Requirements
 
@@ -40,7 +44,6 @@ protecting the existing WSL K3s context.
 Run the following from this directory (`hero-association/deploy/k3d`):
 
 ```bash
-(cd ../../backend && docker compose -f compose.infra.yaml down)
 k3d cluster create --config cluster.yaml
 k3d kubeconfig get hero-association > .kubeconfig
 chmod 600 .kubeconfig
@@ -54,51 +57,28 @@ lab with `k3d cluster delete hero-association` permanently removes its own
 cluster data—never use that command to reset normal development.
 
 For an existing cluster created with the old `19080`/`19443` bindings,
-changing `cluster.yaml` does not update its Docker port mappings. Stop local
-Compose, run `k3d cluster delete hero-association`, then repeat the creation
-and deployment steps below. This
-recreates the isolated k3d databases and telemetry; normal Compose volumes
-are untouched.
+changing `cluster.yaml` does not update its Docker port mappings. First
+back up any k3d data you need to keep, then run
+`k3d cluster delete hero-association` and repeat the creation and deployment
+steps below. This deletes and recreates the k3d databases and telemetry.
 
-For everyday switching, run these commands from this directory. Stop any
-host-run Quarkus/Vite processes separately if they are still running. To use
-k3d after local development:
+For daily development, keep this cluster running and use
+[`./hybrid.sh`](../../LOCAL_DEVELOPMENT.md#switch-a-service-to-wsl-hot-reload)
+to move only the service being edited to WSL. Press Ctrl-C to restore its
+Deployment and HPA. Envoy Gateway is the only Hero Association listener on
+ports 80 and 443.
 
-```bash
-(cd ../../backend && docker compose -f compose.infra.yaml down)
-k3d cluster start hero-association
-```
-
-To return to local development without deleting k3d data:
-
-```bash
-k3d cluster stop hero-association
-(cd ../../backend && ./scripts/start-infra.sh)
-```
-
-If the other gateway still owns port 80 or 443, the new environment will not
-start; stop the other environment first. Do not use `down --volumes` to switch.
-
-Keep normal development's hosts entries and add the two k3d names to the
-Windows hosts file (`C:\Windows\System32\drivers\etc\hosts`) or the Linux
-hosts file (`/etc/hosts`). Entries contain names, not URL schemes:
+The Windows hosts file (`C:\\Windows\\System32\\drivers\\etc\\hosts`) or
+Linux `/etc/hosts` needs only these entries:
 
 ```text
 127.0.0.1 heroassociation.test
 127.0.0.1 auth.heroassociation.test
-127.0.0.1 k3d.heroassociation.test
-127.0.0.1 auth.k3d.heroassociation.test
 ```
 
-The k3d URLs are `https://k3d.heroassociation.test` and
-`https://auth.k3d.heroassociation.test`. Both use standard HTTPS port 443.
-Normal Compose development uses the same host ports, so stop its gateway
-before starting k3d; only one environment can own ports 80 and 443 at a time.
-The k3d leaf certificate covers both hosts and is signed by the same local
-development CA.
-Trust the CA in the Windows current-user store as described in the
-[backend README](../../backend/README.md#local-https-gateway); otherwise the
-browser may show a warning. Routes are installed by their deployment scripts.
+Both names use standard HTTPS port 443 and the ignored CA in
+`../../tls/certs/local-ca.crt`. Trust it in the browser's OS as described in
+the [local development guide](../../LOCAL_DEVELOPMENT.md#requirements-and-first-setup).
 
 On WSL with the separate, pre-existing K3s installation, WSL `curl` to
 `127.0.0.1:80` or `:443` may reach K3s's Traefik instead of Docker Desktop's
@@ -112,11 +92,11 @@ gateway, and the namespace is not globally labeled for injection. Core mTLS
 is enforced after probe and identity checks; separate CPU HPAs now manage
 two to eight BFF and Core Pods.
 
-In k3d, Envoy Gateway asks the BFF to validate each market-placement request
-and solely enforces a five-per-second global limit by Keycloak subject.
-The BFF does not rate-limit market orders; local Traefik does not either. See
-[EDGE_AUTH.md](EDGE_AUTH.md) for the policy, gateway Redis dependency,
-tests, and failure behavior. This does not change local Traefik.
+Envoy Gateway asks the BFF to validate each market-placement request and
+solely enforces a five-per-second global limit by Keycloak subject in both
+full k3d and hybrid mode. The BFF itself does not rate-limit market orders.
+See [EDGE_AUTH.md](EDGE_AUTH.md) for the policy, Gateway Redis dependency,
+tests, and failure behavior.
 
 Install the pinned Istio 1.30.5 `istioctl` binary, then install only its
 control plane using the isolated kubeconfig:
@@ -133,7 +113,7 @@ separate ignored leaf certificate, creates a Kubernetes TLS Secret, and
 applies the versioned resources under `../k8s/`:
 
 ```bash
-../../traefik/generate-local-certs.sh
+../../tls/generate-local-certs.sh
 ./install-envoy-gateway.sh
 ./install-gateway.sh
 KUBECONFIG="$PWD/.kubeconfig" kubectl -n hero-association wait --for=condition=Programmed gateway/hero-association --timeout=150s
@@ -150,7 +130,7 @@ check the response, and remove them immediately:
 ```bash
 KUBECONFIG="$PWD/.kubeconfig" kubectl apply -f gateway-smoke.yaml
 KUBECONFIG="$PWD/.kubeconfig" kubectl -n hero-association rollout status deploy/gateway-smoke
-curl --cacert ../../traefik/certs/local-ca.crt --resolve 'k3d.heroassociation.test:443:127.0.0.1' https://k3d.heroassociation.test/__gateway_smoke
+curl --cacert ../../tls/certs/local-ca.crt --resolve 'heroassociation.test:443:127.0.0.1' https://heroassociation.test/__gateway_smoke
 KUBECONFIG="$PWD/.kubeconfig" kubectl delete -f gateway-smoke.yaml
 ```
 
@@ -266,21 +246,11 @@ default; see the backend README for opt-in instructions.
 
 ## Build the application locally
 
-The normal hot-reload environment remains separate from this k3d lab. Follow
-[`../../backend/README.md`](../../backend/README.md#local-development) for
-PostgreSQL, Redis, Keycloak, Traefik, and the two Quarkus dev processes; follow
-[`../../frontend/README.md`](../../frontend/README.md#run-locally) for Vite.
-To test and create local production-style build artifacts, run from the
-`hero-association` directory:
-
-```bash
-cd backend && ./mvnw -pl hero-association-core -am package
-cd hero-association-bff && ./mvnw package
-cd ../../frontend && npm ci && npm run lint && npm run build
-```
-
-The two Maven packages run service tests, including Core's Testcontainers
-checks, so Docker must be available.
+Hot reload uses this same cluster. Follow the
+[local development guide](../../LOCAL_DEVELOPMENT.md) for the reversible
+Core, BFF, Expedition, and Vite switches. To test and create production-style
+build artifacts locally, run the service-specific Maven or npm checks without
+switching the browser gateway. Docker is required for Testcontainers checks.
 
 ## Promote a verified archive
 
@@ -295,7 +265,7 @@ gates, run `../../pipeline/run-k3d-pipeline.sh` from this directory. It
 creates a new archive and prints its path. The commands below promote an archive that has
 already passed the separate E2E gate.
 
-After `pipeline/build-local.sh all` and the archive-backed browser E2E gate
+After `pipeline/build-local.sh all` and the disposable k3d archive gate
 have passed, deploy those exact JVM and frontend images without rebuilding:
 
 ```bash
@@ -309,15 +279,15 @@ Run this from `hero-association/pipeline` with Docker, Node.js 24, `kubectl`,
 and the running k3d cluster available. The command uses only
 `deploy/k3d/.kubeconfig`, requires context `k3d-hero-association`, and
 uses the cached `.tools/k3d` or `K3D_BIN`. It checks the archive checksum,
-manifest image IDs, and matching `result: passed` E2E record before loading
-images into local Docker or importing them into k3d. It updates only the three
+manifest image IDs, and matching `result: passed` k3d E2E record before loading
+images into local Docker or importing them into k3d. It updates the four
 application Deployment image fields,
 waits for each rollout, and compares every running application Pod's image ID
 with the verified archive's platform image before running `npm run test:k3d`
 and `npm run test:market:k6`. If rollout or either suite fails, it restores the
 previous image references and reports any rollback failure. The default
 command does not reset Core or Keycloak databases, alter HPAs or the Gateway,
-or touch normal Compose development. The explicit `--reset-core-db` command
+or touch the candidate E2E namespace. The explicit `--reset-core-db` command
 requires a complete E2E-verified archive. It verifies the isolated Core
 database, stops Core and its HPA, and recreates only Core data with a Job
 running the **same archived Core image**. It then resumes Core, restores its
@@ -407,11 +377,11 @@ Check the Pods and browser-facing routes:
 
 ```bash
 KUBECONFIG="$PWD/.kubeconfig" kubectl -n hero-association get pods,svc,httproute
-curl --cacert ../../traefik/certs/local-ca.crt --resolve 'k3d.heroassociation.test:443:127.0.0.1' https://k3d.heroassociation.test/api/v1/session
-curl --cacert ../../traefik/certs/local-ca.crt --resolve 'auth.k3d.heroassociation.test:443:127.0.0.1' https://auth.k3d.heroassociation.test/realms/hero-association
+curl --cacert ../../tls/certs/local-ca.crt --resolve 'heroassociation.test:443:127.0.0.1' https://heroassociation.test/api/v1/session
+curl --cacert ../../tls/certs/local-ca.crt --resolve 'auth.heroassociation.test:443:127.0.0.1' https://auth.heroassociation.test/realms/hero-association
 ```
 
-The frontend is served at `https://k3d.heroassociation.test`. The
+The frontend is served at `https://heroassociation.test`. The
 imported test users include `user1@mail.com` / `user1`, `user2@mail.com` /
 `user2`, and `manager1@mail.com` through `manager10@mail.com` with matching
 `managerN` passwords, for this disposable lab only. See the

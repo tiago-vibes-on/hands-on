@@ -1,7 +1,13 @@
 # ADR 0001: Envoy Gateway for k3d ingress
 
 - Date: 2026-09-27
-- Status: Accepted for k3d ingress; market limiting covered by ADR 0005
+- Status: Accepted for k3d ingress; local Compose edge amended 2026-10-01
+
+The original decision below retained Traefik for a separate Compose
+workflow. On 2026-10-01 that workflow was retired after the disposable k3d
+integration and E2E gates passed. Envoy Gateway now serves both full k3d and
+hybrid local development; see
+[the consolidation plan](../LOCAL_ENVIRONMENT_PLAN.md).
 
 ## Context
 

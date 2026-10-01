@@ -15,15 +15,14 @@ Twelve service jobs share the WSL agent's single executor:
 | Expedition | `hero-association-expedition-build-worktree` | `hero-association-expedition-build-main` | `hero-association-expedition-deploy-local` |
 | Frontend | `hero-association-frontend-build-worktree` | `hero-association-frontend-build-main` | `hero-association-frontend-deploy-local` |
 
-Each build creates one candidate image and a checksummed four-image archive
-using the other three images currently running in k3d. Browser E2E tests the
-exact combination. A worktree build never deploys automatically; its deploy
-job is started manually with the verified artifact ID. Each successful `main`
-build triggers its corresponding deploy job. A Jenkins lock serializes the
-complete `main` build-and-deploy pairs across all four services, so a
-multi-service commit builds each candidate against the last deployed baseline.
-After the first successful `main` run, a job skips commits that change
-neither its service nor shared build, E2E, Jenkins, or k3d files.
+Each build tests its backend service against disposable k3d dependencies
+(frontend builds run lint and build), then creates one candidate image and a
+checksummed four-image archive using the other three images currently running
+in k3d. Disposable k3d E2E tests the exact combination without changing daily
+data. Both worktree and trusted-`main` builds are started manually and never deploy.
+Each deploy job is started separately with a verified artifact ID. A Jenkins
+lock serializes trusted-`main` builds; a manual build of any service verifies
+its candidate against the images currently deployed in k3d.
 Deployment never rebuilds an image and rejects a baseline that changed after the build. The latest
 successful deploy of a service wins. The two old combined jobs are disabled
 without deleting their history.
@@ -46,7 +45,10 @@ not add a registry.
 - The readable, isolated `deploy/k3d/.kubeconfig` with current context
   `k3d-hero-association`. The agent uses the original ignored file from the WSL project through
   `HERO_ASSOCIATION_K3D_KUBECONFIG`; it never copies the credential into the
-  Jenkins workspace.
+  Jenkins workspace. The disposable E2E runner likewise reads the original
+  ignored `tls/certs/local-ca.crt` through
+  `HERO_ASSOCIATION_LOCAL_CA_CERTIFICATE`; the snapshot does not contain the
+  local CA certificate or its private key.
 - For the `main` jobs, a GitHub `main` commit containing these service scripts.
   They check out `https://github.com/tiago-vibes-on/hands-on.git` rather than
   uncommitted local changes.
@@ -56,13 +58,11 @@ not add a registry.
 The root `.gitattributes` pins the extensionless Maven wrappers to LF. Keep
 that rule: CRLF checkout makes their Linux shebangs unexecutable.
 
-The Jenkins controller can start while k3d is stopped, but deployment requires
-the cluster. WSL and Docker must be running for builds. After they restart,
-polling checks the latest `main` commit; a stopped local machine cannot run a
-pipeline. If a commit is attempted while k3d is unavailable, preflight fails.
-SCM polling does not retry that same failed revision merely because k3d later
-starts; use **Build Now** once or push a new `main` commit. Normal development
-remains independent.
+The Jenkins controller can start while k3d is stopped, but builds and deploys
+require all four application services restored to full k3d mode. WSL and
+Docker must be running for builds. No job polls Git
+or reacts to a push; start a build or deploy explicitly when the cluster is
+ready. Normal hot-reload development remains independent.
 
 ## One-time setup
 
@@ -97,9 +97,9 @@ the generated password is in the ignored `.env` file:
 sed -n 's/^JENKINS_ADMIN_PASSWORD=//p' .env
 ```
 
-Worktree builds are available immediately. After this configuration reaches
-GitHub `main`, its four build jobs poll that branch; a successful build
-automatically invokes a separate deploy-local job.
+Worktree builds are available immediately. The four trusted-`main` jobs also
+run only when selected manually; each checks out GitHub `main` at build time.
+A successful build records an artifact ID but does not deploy it.
 
 When `jenkins.yaml` changes locally, wait for running jobs to finish, then
 run `docker compose -f compose.yaml restart jenkins` in this directory to
@@ -113,9 +113,10 @@ single agent executor allows one build or deployment at a time, and the Jenkins 
 Open <http://localhost:15180> and select the matching
 `hero-association-<service>-build-worktree` job, then choose **Build Now**.
 It snapshots tracked, staged, unstaged, and non-ignored new files before
-building only that service. Jenkins runs its tests or lint, builds the image,
+building only that service. Jenkins runs the matching disposable k3d component
+gate for a backend service, or frontend lint and build, then builds the image,
 assembles a four-image archive with the current k3d Core/BFF/Expedition/frontend
-baseline, and runs the archive-backed browser suite. The full archive
+baseline, and runs the disposable k3d archive suite. The full archive
 is retained under the WSL agent work directory; the build record includes
 `artifact-id.txt`, the manifest, and the E2E result. If you edit source while
 a snapshot is being taken, rerun the build. Ignored files and credentials
@@ -128,11 +129,9 @@ archive, imports and rolls only the selected service, verifies all running
 Pod image digests, then runs the k3d browser, Map, and market k6 suites. If the
 baseline has changed, build again before deploying. If a post-rollout gate
 fails, the selected service image is restored. No deploy job rebuilds an
-image. The `main` build jobs call these same deploy jobs automatically after
-a clean-checkout build passes. The controller uses the Lockable Resources
-plugin to hold `hero-association-main-promotion` across each build and its
-downstream deploy; the agent executor is released while waiting for the
-deploy job, avoiding a one-executor deadlock.
+image. Trusted-`main` builds use the same explicit deploy jobs as worktree
+builds. The controller uses the Lockable Resources plugin to serialize
+trusted-`main` builds; deployment remains a separate manual action.
 
 The retained archives consume disk. Do not delete an archive before its
 deployment is finished. These are local study artifacts, not releases.

@@ -21,8 +21,8 @@ The backend is split into independently buildable services:
 - `backend/hero-association-bff`: the public API boundary on port `8080`; it
   protects browser requests with a session and CSRF, then forwards its
   server-held Keycloak access token with the current `/api/...` contract. In
-  normal Compose development, Traefik is its public ingress. In k3d, Envoy
-  Gateway is the public ingress and externally authorizes market placement
+  full k3d and hybrid development, Envoy Gateway is its public ingress and
+  externally authorizes market placement
   against the BFF before enforcing the sole per-user gateway limit.
 - `backend/hero-association-core`: the private game-state service on port
   `8081`; it validates the access token's issuer, signature, expiry, subject,
@@ -45,28 +45,32 @@ status and response body for the browser.
 
 ## Local build validation
 
-The local pipeline packages Core, BFF, and frontend images in one checksummed
-archive. Before that archive is eligible for deployment, the isolated browser
-E2E suite must load those exact images without rebuilding them and verify the
-running container image IDs against the archive manifest. Only a complete
-successful run records passing verification beside the archive. Source-building
-development E2E remains available separately. Verified archives can be
-promoted to k3d. A one-command local pipeline tests rollback logic before
-running the build, archive-backed E2E gate, and k3d promotion in that order.
-It stops before deployment if verification fails. K3d promotion checks the
-archive and its passing E2E record before loading images into local Docker or
-importing them into the cluster. Only after Pod-image verification, k3d browser
+The local pipeline tests Core, BFF, and Expedition against disposable k3d
+PostgreSQL, Redis, and RabbitMQ before packaging their JVM images with
+`-DskipTests`; frontend lint and build stay local. The images are saved in one
+checksummed archive. Candidate builds require all four daily application
+services in full k3d mode and never promote them automatically. Direct Maven
+builds remain independent and may use local Dev Services or Testcontainers.
+Before deployment, the disposable k3d E2E gate must run those exact images,
+verify every application Pod image ID against the archive, and pass browser,
+session, isolated Core-cache fallback, BFF outage, and market k6 checks through
+Envoy. Only after namespace cleanup does it write matching passing k3d
+verification beside the archive. The optional Compose test record does not
+authorize deployment. A one-command manual pipeline tests rollback logic,
+builds, runs this archive gate, and promotes to k3d in that order. It stops
+before deployment if verification fails. K3d promotion validates the
+passing record before loading images or importing them into the cluster. Only after Pod-image verification, k3d browser
 E2E, and market k6 pass does promotion write a local result. See
 [the pipeline guide](pipeline/README.md).
 
-Jenkins has independent Core, BFF, and frontend build jobs for an uncommitted
-worktree and trusted `main`, plus one deploy-local job per service. A service
-build tests its new image together with the other two currently deployed
-k3d images in one checksummed archive. Worktree builds do not deploy
-automatically; successful `main` builds trigger their deploy job. A shared Jenkins lock
-serializes complete `main` build-and-deploy pairs across services. Deployment
-rejects a changed baseline, promotes only the candidate image, verifies all
-three running Pod digests, runs browser E2E and market k6, and rolls back the
+Jenkins has independent Core, BFF, Expedition, and frontend build jobs for an
+uncommitted worktree and trusted `main`, plus one deploy-local job per service.
+A service build tests its new image together with the other three currently
+deployed k3d images in one checksummed archive. Both build modes are manual;
+no Git polling or successful build automatically deploys. A shared Jenkins
+lock serializes trusted-`main` builds. An explicit deploy job rejects a
+changed baseline, promotes only the candidate image, verifies all four
+running Pod digests, runs browser E2E and market k6, and rolls back the
 target service if a post-rollout gate fails. The latest successful deployment
 of a service wins; this local lab does not coordinate cross-service releases.
 
@@ -152,8 +156,7 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
   produce fail-closed `500`s during election; a complete Redis outage keeps
   placement unavailable until recovery. Envoy never forwards those failures.
   The BFF does not apply a second market limit.
-  Normal local Traefik development has no market rate limit. Reads and
-  cancellations are not limited.
+  Reads and cancellations are not limited.
 - `DELETE /api/v1/market/orders/{orderId}` cancels an open order only for
   its personal Manager owner or a leader of its agency owner. It releases the
   remaining reservation to that same owner's wallet or inventory and returns
@@ -359,8 +362,7 @@ IDs must not be added for entities or exposed through the API.
   archive, explicit reset-aware promotion verifies the full archive and E2E
   result, stops Core and its HPA, bootstraps only the k3d Core database using
   the exact archived Core image, restores Core and its HPA, then runs the normal
-  Pod-image, browser, and k6 gates. Keycloak, Redis, and normal Compose data
-  remain untouched. Because a data reset is not reversible by restoring an
+  Pod-image, browser, and k6 gates. Keycloak and Redis data remain untouched. Because a data reset is not reversible by restoring an
   older image, failures after reset do not automatically roll back images.
   The seed contains
   local Accounts and Managers for user1, user2, and manager1 through
@@ -387,24 +389,43 @@ IDs must not be added for entities or exposed through the API.
   The product is in an early stage, so local and pre-production schema and
   seed-data changes may be applied directly by resetting and recreating data;
   they do not require backwards compatibility before Flyway is introduced.
-- Local development runs the `postgres-core`, `postgres-keycloak`,
-  `redis-bff`, and `redis-core` Docker Compose services plus Keycloak and
-  Traefik through `backend/compose.infra.yaml`. Game Core runs directly on
-  the host at port `17081`, the BFF at `17080`, and Vite at `15172`. Core
-  connects to PostgreSQL at `localhost:15431` and its disposable Creature
-  cache at `localhost:16380`; BFF sessions use Redis at `localhost:16379`.
-  Quarkus Dev Services is disabled for Core development but available to tests.
-- Traefik terminates local HTTPS at `heroassociation.test` and
-  `auth.heroassociation.test`, proxying the first hostname to host-run Vite and
-  BFF routes and the second to Keycloak. `backend/scripts/start-infra.sh`
-  resolves WSL's current address before it runs the one-line Compose command,
-  which keeps this secure browser path working after WSL restarts.
-- Keycloak also remains available locally at `http://localhost:17180` with a
-  dedicated PostgreSQL database and imports the versioned `hero-association`
-  realm. Compose requires an ignored `backend/.env` created from
-  `backend/.env.example`; it contains local bootstrap, client-secret,
-  session-state, and CSRF signing values. `backend/compose.traefik.yaml` remains
-  an optional all-container packaged-application HTTPS overlay.
+- The active local environment is the k3d cluster. Envoy Gateway serves
+  `heroassociation.test` and `auth.heroassociation.test` in full k3d and
+  hybrid mode; there is no separate daily Traefik gateway. Core and Keycloak
+  PostgreSQL, BFF/Core/Expedition Redis, RabbitMQ, Keycloak, and observability
+  stay in k3d. Core, BFF, Expedition, and frontend can independently use
+  k3d Pods or private WSL hot-reload processes behind their stable Services.
+  A selected service's k3d Pods stop before its host process starts, and its
+  previous replica count, route, and HPA are restored on exit. The first
+  Core-only and individual-service hybrid browser checks passed; Map,
+  WebSocket, and market policy also passed. See
+  [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md).
+- Core Quarkus dev mode validates the existing k3d PostgreSQL schema,
+  disables SQL seed loading and bootstrap, and uses a distinct loopback
+  port-forward. Only explicit reset/reseed commands discard disposable Core
+  data. BFF and Expedition take Keycloak and service credentials from k3d
+  Secrets at runtime, without committing them. The hybrid launcher disables
+  Quarkus Dev Services for host-run backends; telemetry still goes to the
+  shared k3d collector instead of starting another LGTM container.
+- The active candidate and browser gate use a disposable k3d namespace.
+  The old Compose/Traefik browser runner is retired. Backend candidate
+  component tests use private k3d dependencies instead of local Dev Services
+  or Testcontainers. Packaged standalone Compose JVM/native workflows remain
+  optional, not the default local development route.
+- The shared k3d Envoy Gateway has restricted test-only HTTPS listeners
+  for `app.e2e.heroassociation.test` and `auth.e2e.heroassociation.test`.
+  Only labeled E2E namespaces may attach Routes to them. The test leaf
+  certificate uses the ignored local CA; hostnames resolve only inside test
+  runners. A disposable full-stack runner creates independent databases,
+  Redis, RabbitMQ, Keycloak, and application Pods. It runs ten browser
+  journeys and k6 market thresholds with 30-second test tokens and a
+  two-second BFF refresh skew. A saved session survives replacement of both
+  disposable BFF replicas. An outage of only the disposable BFF Redis
+  denies that session; fresh login succeeds after Redis recovery. Source
+  mode uses current daily image refs; archive mode checks all running
+  application Pod image IDs against the exact archive. Only after namespace
+  cleanup does it write the required k3d verification record.
+
 - The local Keycloak realm uses the versioned `hero-association` CSS-only login
   theme. It extends Keycloak's `keycloak.v2` theme and matches the frontend's
   dark, gold-accented visual language without replacing Keycloak templates. It
@@ -417,7 +438,10 @@ IDs must not be added for entities or exposed through the API.
   browser sessions use an `HttpOnly`, `SameSite` cookie. Production Redis must
   be private, authenticated, TLS protected, and encrypted at rest. `/api/v1/session` is
   public, but all proxied game routes require a BFF session and state-changing
-  requests require the signed double-submit CSRF token.
+  requests require the signed double-submit CSRF token. If a session cookie
+  references missing or expired Redis token state, the BFF rejects that login
+  as unauthenticated rather than returning a server error. A Redis connection
+  failure still fails closed and is not treated as an ordinary expired login.
 - Signed-out frontend users can select **Sign in** or **Create account**. The
   latter starts Keycloak's native registration page through the protected BFF
   OIDC route, with Quarkus forwarding only the standard `prompt=create` hint
@@ -449,13 +473,11 @@ IDs must not be added for entities or exposed through the API.
   seeded Manager names are `User 1` and `User 2`, so local sessions and game
   data are immediately distinguishable. They must never be used outside local
   development.
-- Docker Compose runs Core and Keycloak PostgreSQL services, separate Core
-  cache and BFF session Redis services, Game Core, and
-  the BFF using JVM packages by default. Only the BFF publishes port `17080`;
-  Core remains on the private Compose network. Keycloak publishes port `17180`
-  for its local login and admin pages. The optional Traefik overlay instead
-  publishes only ports `80` and `443`; BFF, Keycloak, Core, PostgreSQL, and Redis stay
-  private while the local development CA provides HTTPS for the `.test` domains.
+- Standalone Docker Compose runs Core and Keycloak PostgreSQL, separate Core
+  cache and BFF session Redis, Game Core, and BFF using JVM packages by
+  default. Core remains on the private Compose network; BFF and Keycloak
+  publish development HTTP ports `17080` and `17180`. It has no public HTTPS
+  gateway. Integrated browser development uses the k3d Envoy Gateway.
 - Each service has an independent Maven fast-jar build. Native compilation is
   currently an opt-in Game Core build with `-Dnative`.
 - Game Core's `Dockerfile.native` provides a `native-runtime` target that
@@ -516,10 +538,10 @@ IDs must not be added for entities or exposed through the API.
   for the first Troll Field, active-run recovery, live visuals, and explicit
   Continue/Return. It is enabled in the isolated k3d frontend build; both settlement consumers
   are enabled by k3d integration. Core Quest combat remains available for
-  players. An isolated, opt-in Playwright Compose overlay now verifies Map
-  entry, live and reconnected WebSocket visuals, explicit Continue, deferred
-  Return with no viewer, and Core settlement; it does not alter the normal
-  local player path. See [Expedition settlement](EXPEDITION_SETTLEMENT.md).
+  players. The disposable k3d Playwright gate verifies Map entry, live and
+  reconnected WebSocket visuals, explicit Continue, deferred Return with no
+  viewer, and Core settlement without changing daily game data. See
+  [Expedition settlement](EXPEDITION_SETTLEMENT.md).
   Broker setup creates settlement and acknowledgment topology before either
   service starts. Core and Expedition use separate accounts with no configure
   permission: each publishes only to its own exchange and reads only its queue.
@@ -642,14 +664,14 @@ cd hero-association/backend/hero-association-bff
 
 ## Isolated k3d backend lab
 
-The k3d environment is independent of normal Compose development and uses
-Envoy Gateway for browser ingress. Its backend runs JVM BFF and Core images
+The active local environment uses k3d Envoy Gateway in full-cluster and
+hybrid hot-reload modes. Its backend runs JVM BFF and Core images
 with private ClusterIP Services and opt-in Istio sidecars. Separate PostgreSQL
 databases serve Core and Keycloak, and a
 separate Redis instance stores BFF sessions. Generated lab-only credentials
-and a k3d-only Keycloak realm register callbacks and issuer URLs on standard
-HTTPS port 443. Normal Compose and k3d both bind host ports 80 and 443, so
-only one gateway may run at a time; their realms and data remain separate.
+and a local Keycloak realm register callbacks and issuer URLs on standard
+HTTPS port 443. Standalone Compose JVM/native runs use separate development
+ports and do not provide a second public gateway.
 Kubernetes startup, readiness, and liveness probes use Quarkus SmallRye Health.
 BFF and Core use rolling updates and separate CPU-based `autoscaling/v2` HPAs with
 two to eight replicas. The HPAs use Pod CPU, including Istio sidecar overhead,
@@ -659,11 +681,11 @@ explicit Core database reset removes the Core HPA before stopping Core Pods.
 The k3d frontend is a separate non-meshed Nginx Pod with a private Service;
 Envoy Gateway routes
 its root path to the frontend while `/api` and `/auth` reach BFF. The normal
-Vite/Compose development environment is unchanged. An isolated Playwright
-suite verifies seeded-user login, logout, login again, account identity,
-repeated authenticated agency-state reads, and rejection of cross-agency
-reads through k3d HTTPS. It does not reset cluster data; Windows browser
-certificate trust remains a manual setup step.
+Hybrid Vite and Quarkus dev processes reuse these same Envoy routes. The
+daily seeded-user smoke suite checks authentication and agency access; the
+full disposable k3d suite additionally covers registration, market,
+Expedition, sessions, and outages without resetting daily data. Windows
+browser certificate trust remains a one-time setup step.
 
 Core's k3d `PeerAuthentication` is STRICT and workload-scoped; BFF-to-Core
 traffic is reported by Istio as `mutual_tls`, while a plaintext request from
@@ -706,10 +728,10 @@ traffic and scaling dashboards, retains Prometheus, Loki, and
 Tempo data for up to 24 hours, and uses ephemeral storage that is cleared
 when the observability Pod is replaced.
 
-A build-once local delivery lane packages tested Core and BFF JVM images
-plus the frontend image in a checksummed archive. The archive-backed browser E2E
-suite records a matching passing result before k3d promotion is allowed.
-Normal promotion imports those exact images, updates only the three k3d
+A build-once local delivery lane packages tested Core, BFF, and Expedition
+JVM images plus the frontend image in a checksummed archive. The disposable
+k3d archive gate records a matching passing result before promotion is
+allowed. Normal promotion imports those exact images, updates the four k3d
 application Deployments, waits for rollouts, and runs k3d browser tests. A
 failed normal rollout or test restores prior image references. An explicit
 `--reset-core-db` promotion requires a complete verified archive, resets

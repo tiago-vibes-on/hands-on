@@ -1,0 +1,13 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: bff
+  namespace: hero-association
+$patch: delete
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: core
+  namespace: hero-association
+$patch: delete

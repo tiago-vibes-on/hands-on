@@ -1,7 +1,6 @@
 # Local AWS exploration with Floci
 
-Floci is an optional local AWS emulator. It does not replace the normal
-development environment in `backend/compose.infra.yaml`, and the application
+Floci is an optional local AWS emulator. It does not replace the active k3d and hybrid development environment, and the application
 does not connect to it yet. It can store the exact E2E-verified image archive
 from the local build pipeline in its emulated S3; this is artifact promotion,
 not an application deployment. Run these commands from `hero-association/` in WSL;
@@ -14,16 +13,16 @@ docker compose -f compose.floci.yaml ps
 curl --fail http://localhost:4566/_localstack/health
 ```
 
-After `pipeline/build-local.sh all` and the archive-backed E2E gate have
-passed, publish the same archive to Floci S3 without building again:
+After `pipeline/build-local.sh all` and the disposable k3d archive E2E gate
+have passed, publish the same archive to Floci S3 without building again:
 
 ```bash
 node pipeline/publish-floci.mjs pipeline/artifacts/<build-id>/all
 ```
 
 The script accepts only the loopback Floci endpoint, checks the archive and
-its passing E2E record, uploads `images.tar`, checksum, manifest, and E2E
-evidence under `s3://hero-association-builds/builds/<build-id>/all/`, then
+its passing `k3d-e2e-verification.json`, uploads `images.tar`, checksum,
+manifest, and that E2E evidence under `s3://hero-association-builds/builds/<build-id>/all/`, then
 downloads each object to verify its SHA-256. Re-running it verifies identical
 existing objects; it refuses to overwrite a different object at the same key.
 It needs Node.js 24, Docker, and the running Floci container, but not the AWS

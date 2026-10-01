@@ -1,8 +1,11 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
-const [source, target] = process.argv.slice(2);
-if (!source || !target) {
-  throw new Error('Usage: node generate-realm.mjs SOURCE TARGET');
+const [source, target, origin = 'https://heroassociation.test'] = process.argv.slice(2);
+if (!source || !target || process.argv.length > 5) {
+  throw new Error('Usage: node generate-realm.mjs SOURCE TARGET [HTTPS_ORIGIN]');
+}
+if (new URL(origin).origin !== origin || new URL(origin).protocol !== 'https:') {
+  throw new Error('Realm callback origin must be an HTTPS origin without a path');
 }
 
 const realm = JSON.parse(readFileSync(source, 'utf8'));
@@ -11,7 +14,6 @@ if (!bff) {
   throw new Error('The source realm has no hero-association-bff client');
 }
 
-const origin = 'https://k3d.heroassociation.test';
 bff.redirectUris = [`${origin}/auth/callback`, `${origin}/auth/post-logout`];
 bff.webOrigins = [origin];
 writeFileSync(target, `${JSON.stringify(realm, null, 2)}\n`, { mode: 0o600 });

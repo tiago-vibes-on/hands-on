@@ -40,7 +40,7 @@ pipeline {
             script {
                 if (env.HERO_ASSOCIATION_BUILD_ID) {
                     archiveArtifacts(
-                        artifacts: "hero-association/pipeline/artifacts/${env.HERO_ASSOCIATION_BUILD_ID}/all/manifest.txt,hero-association/pipeline/artifacts/${env.HERO_ASSOCIATION_BUILD_ID}/all/e2e-verification.json,hero-association/pipeline/artifacts/${env.HERO_ASSOCIATION_BUILD_ID}/all/k3d-promotion.json",
+                        artifacts: "hero-association/pipeline/artifacts/${env.HERO_ASSOCIATION_BUILD_ID}/all/manifest.txt,hero-association/pipeline/artifacts/${env.HERO_ASSOCIATION_BUILD_ID}/all/k3d-e2e-verification.json,hero-association/pipeline/artifacts/${env.HERO_ASSOCIATION_BUILD_ID}/all/k3d-promotion.json",
                         allowEmptyArchive: true
                     )
                 }

@@ -35,7 +35,10 @@ async function liveImage(component) {
     '--kubeconfig', kubeconfig, '-n', 'hero-association', 'get', `deployment/${component}`, '-o', 'json',
   ])
   const deployment = JSON.parse(raw)
-  const replicas = deployment.spec.replicas || 1
+  const replicas = deployment.spec.replicas ?? 0
+  if (replicas < 1) {
+    throw new Error(`Baseline ${component} is in hybrid mode; restore full k3d before building a candidate`)
+  }
   if (deployment.status.observedGeneration < deployment.metadata.generation ||
       deployment.status.readyReplicas !== replicas || deployment.status.updatedReplicas !== replicas) {
     throw new Error(`Baseline deployment ${component} is not healthy`)

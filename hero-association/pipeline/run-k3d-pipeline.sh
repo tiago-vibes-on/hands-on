@@ -36,7 +36,7 @@ if [[ "$context" != 'k3d-hero-association' ]]; then
   printf 'Refusing to use Kubernetes context: %s\n' "$context" >&2
   exit 1
 fi
-kubectl --kubeconfig "$kubeconfig" -n hero-association get deployment core bff expedition frontend >/dev/null
+HERO_ASSOCIATION_K3D_KUBECONFIG="$kubeconfig" "$project_dir/deploy/k3d/require-full-k3d.sh"
 
 stage='k3d rollback regression tests'
 node --test "$script_dir/rollback-k3d.test.mjs" "$script_dir/core-bootstrap-job.test.mjs"
@@ -45,12 +45,15 @@ stage='build and archive'
 printf 'Building Core, BFF, Expedition, and frontend as %s\n' "$build_id"
 "$script_dir/build-local.sh" all "$build_id"
 
-stage='archive-backed browser E2E'
+stage='disposable k3d archive E2E'
 (
   cd "$project_dir/e2e"
   npm ci
-  npm run test:archive -- "$artifact_dir"
 )
+if [[ -z "${HERO_ASSOCIATION_LOCAL_CA_CERTIFICATE:-}" && -n "${HERO_ASSOCIATION_SOURCE_REPO:-}" ]]; then
+  export HERO_ASSOCIATION_LOCAL_CA_CERTIFICATE="$HERO_ASSOCIATION_SOURCE_REPO/hero-association/tls/certs/local-ca.crt"
+fi
+"$project_dir/deploy/k3d/test-isolated-stack.sh" "$artifact_dir"
 
 stage='k3d promotion, browser and k6 checks'
 if [[ "$reset_core_db" == true ]]; then

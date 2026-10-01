@@ -1,7 +1,7 @@
 # Hero Association Backend Services
 
-Core and BFF run in all environments. Expedition powers the k3d Map and is
-opt-in for ordinary local development:
+Core and BFF run in full k3d and hybrid mode. Expedition powers the Map in
+both modes:
 
 ```text
 browser -> hero-association-bff -> hero-association-core -> Core PostgreSQL
@@ -41,9 +41,8 @@ set `HERO_ASSOCIATION_EXPEDITION_WEBSOCKET_ENABLED=true` in BFF,
 same uncommitted 32-character-or-longer
 `HERO_ASSOCIATION_EXPEDITION_BFF_SERVICE_KEY` in both services; enable the
 Expedition player API deliberately as well. An opt-in frontend Map page
-now uses these commands and the socket. The isolated local and visible
-k3d journeys passed. Map is player-facing in k3d; ordinary local development
-keeps it opt-in, and Core Quest combat remains live.
+now uses these commands and the socket. The Map journey passed in full k3d
+and hybrid mode; Core Quest combat remains live.
 Agency-state Hero responses include cumulative `experience`; a successful
 fight can increase XP without immediately increasing a Hero level.
 The private settlement handoff is disabled by default. See the [Expedition README](hero-association-expedition/README.md)
@@ -51,15 +50,13 @@ and [settlement handoff](../EXPEDITION_SETTLEMENT.md). To exercise internal
 admission, set the same uncommitted
 `HERO_ASSOCIATION_EXPEDITION_CORE_SERVICE_KEY` in Core and Expedition.
 
-For the opt-in local browser journey, run `npm run test:expedition` from
-[`../e2e`](../e2e). It builds a disposable Expedition image and enables
-Map, worker, socket, and settlement only in that isolated Compose project;
-normal development remains unchanged.
+The authenticated Expedition browser journey runs in the disposable k3d
+full-stack gate; see the [E2E runbook](../e2e/README.md). It verifies Map,
+WebSocket reconnect, and settlement without changing daily game data.
 
-For optional local Expedition dependencies, run
-`docker compose -f compose.expedition.yaml up --detach redis-expedition rabbitmq-expedition-setup`
-from `backend/`. The setup job owns durable RabbitMQ topology; Core and
-Expedition use distinct least-privilege service accounts. See the
+Redis and RabbitMQ for daily Expedition development stay in k3d. The setup
+Job owns durable RabbitMQ topology; Core and Expedition use distinct
+least-privilege service accounts. See the
 [Expedition README](hero-association-expedition/README.md) for credentials.
 
 The [k3d Expedition runbook](../deploy/k3d/EXPEDITION.md) covers private staging,
@@ -68,7 +65,7 @@ the opt-in authenticated k3d path. Normal backend deployment does not
 enable Expedition; rerun the integration command after it. The k3d frontend
 build enables Map by default.
 
-For the routine four-service build and k3d promotion, run
+For an explicitly requested four-service build and k3d promotion, run
 `../pipeline/run-k3d-pipeline.sh` as described in the
 [pipeline README](../pipeline/README.md). It archives Core, BFF, Expedition,
 and a Map-enabled frontend, then verifies browser, Map, and market paths.
@@ -79,7 +76,7 @@ infrastructure dependencies. From `backend/`, a clean build runs
 `./mvnw -pl hero-association-core -am package` or
 `./mvnw -pl hero-association-expedition -am package`. For direct module commands
 (including `quarkus:dev`), first install the library with
-`./mvnw -pl hero-association-lib -am install`. See the
+`./mvnw -pl hero-association-lib/combat-engine -am install`. See the
 [library README](hero-association-lib/README.md).
 
 Existing local databases may retain the retired `combat_battle_registration`
@@ -87,7 +84,9 @@ and `combat_progression_inbox` tables. They are not used by the new code;
 an explicit disposable Core schema reset after promoting the updated image
 removes them. Do not drop these tables under an older Core Pod.
 
-The BFF keeps Keycloak token state in Redis. See
+The BFF keeps Keycloak token state in Redis. The BFF pins Quarkus 3.40.1
+to reject missing or expired token-state keys as unauthenticated; older
+3.33.3.2 returned HTTP 500 for that case. Redis outages remain server errors. See
 [`../AUTHENTICATION.md`](../AUTHENTICATION.md) for the implementation status
 and remaining Account, Manager, and authorization work.
 
@@ -107,99 +106,47 @@ These are atomic moves of existing gold, without a market fee or agency
 earnings share. The endpoint returns both new balances. It is not yet
 idempotent, so clients must not automatically retry an ambiguous response.
 
-Normal Compose development keeps Traefik and has no market-order rate limit.
-The isolated k3d deployment uses Envoy Gateway external authorization and a
+Full k3d and hybrid development use Envoy Gateway external authorization and a
 Redis-backed global per-user limit for `POST /api/v1/market/orders`; see the
 [k3d edge-auth runbook](../deploy/k3d/EDGE_AUTH.md). The BFF Redis still holds
 OIDC session state, not market rate-limit state.
-The [local Jenkins setup](../ci/jenkins/README.md) has separate Core, BFF, and
-frontend worktree and `main` builds, plus a verified-artifact deploy job for
-each service. Worktree deployment is manual; trusted `main` builds deploy
-automatically after their gates pass.
+The [local Jenkins setup](../ci/jenkins/README.md) has separate Core, BFF,
+Expedition, and frontend worktree and trusted-`main` builds, plus a
+verified-artifact deploy job for each service. Builds and deployments are
+manual; pushing to Git does not change the running k3d environment.
 Normal Quarkus dev mode remains independent.
 
 ## Local development
 
-Copy the environment template and replace every placeholder. The local
-Keycloak bootstrap credentials, database passwords, BFF client secret, OIDC
-state secret, and CSRF signing key belong only in the ignored `backend/.env`
-file. The three BFF security values must each be at least 32 characters.
+The default development environment is the k3d cluster with Envoy Gateway,
+Keycloak, PostgreSQL, Redis, RabbitMQ, and observability. Run any selected
+service on WSL with Quarkus hot reload using one reversible command from
+`../deploy/k3d`:
 
 ```bash
-cp .env.example .env
+k3d cluster start hero-association
+./hybrid.sh run core
+./hybrid.sh run bff
+./hybrid.sh run expedition
 ```
 
-Local Compose and the isolated k3d lab both bind host ports 80 and 443.
-Before starting local infrastructure, stop k3d if it is running with
-`k3d cluster stop hero-association` from `../deploy/k3d`. The switch keeps
-both environments' database volumes; see the
-[k3d switching steps](../deploy/k3d/README.md#create-the-cluster).
+Each `run` command belongs in its own terminal. Use only the services you
+are editing; the others remain in k3d. Press Ctrl-C to restore the matching
+Deployment, Service route, and HPA. The browser stays at
+`https://heroassociation.test`; Core remains private. The
+[local development guide](../LOCAL_DEVELOPMENT.md) covers the first setup,
+port allocations, secrets, interruption recovery, and Vite.
 
-Start the local infrastructure (Traefik, Keycloak, Game Core PostgreSQL, and separate BFF/Core Redis services), then run the Quarkus services with hot reload:
+Core dev mode validates the shared k3d schema and does not seed or reset it.
+The hybrid launcher disables Quarkus Dev Services for host-run backends and
+uses the shared k3d collector instead of launching a separate LGTM container.
+Only an explicit k3d Core database reset/reseed command should discard game
+data. The old Compose/Traefik development stack is retired. Standalone
+packaged JVM/native Compose runs remain optional and do not own ports 80/443.
 
-```bash
-# Terminal 1, from backend/. This runs docker compose -f compose.infra.yaml up --detach.
-./scripts/start-infra.sh
-
-# Terminal 2
-cd hero-association-core
-./mvnw quarkus:dev
-
-# Terminal 3, from backend/
-./scripts/run-bff-dev.sh
-```
-
-Always start the BFF with this script for local development. It loads
-`backend/.env` and rejects missing or placeholder BFF secrets; running
-`./mvnw quarkus:dev` directly without those variables can make Keycloak
-reject the login callback. The BFF client secret must also match the value
-stored in the imported Keycloak realm. Keycloak imports the realm only once,
-so changing that secret in `.env` later requires updating the existing
-Keycloak client or recreating the local realm.
-
-Stop those dependencies with:
-
-```bash
-docker compose -f compose.infra.yaml down
-```
-
-The default local host-port allocation avoids commonly used application and
-database ports:
-
-| Service | Host port |
-| --- | --- |
-| Frontend (Vite) | `15172` |
-| BFF | `17080` |
-| Game Core | `17081` |
-| Keycloak | `17180` |
-| Game Core PostgreSQL | `15431` |
-| BFF session Redis | `16379` |
-| Core Creature cache Redis | `16380` |
-| Optional Expedition Redis | `16381` |
-| Optional Expedition RabbitMQ | `15675` |
-| Optional Expedition RabbitMQ UI | `15676` |
-
-Quarkus dev mode also assigns Core debugger port `15005` and BFF debugger port
-`15006`, both bound to `localhost`.
-
-For normal development, open `https://heroassociation.test`. Traefik proxies the
-host-run Vite server and BFF under that one secure origin; Keycloak is available
-at `https://auth.heroassociation.test`. Vite, BFF, and Keycloak also retain
-their direct local addresses (`http://localhost:15172`,
-`http://localhost:17080`, and `http://localhost:17180`) for development and
-diagnostics. Change any local host port in `backend/.env` before starting
-Compose; the BFF uses Redis at `localhost:16379`, and Core uses its separate
-cache Redis at `localhost:16380`. Change the respective
-`HERO_ASSOCIATION_BFF_REDIS_HOST_PORT` or
-`HERO_ASSOCIATION_CORE_REDIS_HOST_PORT` in `backend/.env` when needed. If
-changing the Core cache port, export the same variable in the host-run Core
-terminal before `./mvnw quarkus:dev`; Maven does not read `backend/.env`.
-
-To start only Keycloak and its database, run this from `backend/`:
-
-```bash
-./scripts/start-infra.sh postgres-keycloak keycloak
-```
+The [k3d E2E isolation guide](../e2e/K3D_ISOLATION.md) documents the
+verified disposable Gateway and full-stack browser checks, including the
+required exact-image archive gate. The retired Compose archive format does not authorize deployment.
 
 The imported `hero-association` realm enables native registration and contains
 its confidential `hero-association-bff` OpenID Connect client. Its access-token
@@ -232,9 +179,9 @@ and a cache error falls back to PostgreSQL. Troll has 2,000 health and Forest
 Wolf has 120. Active snapshots retain these inputs if roster or definition
 data changes. Compiled spell
 formulas are not versioned yet; see the planned
-[Combat and Expedition plan](../COMBAT_EXPEDITION_PLAN.md). The Map UI is available in k3d
-with Expedition integration enabled and reuses the Phaser battle animations;
-ordinary local development keeps Expedition feature flags disabled.
+[Combat and Expedition plan](../COMBAT_EXPEDITION_PLAN.md). The Map UI is available
+in full k3d and hybrid mode with Expedition integration enabled, and reuses
+the Phaser battle animations.
 Any onboarded Manager can claim a globally available recruit into their personal
 roster through `POST /api/v1/recruits/{recruitId}/claim`, even before creating
 an agency. Agency leaders can explicitly claim a recruit for their agency
@@ -259,85 +206,47 @@ production.
 Keycloak imports the versioned realm only when it does not already exist. This
 is an early-stage project: reset and reseed local or pre-production data rather
 than keeping compatibility with the current data. To recreate the realm during
-local development, stop the infrastructure with `docker compose -f compose.infra.yaml down --volumes` and start it again.
+local development, use an explicit k3d realm reset or disposable E2E namespace;
+restarting a Pod alone will not reimport the realm. Do not delete k3d data
+merely to apply a code change.
 
 ## Local HTTPS gateway
 
-Traefik is part of the normal development infrastructure. Vite and both
-Quarkus services still run on the host for hot reload. Traefik serves
-`https://heroassociation.test`, forwards `/api` and `/auth` to the BFF, and
-serves Keycloak at `https://auth.heroassociation.test`.
-
-Add these entries to your operating system's hosts file (names only, no
-`https://` prefix):
-
-```text
-127.0.0.1 heroassociation.test
-127.0.0.1 auth.heroassociation.test
-```
-
-On Windows the file is `C:\Windows\System32\drivers\etc\hosts` and requires
-an Administrator editor. Start the infrastructure from `backend/`:
-
-```bash
-./scripts/start-infra.sh
-```
-
-The script generates a local CA and certificate in the ignored
-`../traefik/certs/` directory, detects the current WSL address for host-run
-Vite and BFF, and starts `compose.infra.yaml`. Run it again after WSL
-restarts. On other systems, set `HERO_ASSOCIATION_DEV_HOST_ADDRESS` if
-automatic detection is not appropriate. Do not commit the CA private key.
-
-Trust `../traefik/certs/local-ca.crt` once in the operating system where your
-browser runs. For Chrome or Edge on Windows with the project running in WSL,
-import it into the Windows current-user root store from this directory:
-
-```bash
-WINDOWS_CERTIFICATE_PATH="$(wslpath -w ../traefik/certs/local-ca.crt)"
-(cd /mnt/c && certutil.exe -user -addstore -f Root "$WINDOWS_CERTIFICATE_PATH")
-```
-
-Restart the browser after importing. On Linux systems using
-`update-ca-certificates`, copy the CA certificate to
-`/usr/local/share/ca-certificates/hero-association-local-ca.crt` and run
-`sudo update-ca-certificates`. Do not import the private key.
-
-Windows `curl.exe` may report `CRYPT_E_NO_REVOCATION_CHECK` for this offline
-development CA. For a local CLI check, use `--ssl-revoke-best-effort`; do not
-use `--insecure`, which would also disable certificate validation.
-
-The Windows browser uses Docker's Windows port forwarding. If an unrelated
-K3s installation is already listening on port 443 inside WSL, a WSL
-`curl https://localhost` check may reach K3s instead of this gateway; test
-through the Windows browser or `curl.exe` in that case. The development
-certificate is for `.test` hostnames only, not production.
-
-Stop the local infrastructure without deleting its data with
-`docker compose -f compose.infra.yaml down`. Never add `--volumes` unless you
-explicitly intend to reset the local Keycloak and Core databases.
+Envoy Gateway owns both local HTTPS hostnames in full k3d and hybrid mode:
+`heroassociation.test` and `auth.heroassociation.test`. Add only those two
+hosts entries and trust the ignored `../tls/certs/local-ca.crt` in the
+browser's operating system. See the
+[local development guide](../LOCAL_DEVELOPMENT.md#requirements-and-first-setup)
+for exact instructions and the Windows offline-CA curl caveat. Never commit
+the CA or leaf private keys.
 
 ## Browser end-to-end tests
 
-The repository-level [`../e2e`](../e2e) Playwright project verifies browser
-registration, logout, relogin, and other authentication flows through the
-frontend, BFF, Keycloak, and Core. The k3d browser suite separately checks
-the Envoy market-order limit across two BFF instances and separate sessions.
-It starts an isolated Docker Compose project with its own ports and volumes,
-so it does not share state with the development workflow above:
+The repository-level [`../e2e`](../e2e) Playwright project verifies
+registration, session continuity, agency actions, market limits, and
+Map/Expedition through a disposable k3d namespace and Envoy Gateway. For a
+build-once candidate, create the four-image archive in
+[`../pipeline`](../pipeline/README.md), then from `hero-association/` run:
 
 ```bash
-cd ../e2e
-npm install
-npm test
+(cd e2e && npm ci)
+./deploy/k3d/test-isolated-stack.sh pipeline/artifacts/<build-id>/all
 ```
 
-For a build-once candidate, first create the complete image archive from
-[`../pipeline`](../pipeline/README.md). From `e2e/`, run:
+This checks both disposable RabbitMQ role ACLs over AMQP, exact Pod image
+IDs, and writes the required passing k3d E2E record only after test resources
+are removed. Java 25 is required on the runner for the AMQP check. It does
+not deploy the candidate.
+The old Compose/Traefik E2E runner is retired. From `e2e/`, `npm test` now
+runs the daily k3d smoke suite; use the disposable archive gate above for
+candidate verification without touching daily accounts.
 
-`npm run test:archive -- ../pipeline/artifacts/<build-id>/all`
-
-The regular `npm test` above remains the source-building development check.
+To run Core, BFF, and Expedition Maven tests against disposable k3d
+PostgreSQL, Redis, and RabbitMQ instead of local Dev Services or broker
+Testcontainers, run `./deploy/k3d/test-isolated-components.sh all` from
+`hero-association/`. Use `core`, `bff`, or `expedition` instead of `all` for a
+single service. Candidate builds now run the corresponding lane before
+packaging; direct `./mvnw package` remains independently runnable.
 
 See [`../e2e/README.md`](../e2e/README.md) for the ports, cleanup behavior,
 current coverage, and the k6 check of the deployed k3d market-order limit.
@@ -350,19 +259,11 @@ From this directory, run the complete JVM stack:
 docker compose up --build
 ```
 
-For a packaged HTTPS check, stop the normal development stack first because
-both gateways use ports 80 and 443. Then run:
-
-```bash
-../traefik/generate-local-certs.sh
-docker compose -f compose.yaml -f compose.traefik.yaml up --build
-```
-
-This builds the frontend into its own Nginx container and routes it, the BFF,
-and Keycloak through Traefik. The same local CA is used; Core stays private.
-
-Both packaged Compose stacks explicitly reset and reseed the disposable Core
-database on every Core startup; do not use them with data you need to keep.
+The standalone Compose stack publishes its own development ports and does
+not include a browser-facing HTTPS gateway. Use k3d Envoy Gateway for the
+integrated browser workflow. Both packaged JVM/native Compose stacks reset
+and reseed their disposable Core database on every Core startup; do not use
+them with data you need to keep.
 
 The JVM Compose workflow publishes the BFF at `http://localhost:17080` and
 Keycloak at `http://localhost:17180`; Core remains on the private Compose

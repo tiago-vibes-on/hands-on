@@ -41,7 +41,7 @@ spec:
             - name: HERO_ASSOCIATION_OIDC_AUTH_SERVER_URL
               value: http://keycloak:8080/realms/hero-association
             - name: HERO_ASSOCIATION_OIDC_ISSUER
-              value: https://auth.k3d.heroassociation.test/realms/hero-association
+              value: https://auth.heroassociation.test/realms/hero-association
             - name: HERO_ASSOCIATION_OTEL_DISABLED
               value: "true"
           ports:

@@ -92,31 +92,22 @@ jobs:
               timeout(time: 3, unit: 'HOURS')
             }
             stages {
-              stage('Build and deploy trusted main') {
+              stage('Build and verify trusted main') {
                 steps {
                   script {
                     lock(resource: 'hero-association-main-promotion') {
-                      def artifactId = ''
                       node('wsl-local') {
                         deleteDir()
-                        git branch: 'main', url: 'https://github.com/tiago-vibes-on/hands-on.git', poll: true
+                        git branch: 'main', url: 'https://github.com/tiago-vibes-on/hands-on.git', poll: false
                         if (fileExists('hero-association/ci/jenkins/run-service-build.sh')) {
                           try {
                             sh 'bash hero-association/ci/jenkins/run-service-build.sh main __SERVICE__'
-                            if (fileExists('artifact-id.txt')) {
-                              artifactId = readFile('artifact-id.txt').trim()
-                            }
                           } finally {
                             archiveArtifacts artifacts: 'artifact-id.txt,evidence/*', allowEmptyArchive: true
                           }
                         } else {
-                          echo 'Service jobs are not on main yet; no deployment.'
+                          echo 'Service jobs are not on main yet; no build.'
                         }
-                      }
-                      if (artifactId) {
-                        build job: 'hero-association-__SERVICE__-deploy-local',
-                          parameters: [string(name: 'ARTIFACT_ID', value: artifactId)],
-                          wait: true, propagate: true
                       }
                     }
                   }
@@ -126,8 +117,7 @@ jobs:
           }
         '''.replace('__SERVICE__', service)
         pipelineJob("hero-association-" + service + "-build-main") {
-          description("Poll trusted main, build and verify " + service + ", then trigger its separate local deploy job.")
-          triggers { scm('H/5 * * * *') }
+          description("Manual: build and verify trusted main for " + service + "; deployment is separate.")
           definition { cps { script(mainScript); sandbox() } }
         }
       }

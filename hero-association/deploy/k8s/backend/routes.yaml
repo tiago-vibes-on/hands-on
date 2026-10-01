@@ -8,7 +8,7 @@ spec:
     - name: hero-association
       sectionName: https
   hostnames:
-    - k3d.heroassociation.test
+    - heroassociation.test
   rules:
     - matches:
         - path:
@@ -25,7 +25,7 @@ spec:
           requestHeaderModifier:
             set:
               - name: X-Forwarded-Host
-                value: k3d.heroassociation.test
+                value: heroassociation.test
               - name: X-Forwarded-Proto
                 value: https
               - name: X-Forwarded-Port
@@ -44,7 +44,7 @@ spec:
     - name: hero-association
       sectionName: https
   hostnames:
-    - auth.k3d.heroassociation.test
+    - auth.heroassociation.test
   rules:
     - backendRefs:
         - name: keycloak

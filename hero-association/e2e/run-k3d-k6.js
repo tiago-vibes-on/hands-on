@@ -10,8 +10,8 @@ const playwrightVersion = packageLock.packages['node_modules/@playwright/test'].
 const playwrightImage = `mcr.microsoft.com/playwright:v${playwrightVersion}-noble`
 const k6Image = 'grafana/k6:2.3.0'
 const hostMappings = [
-  '--add-host', 'k3d.heroassociation.test:127.0.0.1',
-  '--add-host', 'auth.k3d.heroassociation.test:127.0.0.1',
+  '--add-host', 'heroassociation.test:127.0.0.1',
+  '--add-host', 'auth.heroassociation.test:127.0.0.1',
 ]
 
 function run(command, args, environment = process.env) {

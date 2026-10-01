@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bff
+  namespace: hero-association
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: bff
+          env:
+            - name: QUARKUS_OIDC_TOKEN_REFRESH_TOKEN_TIME_SKEW
+              value: 2S
+            - name: HERO_ASSOCIATION_FRONTEND_URL
+              value: https://app.e2e.heroassociation.test
+            - name: HERO_ASSOCIATION_OIDC_AUTHORIZATION_PATH
+              value: https://auth.e2e.heroassociation.test/realms/hero-association/protocol/openid-connect/auth
+            - name: HERO_ASSOCIATION_OIDC_ISSUER
+              value: https://auth.e2e.heroassociation.test/realms/hero-association
+            - name: QUARKUS_OIDC_END_SESSION_PATH
+              value: https://auth.e2e.heroassociation.test/realms/hero-association/protocol/openid-connect/logout
+            - name: HERO_ASSOCIATION_EXPEDITION_BASE_URL
+              value: http://expedition:8083
+            - name: HERO_ASSOCIATION_EXPEDITION_WEBSOCKET_ENABLED
+              value: "true"
+            - name: HERO_ASSOCIATION_EXPEDITION_BFF_SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hero-association-expedition-credentials
+                  key: HERO_ASSOCIATION_EXPEDITION_BFF_SERVICE_KEY

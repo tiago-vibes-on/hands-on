@@ -5,7 +5,7 @@ import { rename, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { inspectArchive, prepareArchive, requirePassingE2EVerification } from '../e2e/archive-images.js'
+import { inspectArchive, prepareArchive, requirePassingK3dE2EVerification } from '../e2e/archive-images.js'
 import { restorePreviousImages } from './rollback-k3d.mjs'
 import { assertCoreDatabaseIdentity, prepareCoreBootstrapJob } from './core-bootstrap-job.mjs'
 
@@ -225,7 +225,7 @@ async function recordPromotion(archive, observedPods, coreBootstrapJob) {
       id: archive.images[component].id,
       pods: observedPods[component],
     }])),
-    checks: { archiveE2E: 'passed', podImages: 'passed', browserE2E: 'passed', expeditionApiE2E: 'passed', mapE2E: 'passed', marketK6: 'passed' },
+    checks: { archiveK3dE2E: 'passed', podImages: 'passed', browserE2E: 'passed', expeditionApiE2E: 'passed', mapE2E: 'passed', marketK6: 'passed' },
     recordedAt: new Date().toISOString(),
   }
   const destination = path.join(archive.archiveDirectory, 'k3d-promotion.json')
@@ -256,6 +256,8 @@ async function main() {
     throw new Error('Refusing to use Kubernetes context ' + context)
   }
 
+  await run('bash', [path.join(projectDirectory, 'deploy/k3d/require-full-k3d.sh')])
+
   const previous = {}
   for (const component of components) {
     const { deployment, image } = await getDeployment(component)
@@ -282,7 +284,7 @@ async function main() {
     if (!archive.promoteComponent) throw new Error('Baseline verification requires a service promotion archive')
     return
   }
-  await requirePassingE2EVerification(archive)
+  await requirePassingK3dE2EVerification(archive)
   if (mode === 'verify-only') {
     await verifyDeploymentImageReferences(archive)
     await verifyRunningPodImages(archive)

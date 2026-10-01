@@ -1,6 +1,6 @@
 name: hero-association-floci
 
-# Optional local AWS emulator; independent of backend/compose.infra.yaml.
+# Optional local AWS emulator; independent of the active k3d/hybrid application.
 services:
   floci:
     image: floci/floci:2.1.0

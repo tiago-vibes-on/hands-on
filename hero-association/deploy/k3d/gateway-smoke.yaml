@@ -51,7 +51,7 @@ spec:
     - name: hero-association
       sectionName: https
   hostnames:
-    - k3d.heroassociation.test
+    - heroassociation.test
   rules:
     - matches:
         - path:

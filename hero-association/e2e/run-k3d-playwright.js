@@ -20,8 +20,8 @@ if (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(gatewayIp)) {
 const argumentsForDocker = [
   'run', '--rm', '--init',
   '--network', k3dNetwork,
-  '--add-host', `k3d.heroassociation.test:${gatewayIp}`,
-  '--add-host', `auth.k3d.heroassociation.test:${gatewayIp}`,
+  '--add-host', `heroassociation.test:${gatewayIp}`,
+  '--add-host', `auth.heroassociation.test:${gatewayIp}`,
   '--ipc', 'host',
   '--user', `${process.getuid()}:${process.getgid()}`,
   '--volume', `${e2eDirectory}:/work`,

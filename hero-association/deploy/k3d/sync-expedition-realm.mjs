@@ -96,8 +96,24 @@ try {
     process.stdout.write('Expedition client already exists.\n');
   }
 
-  const bffClient = await findClient(bff.clientId);
-  if (!bffClient) throw new Error('BFF client is missing');
+  const bffClientSummary = await findClient(bff.clientId);
+  if (!bffClientSummary) throw new Error('BFF client is missing');
+  const bffClient = await request('GET', `/clients/${bffClientSummary.id}`);
+  const origin = 'https://heroassociation.test';
+  const redirectUris = [`${origin}/auth/callback`, `${origin}/auth/post-logout`];
+  const webOrigins = [origin];
+  if (JSON.stringify(bffClient.redirectUris) !== JSON.stringify(redirectUris) ||
+      JSON.stringify(bffClient.webOrigins) !== JSON.stringify(webOrigins)) {
+    await request('PUT', `/clients/${bffClient.id}`, {
+      ...bffClient, redirectUris, webOrigins,
+    });
+    process.stdout.write('Updated BFF redirects to the canonical local hostname.\n');
+  }
+  const verifiedBff = await request('GET', `/clients/${bffClient.id}`);
+  if (JSON.stringify(verifiedBff.redirectUris) !== JSON.stringify(redirectUris) ||
+      JSON.stringify(verifiedBff.webOrigins) !== JSON.stringify(webOrigins)) {
+    throw new Error('BFF redirect URI verification failed');
+  }
   const mapperPath = `/clients/${bffClient.id}/protocol-mappers/models`;
   const mappers = await request('GET', mapperPath);
   const existing = mappers.find(mapper => mapper.name === audience.name);

@@ -12,17 +12,17 @@ CSRF protection; Game Core owns Account provisioning and Manager onboarding.
 | Stage | Status | What it means |
 | --- | --- | --- |
 | Architecture and boundaries | Complete | Keycloak, BFF, Game Core, and the account model are defined in this document. |
-| Local Keycloak environment | Complete | Compose runs Keycloak with its own PostgreSQL database and imports the versioned Hero Association realm. |
+| Local Keycloak environment | Complete | k3d runs Keycloak with a separate PostgreSQL database and the versioned Hero Association realm. |
 | BFF session flow | Complete | Keycloak login, callback, local logout, server-side sessions, a secure session cookie, and CSRF protection are implemented. |
 | Redis BFF token state | Complete | Quarkus stores Keycloak token state in BFF-owned Redis; the `postgres-bff` service has been removed. |
 | Frontend integration | Complete | React bootstraps the BFF session, offers sign-in and sign-out, and sends CSRF headers for writes. |
 | Game Core token validation | Complete | The BFF forwards its server-held Keycloak access token and Game Core rejects anonymous, invalid, or incorrectly addressed tokens. |
-| Expedition token validation | Pre-cutover | BFF routes the Expedition API and forwards the same server-held token; Expedition requires its own audience and resolves the Manager through Core. The player API stays disabled. The disabled-by-default BFF WebSocket checks the session, exact Origin, and run ownership before its opening snapshot, then pushes subscribed Redis-backed visual updates; a feature-flagged Map UI passes isolated local browser E2E; k3d and cutover checks remain pending. |
+| Expedition token validation | Complete locally | Expedition validates its own Keycloak audience; BFF forwards the server-held token. Map and WebSocket reconnect pass in full k3d and individually switched hybrid mode. |
 | Account and manager onboarding | Complete | The first authenticated account request provisions an `Account`; React then requires a unique Manager display name before opening the game. |
 | Agency authorization | Complete | `AgencyMember` binds Managers to agencies; every agency read and command requires membership, financial market commands require `LEADER`, and a Manager without a membership can create its first agency. |
 | Google sign-in | Deferred (post-MVP) | Keep native email/password sign-in for the MVP; configure Google as a Keycloak identity provider later. |
 | Service split | Complete | `backend/hero-association-core` owns game state and `backend/hero-association-bff` is the public proxy boundary. |
-| k3d identity-aware gateway limit | Complete | Envoy validates the browser session through the BFF and solely enforces five placements per second per user. Rate-limit service failure is fail-closed; normal local Traefik has no market limit. BFF Redis remains for OIDC sessions. See [k3d edge-auth runbook](deploy/k3d/EDGE_AUTH.md). |
+| Local identity-aware gateway limit | Complete | Envoy validates the browser session through BFF and solely enforces five market placements per second per user in full k3d and hybrid mode. Gateway Redis is separate from BFF session Redis. See [edge-auth runbook](deploy/k3d/EDGE_AUTH.md). |
 
 The actionable checklist is in the [roadmap](ROADMAP.md): Milestone 9 covers
 authentication work in the MVP, and Google sign-in is listed under Post-MVP.
@@ -46,21 +46,21 @@ Update this table and the roadmap together when an authentication stage changes.
 ## Target topology
 
 ```text
-Browser --HTTPS--> Traefik --app route--> React
-                       |--/api, /auth--> Identity BFF --bearer token--> Game Core --> Core PostgreSQL
-                       |                    |--session state--> Redis
-                       |                    +--OIDC--> Keycloak
-                       +--auth hostname--------------> Keycloak --> Keycloak PostgreSQL
+Browser --HTTPS--> Envoy Gateway --app route--> React
+                         |--/api, /auth--> Identity BFF --bearer token--> Game Core --> Core PostgreSQL
+                         |                    |--session state--> Redis
+                         |                    +--OIDC--> Keycloak
+                         +--auth hostname--------------> Keycloak --> Keycloak PostgreSQL
 ```
 
-Traefik is the edge gateway in local Compose; Envoy Gateway is the
-browser-facing ingress in the isolated k3d lab. Istio secures BFF-to-Core
-traffic inside k3d. Both gateways serve React, proxy `/api` and `/auth` to
-the BFF, and expose Keycloak on its own authentication hostname. The BFF
-owns browser sessions and Keycloak owns identity. In k3d, only market-order
-placement has an additional Envoy external-authorization check and global
-per-user limit keyed by the BFF-returned Keycloak subject, not a browser
-header. Game Core, Keycloak PostgreSQL, and Redis remain private.
+Envoy Gateway is the only active browser-facing local edge in full k3d and
+hybrid mode. Istio secures meshed service-to-service traffic in k3d. A selected
+WSL service sits behind a private in-cluster bridge, keeping the public and
+private Service URLs stable. The BFF owns browser sessions and Keycloak owns
+identity. Envoy applies a global five-per-second, per-subject limit to market
+order placement after asking BFF to validate the opaque session; it never
+trusts a browser-supplied identity header. Game Core, Keycloak PostgreSQL,
+and Redis remain private. See [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md).
 
 The BFF owns the browser session, login, logout, callback, and CSRF handling.
 It uses the OpenID Connect Authorization Code flow as a confidential server
@@ -219,21 +219,14 @@ agencies, and inventory.
 
 ## Current local Keycloak setup
 
-`backend/compose.yaml` runs Keycloak on `http://localhost:17180` with its
-dedicated PostgreSQL database. It also exposes BFF session Redis at
-`localhost:16379` for host-based BFF development.
-`backend/compose.native.yaml` uses its separate Keycloak port `19180` and BFF
-Redis port `19679`.
-Before starting either Compose stack, copy `backend/.env.example` to
-`backend/.env` and replace every placeholder. The `.env` file is ignored by
-Git. `backend/compose.infra.yaml` adds Traefik to the standard development
-dependencies. It exposes the host-run Vite and BFF services through
-`https://heroassociation.test` and Keycloak through
-`https://auth.heroassociation.test` without giving up host hot reload. The
-optional `backend/compose.traefik.yaml` overlay remains available for an
-all-container packaged-application check. Hosts-file, certificate-trust, and
-startup instructions are in [`backend/README.md`](backend/README.md#local-https-gateway).
-
+The active local Keycloak and its own PostgreSQL run in k3d. The browser uses
+`https://auth.heroassociation.test`, and BFF reaches the private Keycloak
+Service. Hybrid Quarkus services use private port-forwards and the same public
+OIDC issuer. The k3d deployment generates ignored credentials; no Keycloak
+client secret or CA private key is committed. The older Compose Keycloak
+stack remains only for the E2E migration and optional packaged workflows.
+First setup, trust, and switching commands are in
+[LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md).
 
 `backend/keycloak/realm/hero-association-realm.json` is a versioned startup
 import. It creates the `hero-association` realm, enables local email/password
@@ -244,13 +237,13 @@ to access tokens. Its client secret is resolved from
 `HERO_ASSOCIATION_BFF_OIDC_CLIENT_SECRET` during the first import; it is never
 committed to the repository. Local email verification is disabled because SMTP
 is not configured. It registers callbacks for direct host development, the
-isolated browser test, and the local Traefik gateway. Production must use a
+isolated k3d browser test, and the local Envoy Gateway. Production must use a
 separate realm configuration with only its deployed callback URLs and no
 development credentials.
 
 The realm selects the versioned `hero-association` CSS-only login theme in
 `backend/keycloak/theme`. It extends Keycloak's `keycloak.v2` theme without
-copying its templates, and local Compose disables theme caching so CSS edits
+copying its templates, and local k3d Keycloak disables theme caching so CSS edits
 are immediately visible during development. Production should use normal theme
 caching.
 
@@ -259,14 +252,12 @@ or last name. Those optional Keycloak fields are hidden from end users and are
 set directly as deterministic seed data while the product is in its early
 stage.
 
-The realm is imported only when it does not yet exist. An existing local
-realm will not gain the Expedition audience mapper merely from a file edit;
-update it in Keycloak or deliberately recreate the local realm before
-enabling the Expedition player API. To deliberately recreate
-the local Keycloak realm, stop the infrastructure from `backend/` with
-`HERO_ASSOCIATION_DEV_HOST_ADDRESS="$(hostname -I | awk '{print $1}')" docker compose -f compose.infra.yaml down --volumes`,
-then start it again. Google is intentionally not configured until its social-login
-task is implemented.
+The realm is imported only when it does not yet exist. An existing k3d realm
+will not gain new fixture users merely from a file edit. The private
+Expedition integration syncs its client and audience mapper explicitly;
+other realm changes require deliberate Keycloak updates or a backed-up k3d
+lab recreation. Use the disposable E2E namespace to validate new fixtures
+without resetting daily accounts. Google remains a post-MVP task.
 
 The versioned realm includes `user1@mail.com` / `user1` (Dawnwatch leader),
 `user2@mail.com` / `user2` (Ironridge leader), and `user3@mail.com` / `user3`
@@ -287,21 +278,16 @@ as the Keycloak client secret.
 
 ## Deployment and local development
 
-- Run Keycloak and its dedicated PostgreSQL database in Docker Compose for
-  local development. It must not share Game Core's game-state database.
-- Keep Vite plus Quarkus dev mode as the default local editing workflow. The
-  Traefik service in `compose.infra.yaml` provides its same-origin HTTPS and OIDC
-  routes while proxying to those host-run processes, so the browser tests the
-  deployed routing shape without losing hot reload.
-- Configure realm, clients, redirect URIs, and theme through versioned,
-  non-secret configuration where possible.
-- Store client secrets, Google credentials, and production signing material in
-  environment-specific secret storage. Do not add them to `.env` files tracked
-  by Git.
-- Traefik exposes the React application, BFF routes, and Keycloak login endpoint
-  publicly. Game Core has no browser CORS configuration and no public ingress;
-  Core and Keycloak PostgreSQL plus Redis remain private, and Game Core still
-  validates the BFF-forwarded bearer token as defense in depth.
+- Keep Keycloak PostgreSQL separate from Core PostgreSQL inside k3d.
+- Use Envoy Gateway with the canonical local HTTPS hostnames in both full
+  k3d and hybrid modes. Selected Vite/Quarkus services can run on WSL
+  without changing the browser origin or OIDC redirect URI.
+- Version realm, client, redirect, and theme configuration without secrets;
+  supply client secrets through ignored local files and Kubernetes Secrets.
+- Keep Game Core private and validate BFF-forwarded bearer tokens as
+  defense in depth. The browser receives only the opaque BFF session.
+- Use explicit k3d database reset/reseed commands only when changing the
+  disposable schema. Do not reset data during Quarkus reload.
 
 ## Delivery sequence
 

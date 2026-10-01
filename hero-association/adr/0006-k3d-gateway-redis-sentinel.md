@@ -20,7 +20,8 @@ Keep the existing fail-closed policy: if the rate-limit service cannot check
 Redis, market placement receives an Envoy `500`, never an unbounded bypass.
 
 The counters and Sentinel configuration remain ephemeral in this study lab.
-Normal local Traefik development and the BFF's session Redis do not change.
+Hybrid local development uses this same k3d Gateway Redis group. The BFF
+session Redis remains separate.
 
 ## Alternatives
 

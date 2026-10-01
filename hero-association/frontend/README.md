@@ -17,64 +17,42 @@ while the tab is visible.
 
 ## Run locally
 
-Run these in four terminals, each starting from `hero-association/`. Configure
-`backend/.env` from its template once; keep any existing local secrets.
+The default local environment is the k3d cluster with Envoy Gateway and its
+shared infrastructure. From `hero-association/deploy/k3d`, run:
 
 ```bash
-# Terminal 1: local infrastructure
-cd backend
-./scripts/start-infra.sh
-
-# Terminal 2: Game Core
-cd backend/hero-association-core
-./mvnw quarkus:dev
-
-# Terminal 3: BFF (loads backend/.env and validates its secrets)
-cd backend
-./scripts/run-bff-dev.sh
-
-# Terminal 4: frontend
-cd frontend
-npm ci
-npm run dev
+k3d cluster start hero-association
+./hybrid.sh run frontend
 ```
 
-Vite listens at `http://localhost:15172`, but use
-`https://heroassociation.test` in the browser. The Traefik container from the
-infrastructure stack proxies that secure origin to Vite and to the BFF, and
-proxies Keycloak at `https://auth.heroassociation.test`. Vite binds its local
-development server to the WSL network so Traefik can reach it; its allowed-host
-list still limits browser requests to `heroassociation.test` by default. Set
-`VITE_API_PROXY_TARGET` in a local `.env` file to use a different BFF address;
-[`.env.example`](.env.example) documents the variable. `VITE_API_PROXY_CHANGE_ORIGIN`
-defaults to `true`; set it to `false` only when a controlled OIDC callback must
-return through the browser-visible development proxy, as in the E2E workflow.
-Leave `VITE_ALLOWED_HOSTS` unset unless a controlled environment needs Vite to
-serve an additional host.
+The hybrid command starts Vite on WSL port `15172`, stops only the k3d
+frontend Pod, and routes `https://heroassociation.test` through the
+unchanged Envoy Gateway. Vite HMR connects to the same HTTPS origin over
+WebSocket. Press Ctrl-C to restore the frontend Pod. Core, BFF, Expedition,
+and Keycloak can remain in k3d or be switched separately using
+[`hybrid.sh`](../LOCAL_DEVELOPMENT.md#switch-a-service-to-wsl-hot-reload).
+The ignored k3d Secrets are passed to host-run backend processes at runtime.
+Run `npm ci` once if `node_modules` is absent.
 
-The Map page is visible in the isolated k3d build. In ordinary local
-development it is hidden unless `VITE_EXPEDITION_ENABLED=true` is set when
-starting Vite or building the frontend. It loads the Manager's active
-Expedition, offers the fixed Troll Field to prepared personal-hero parties,
-sends UUIDv7 Start/Continue/Return commands with the existing CSRF token, and
-receives fight snapshots over a same-origin BFF WebSocket. It reconnects from
-the current server snapshot. On returning to Map or resuming a hidden tab,
-it drops queued hit animations and paints the current server frame immediately;
-only subsequent live events animate. The browser never calculates fight
-results or receives a Keycloak token. For a container image, pass
-`--build-arg VITE_EXPEDITION_ENABLED=true` to `docker build`; the image
-default remains false. The k3d build script enables it by default. Turning on
-the frontend flag alone does not enable the backend player API or socket. The existing Quest flow remains available; see the
-[Combat and Expedition plan](../COMBAT_EXPEDITION_PLAN.md).
+The Map page is enabled in the k3d image and the hybrid Vite command. It
+loads the Manager's active Expedition, offers Troll Field to prepared
+personal-hero parties, sends UUIDv7 Start/Continue/Return commands with the
+existing CSRF token, and receives fight snapshots over a same-origin BFF
+WebSocket. It reconnects from the current server snapshot. On returning to
+Map or resuming a hidden tab, queued hit animations are dropped and the
+current server frame is painted immediately; only subsequent live events
+animate. The browser never calculates fight results or receives a Keycloak
+token. The standalone Dockerfile still defaults Map off unless
+`VITE_EXPEDITION_ENABLED=true` is passed at build time.
 
 If the API cannot be reached, the frontend shows a visible notice and uses a
 static local fixture. A production deployment sends `/api` requests to the
 public BFF; the browser never calls Game Core directly.
 
-The local HTTPS setup, hosts-file entries, and one-time Traefik certificate trust
-steps are in [`../backend/README.md`](../backend/README.md#local-https-gateway).
+The hosts entries and one-time certificate trust steps are in the
+[local development guide](../LOCAL_DEVELOPMENT.md#requirements-and-first-setup).
 
-Keycloak is available locally on `http://localhost:17180`. The frontend begins
+Keycloak is available through `https://auth.heroassociation.test`. The frontend begins
 at a sign-in screen, uses the BFF's `/auth/login` redirect, and receives no
 Keycloak tokens in browser storage. The first signed-in visit provisions an
 Account and requires a unique Manager name before the game opens. A Manager
@@ -97,22 +75,19 @@ npm run build
 
 ## Browser end-to-end tests
 
-The repository-level [`../e2e`](../e2e) Playwright project validates the
-browser journey across the frontend, BFF, Keycloak, and Core. It uses a
-separate Docker Compose stack and does not reuse local development databases
-or ports:
+Use the shared k3d Envoy route for current browser, Map, and market-policy
+checks. From `../e2e`:
 
 ```bash
-cd ../e2e
-npm --prefix ../frontend install
-npm install
-npm run test:auth
+npm ci
+npm run test:k3d
+npm run test:k3d:map
+npm run test:market:k6
 ```
 
-See [`../e2e/README.md`](../e2e/README.md) for the details. The
-local Map journey is a separate, opt-in `npm run test:expedition` from
-`../e2e`; it enables Expedition only inside that disposable test stack.
-Run `npm run test:k3d:map` for the visible k3d browser journey.
+The Compose/Traefik browser and archive lanes were retired. The
+[isolated k3d E2E runbook](../e2e/README.md) describes candidate verification;
+the commands above are smoke checks against the running development data.
 
 ## Deploy to the isolated k3d lab
 
@@ -124,7 +99,7 @@ Build and deploy it after the k3d backend from `../deploy/k3d`:
 ./deploy-frontend.sh
 ```
 
-Open `https://k3d.heroassociation.test`. Envoy Gateway serves the UI
+Open `https://heroassociation.test`. Envoy Gateway serves the UI
 and routes `/api` and `/auth` to BFF on the same origin. The k3d Playwright
 suite runs with `npm run test:k3d` from `../e2e` without resetting lab data.
 See [`../deploy/k3d/README.md`](../deploy/k3d/README.md#build-and-deploy-the-frontend)

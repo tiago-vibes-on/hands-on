@@ -1,96 +1,41 @@
 # Hero Association E2E tests
 
-The Playwright suite verifies React, Traefik, the BFF, Keycloak, Game Core,
-PostgreSQL, and Redis together through the same HTTPS hostnames used for local
-development.
+The active browser and archive gate runs through the shared k3d Envoy Gateway.
+Backend candidate builds first test Core, BFF, or Expedition against private,
+disposable k3d dependencies. The archive gate then creates an independent
+full-stack namespace with its own databases, Keycloak, Redis, and RabbitMQ.
+See [K3D_ISOLATION.md](K3D_ISOLATION.md). The old Compose/Traefik runner has
+been retired; standalone JVM/native Compose packaging remains available.
 
-## Run
+## Verify a candidate archive without deploying it
 
-From this directory, with Docker and Node.js 24 available:
-
-```bash
-npm install
-npm test
-```
-
-`npm test` runs the local Traefik suite and excludes k3d-only tests.
-`npm run test:auth` runs only `tests/authentication.spec.js`. The normal
-`npm test` excludes the pre-cutover Expedition test. Run that separate journey
-with `npm run test:expedition`. It adds dedicated Expedition Redis and RabbitMQ,
-builds the Expedition service and Map-enabled frontend, and enables the
-Core/Expedition/BFF integration flags only inside this disposable E2E project.
-The overlay first provisions RabbitMQ topology and separate Core and
-Expedition service users with only their publish/read permissions.
-
-The Playwright test prepares a personal Party, enters Troll Field, confirms
-WebSocket visuals and reconnect, explicitly continues, requests return during
-the next fight, disconnects the viewer, and waits for Core settlement. Do not
-run the normal and Expedition E2E commands simultaneously because both use
-the same disposable Compose project. This does not enable Expedition in normal
-local development or k3d.
-The runner uses Playwright's official Chromium Docker image at
-the version pinned in `package-lock.json`, so no host browser installation is
-required. The frontend image runs `npm ci` during its Docker build; frontend
-`node_modules` on the host are not needed.
-
-The setup creates an isolated Compose project named `hero-association-e2e`.
-Traefik serves the frontend and BFF at `https://heroassociation.test` and
-Keycloak at `https://auth.heroassociation.test` inside the browser container's
-Docker network. The browser trusts the test-only local certificate for this
-run; it never routes through the normal development gateway. The second BFF
-instance is reached through the E2E-only same-origin
-`/__e2e-secondary/api/...` route, so the browser sends the same session
-cookie to both instances.
-
-The stack publishes diagnostic host ports `15432` (Core PostgreSQL), `16380`
-(Redis), `18080` and `18082` (BFF instances), `18081` (Core), `18180`
-(Keycloak), and `18443` (Traefik HTTPS). The Expedition-only
-overlay also publishes `18083` for service diagnostics. It has its own databases and Redis
-state. Setup and teardown remove only the E2E Compose project and its volumes,
-including after a failed setup. The normal development data is never reset.
-
-The suite covers registration, sign-out and sign-in again, token refresh,
-Redis session expiry, session sharing across BFF instances, Manager and
-agency onboarding, personal and leader-only agency recruitment, one-time
-claims across both ownership routes, cross-agency authorization, and
-market-order proxying through both BFF instances without a local rate limit,
-a personal order placed and cancelled through the browser, leader editing of
-an agency-hero fee, and a borrowing fee charged when its party starts a quest.
-The Agency page suite also checks a leader's gold withdrawal to self and
-deposit back into the agency without fees or net balance changes.
-It uses the versioned local Keycloak users `user1@mail.com` / `user1`,
-`user2@mail.com` / `user2`, the initially unprovisioned
-`user3@mail.com` / `user3`, `manager4@mail.com` / `manager4` for
-personal trading, and `manager9@mail.com` / `manager9` for non-leader
-authorization. Access tokens last eight seconds only in this
-isolated realm.
-
-Failure screenshots and traces are written to ignored `test-results/` and
-`playwright-report/` directories.
-
-## Test a build archive without rebuilding
-
-Build one complete archive, then pass its printed path to the separate
-archive-backed browser lane:
+With Docker, Java 25, Node.js 24, k3d, and the isolated kubeconfig available,
+run from `hero-association/`:
 
 ```bash
-cd ../pipeline
-./build-local.sh all
-cd ../e2e
-npm ci
-npm run test:archive -- ../pipeline/artifacts/<build-id>/all
+./pipeline/build-local.sh all
+(cd e2e && npm ci)
+./deploy/k3d/test-isolated-stack.sh pipeline/artifacts/<build-id>/all
 ```
 
-The runner verifies the archive checksum and all four manifest image IDs
-before changing the isolated E2E stack. It loads those images, disables
-Compose builds and pulls for Core, BFF, Expedition, and frontend, and confirms
-the running containers use the recorded IDs. It also runs the Expedition
-browser journey. Keycloak, databases, Redis, RabbitMQ, and Traefik remain pinned
-Compose dependencies outside the application archive.
-Only a successful browser run followed by cleanup records `result: passed`
-in the ignored archive's `e2e-verification.json`. An invalid archive is
-rejected before setup; after validation, an interrupted or failed test run
-leaves `result: pending`. The regular `npm test` still builds from source.
+Or from `e2e/`, run `npm run test:isolated -- ../pipeline/artifacts/<build-id>/all`.
+The candidate build requires all four daily application Deployments restored
+to full k3d mode, but tests and identity data stay in disposable namespaces.
+The runner checks the archive checksum and all five running application Pod
+image IDs before and after BFF replacement. It runs ten browser cases,
+Core-cache-off Map replay, BFF session/outage and expiry checks, RabbitMQ
+cross-role denial, and market k6 thresholds. It marks
+`k3d-e2e-verification.json` passed only after the namespace is deleted.
+That exact passing record is required for manual promotion; neither command
+deploys the candidate. Failure screenshots and traces are written to ignored
+`test-results/` and `playwright-report/` directories.
+
+The previous Compose-only `authentication.spec.js` and
+`market-proxy.spec.js` remain as historical test source. The active isolated
+suite reuses the gold-transfer, personal-market, and Expedition journeys.
+The unrestricted Compose market-proxy case is superseded by the Envoy limit
+test. The borrowing-quest case is deferred with Quest; it is not an active
+MVP gate.
 
 ## Verify the running k3d lab
 
@@ -113,8 +58,8 @@ from the versioned [realm file](../backend/keycloak/realm/hero-association-realm
 Keycloak does not reimport clients or users into an existing realm when Core is
 reset. The [private Expedition integration](../deploy/k3d/EXPEDITION_INTEGRATION.md)
 synchronizes its client and audience mapper without resetting Keycloak.
-Unlike `npm test`, this k3d suite does not start Compose, flush Redis, or delete
-volumes. The Playwright container joins the isolated k3d Docker network and
+This k3d smoke suite does not start Compose, flush Redis, or delete
+volumes. `npm test` now runs this same k3d smoke configuration. The Playwright container joins the isolated k3d Docker network and
 maps both hostnames to its load balancer, bypassing unrelated WSL port-443
 listeners. It ignores local certificate errors only inside the test browser.
 
@@ -150,9 +95,12 @@ independently of user 1's two sessions.
 The sustained scenario targets 200 attempts at 20 per second for ten
 seconds. Its arrival scheduler and the one-second gateway window boundaries
 make exact iteration and 400/429 counts timing-dependent. Thresholds require
-198–202 completed attempts, at most 55 not rate-limited, at least 143
+198–202 completed attempts, at most 65 not rate-limited, at least 133
 rate-limited, no unexpected responses, and no dropped iterations. At least one
-request must not be rate-limited.
+request must not be rate-limited. The ten-second sustained window is a coarse
+throughput check: its exact 400/429 split varies with request scheduling and
+gateway accounting boundaries. The six-request burst is the precise check of
+the five-request per-user budget.
 
 k6's native `THRESHOLDS` section prints the expected expression and observed
 count for each metric and sets a nonzero exit status if a threshold fails.

@@ -1,7 +1,7 @@
 import { chromium } from '@playwright/test'
 import { writeFile } from 'node:fs/promises'
 
-const appUrl = 'https://k3d.heroassociation.test'
+const appUrl = process.env.HERO_ASSOCIATION_K6_APP_URL || 'https://heroassociation.test'
 const outputPath = '/session/session.json'
 const users = [
   ['user1@mail.com', 'user1'],

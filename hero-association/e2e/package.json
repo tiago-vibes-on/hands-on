@@ -4,10 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "test": "node run-playwright.js",
-    "test:archive": "node run-playwright.js --archive",
-    "test:auth": "node run-playwright.js tests/authentication.spec.js",
-    "test:expedition": "HERO_ASSOCIATION_E2E_EXPEDITION=true node run-playwright.js tests/expedition.spec.js",
+    "test": "node run-k3d-playwright.js",
+    "test:isolated": "../deploy/k3d/test-isolated-stack.sh",
     "test:k3d": "node run-k3d-playwright.js",
     "test:k3d:expedition": "HERO_ASSOCIATION_K3D_PLAYWRIGHT_CONFIG=playwright.k3d.expedition.config.js node run-k3d-playwright.js",
     "test:k3d:map": "HERO_ASSOCIATION_K3D_PLAYWRIGHT_CONFIG=playwright.k3d.map.config.js node run-k3d-playwright.js",

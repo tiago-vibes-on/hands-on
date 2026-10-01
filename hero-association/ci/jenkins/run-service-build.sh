@@ -22,6 +22,8 @@ case "$workspace/" in
 esac
 
 source_repo="$(realpath -- "$HERO_ASSOCIATION_SOURCE_REPO")"
+"$source_repo/hero-association/deploy/k3d/require-full-k3d.sh"
+
 if [[ "$mode" == main ]]; then
   build_repo="$workspace"
   [[ -z "$(git -C "$build_repo" status --porcelain --untracked-files=normal)" ]] ||
@@ -35,31 +37,6 @@ else
 fi
 
 revision="$(git -C "$build_repo" rev-parse HEAD)"
-if [[ "$mode" == main && "${GIT_PREVIOUS_SUCCESSFUL_COMMIT:-}" =~ ^[a-f0-9]{40}$ ]] &&
-   git -C "$build_repo" cat-file -e "$GIT_PREVIOUS_SUCCESSFUL_COMMIT^{commit}" 2>/dev/null; then
-  relevant_change=false
-  while IFS= read -r -d '' changed_file; do
-    case "$changed_file" in
-      .gitattributes|hero-association/ci/jenkins/*|hero-association/pipeline/*|hero-association/e2e/*|hero-association/deploy/k3d/*)
-        relevant_change=true ;;
-      hero-association/backend/hero-association-core/*)
-        if [[ "$component" == core ]]; then relevant_change=true; fi ;;
-      hero-association/backend/hero-association-bff/*)
-        if [[ "$component" == bff ]]; then relevant_change=true; fi ;;
-      hero-association/backend/hero-association-expedition/*)
-        if [[ "$component" == expedition ]]; then relevant_change=true; fi ;;
-      hero-association/frontend/*)
-        if [[ "$component" == frontend ]]; then relevant_change=true; fi ;;
-      hero-association/backend/*)
-        relevant_change=true ;;
-    esac
-  done < <(git -C "$build_repo" diff --name-only -z "$GIT_PREVIOUS_SUCCESSFUL_COMMIT" "$revision")
-  if [[ "$relevant_change" == false ]]; then
-    printf 'No %s or shared build changes since %s; no artifact or deployment.\n' \
-      "$component" "$GIT_PREVIOUS_SUCCESSFUL_COMMIT"
-    exit 0
-  fi
-fi
 build_id="${mode}-${component}-${BUILD_NUMBER}-${revision:0:8}-$(date -u +%Y%m%dT%H%M%S)"
 project="$build_repo/hero-association"
 artifact="$agent_workdir/artifacts/$build_id/all"
@@ -74,9 +51,10 @@ node "$project/pipeline/deploy-k3d.mjs" --verify-baseline "$artifact"
 (
   cd "$project/e2e"
   npm ci
-  npm run test:archive -- "$artifact"
 )
-cp "$artifact/manifest.txt" "$artifact/e2e-verification.json" "$evidence/"
+HERO_ASSOCIATION_LOCAL_CA_CERTIFICATE="${HERO_ASSOCIATION_LOCAL_CA_CERTIFICATE:-$source_repo/hero-association/tls/certs/local-ca.crt}" \
+  "$project/deploy/k3d/test-isolated-stack.sh" "$artifact"
+cp "$artifact/manifest.txt" "$artifact/k3d-e2e-verification.json" "$evidence/"
 printf 'artifact_id=%s\nsource_mode=%s\nsource_revision=%s\ncomponent=%s\n' \
   "$build_id" "$mode" "$revision" "$component" > "$evidence/build.txt"
 printf '%s\n' "$build_id" > "$workspace/artifact-id.txt"

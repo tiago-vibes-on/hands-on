@@ -15,7 +15,7 @@ to this service without changing the API contract. See
 For a clean checkout, run `./mvnw -pl hero-association-core -am test` from
 `backend/`; this builds the shared combat engine too. To run the direct
 module commands below, first run
-`./mvnw -pl hero-association-lib -am install` from `backend/`. Then, from
+`./mvnw -pl hero-association-lib/combat-engine -am install` from `backend/`. Then, from
 this directory, run:
 
 ```bash
@@ -36,38 +36,24 @@ keep telemetry disabled unless explicitly enabled; see
 
 ## Local development (default)
 
-Run PostgreSQL, Keycloak, and the separate disposable Core Redis cache in
-Docker Compose, then run Quarkus directly on the host. This keeps dependency
-lifecycles separate from the microservice and enables hot reload.
-
-From the parent `backend/` directory, first create the ignored Keycloak
-environment file required by Compose:
+Shared PostgreSQL, Keycloak, Redis, RabbitMQ, and Envoy Gateway stay in k3d.
+From `hero-association/deploy/k3d`, run:
 
 ```bash
-cd ..
-cp .env.example .env
+k3d cluster start hero-association
+./hybrid.sh run core
 ```
 
-Then start the local infrastructure:
-
-```bash
-# Terminal 1, from backend/
-./scripts/start-infra.sh
-
-# Terminal 2: run Game Core on the host
-cd hero-association-core
-./mvnw quarkus:dev
-```
-
-The development profile connects to PostgreSQL at `localhost:15431` using the
-seeded `hero_association` credentials and to its Creature cache Redis at
-`localhost:16380`. Cache entries expire after 60 seconds. On a cache error,
-Core reads PostgreSQL; Redis is excluded from Core's readiness check because
-this cache is optional. Core validates bearer tokens issued by Keycloak at
-`https://auth.heroassociation.test` and listens on `http://localhost:17081`.
-Use the BFF at `http://localhost:17080` for browser requests; it forwards
-the server-held access token. Dev Services is disabled in dev mode; tests
-start their own temporary PostgreSQL and Redis containers.
+The command stops only the Core k3d workload, forwards its private
+dependencies, and runs Core in Quarkus dev mode with hot reload on port
+`17081`. Browser requests still enter through
+`https://heroassociation.test` and the BFF. Press Ctrl-C to restore the
+original Core replicas, Service route, and HPA. Core validates the existing
+database schema and does not reseed it during a reload. See the
+[local development guide](../../LOCAL_DEVELOPMENT.md) for ports, secrets,
+mixed-service mode, interruption recovery, and intentional Core reset.
+Direct `./mvnw test` remains independently runnable and may start local
+Dev Services; backend candidate builds use disposable k3d dependencies.
 
 ### Pre-cutover Expedition settlement (off by default)
 
@@ -144,17 +130,13 @@ checks recovery, combat, and quest resolution while scaling from two to eight
 Pods under concurrent database reads. The k3d Core HPA runs two to eight
 replicas; normal Core Pods validate the shared database schema.
 
-### Stop the local database
+### Reset disposable Core data intentionally
 
-Stop the standalone database while preserving its data:
-
-```bash
-cd ..
-docker compose -f compose.infra.yaml stop postgres-core
-```
-
-The current development configuration drops and recreates the schema on every
-Quarkus startup, so the Compose volume does not preserve game data yet.
+Hybrid dev mode does not drop or recreate the shared k3d database. To reset
+Core game data after an incompatible schema change, first restore full k3d
+mode and use the explicit reset/reseed workflow in the
+[local development guide](../../LOCAL_DEVELOPMENT.md). Do not reset data you
+need to preserve.
 
 ## Package
 
@@ -162,7 +144,7 @@ The combat rules engine is shared with the isolated Combat sandbox through
 `../hero-association-lib/combat-engine`. For a clean build, run from
 `backend/`: `./mvnw -pl hero-association-core -am package`. To use the
 standalone `./mvnw` commands below (including dev mode), first run
-`./mvnw -pl hero-association-lib -am install` from `backend/`.
+`./mvnw -pl hero-association-lib/combat-engine -am install` from `backend/`.
 
 The default package is a JVM fast-jar:
 

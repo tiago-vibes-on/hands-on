@@ -5,13 +5,13 @@ import { createReadStream } from 'node:fs'
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
 import { Readable } from 'node:stream'
-import { inspectArchive, prepareArchive, requirePassingE2EVerification } from '../e2e/archive-images.js'
+import { inspectArchive, prepareArchive, requirePassingK3dE2EVerification } from '../e2e/archive-images.js'
 
 // Intentionally fixed to the loopback-only emulator: this command must never
 // publish to a real AWS endpoint because of ambient AWS CLI configuration.
 const endpoint = 'http://127.0.0.1:4566'
 const bucket = 'hero-association-builds'
-const files = ['images.tar', 'images.tar.sha256', 'manifest.txt', 'e2e-verification.json']
+const files = ['images.tar', 'images.tar.sha256', 'manifest.txt', 'k3d-e2e-verification.json']
 
 async function digest(stream) {
   const hash = createHash('sha256')
@@ -65,7 +65,7 @@ async function main() {
   const archive = await inspectArchive(process.argv[2])
   if (archive.promoteComponent) throw new Error('K3d service archives are not portable Floci artifacts')
   await prepareArchive(archive.archiveDirectory)
-  await requirePassingE2EVerification(archive)
+  await requirePassingK3dE2EVerification(archive)
 
   const health = await fetch(`${endpoint}/_localstack/health`, { signal: AbortSignal.timeout(10_000) })
   if (!health.ok) throw new Error(`Floci health check returned HTTP ${health.status}`)

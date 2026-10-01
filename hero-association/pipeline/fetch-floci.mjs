@@ -6,12 +6,12 @@ import path from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { fileURLToPath } from 'node:url'
-import { inspectArchive, prepareArchive, requirePassingE2EVerification } from '../e2e/archive-images.js'
+import { inspectArchive, prepareArchive, requirePassingK3dE2EVerification } from '../e2e/archive-images.js'
 
 // This command is deliberately bound to the local emulator, never ambient AWS.
 const endpoint = 'http://127.0.0.1:4566'
 const bucket = 'hero-association-builds'
-const files = ['manifest.txt', 'images.tar.sha256', 'e2e-verification.json', 'images.tar']
+const files = ['manifest.txt', 'images.tar.sha256', 'k3d-e2e-verification.json', 'images.tar']
 const buildIdPattern = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$/
 
 async function main() {
@@ -39,7 +39,7 @@ async function main() {
   if (archive.buildId !== buildId) throw new Error('Downloaded manifest build ID does not match the requested build')
   if (archive.promoteComponent) throw new Error('K3d service archives are not portable Floci artifacts')
   await prepareArchive(archive.archiveDirectory)
-  await requirePassingE2EVerification(archive)
+  await requirePassingK3dE2EVerification(archive)
   console.log(`Verified Floci archive: ${destination}`)
 }
 

@@ -2,8 +2,8 @@
 
 ## Status
 
-Implemented in the isolated k3d lab. Normal Compose development uses Traefik
-with no market-order rate limit. The browser keeps an opaque BFF session
+Implemented in the active k3d lab. Full k3d and hybrid development both use
+Envoy Gateway and the same market-order rate limit. The browser keeps an opaque BFF session
 cookie; Keycloak tokens remain server-side in BFF Redis. The BFF owns login,
 logout, and CSRF, but not market limiting. Core independently validates bearer
 tokens and financial authorization. [ADR 0005](../../adr/0005-k3d-market-order-edge-auth.md)

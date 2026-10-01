@@ -1,0 +1,3 @@
+- op: replace
+  path: /spec/rules/0/filters/0/requestHeaderModifier/set/0/value
+  value: app.e2e.heroassociation.test

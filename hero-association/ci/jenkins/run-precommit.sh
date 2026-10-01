@@ -53,7 +53,8 @@ cp "$artifact_dir/manifest.txt" "$evidence_dir/manifest.txt"
 (
   cd "$snapshot_repo/hero-association/e2e"
   npm ci
-  npm run test:archive -- "$artifact_dir"
 )
-cp "$artifact_dir/e2e-verification.json" "$evidence_dir/e2e-verification.json"
-printf 'Pre-commit build and archive E2E passed; nothing was deployed.\n'
+HERO_ASSOCIATION_LOCAL_CA_CERTIFICATE="${HERO_ASSOCIATION_LOCAL_CA_CERTIFICATE:-$source_repo/hero-association/tls/certs/local-ca.crt}" \
+  "$snapshot_repo/hero-association/deploy/k3d/test-isolated-stack.sh" "$artifact_dir"
+cp "$artifact_dir/k3d-e2e-verification.json" "$evidence_dir/k3d-e2e-verification.json"
+printf 'Pre-commit build and disposable k3d E2E passed; nothing was deployed.\n'

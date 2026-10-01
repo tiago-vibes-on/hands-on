@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import { readFile, realpath, writeFile } from 'node:fs/promises'
+import { readFile, realpath } from 'node:fs/promises'
 import path from 'node:path'
 import { promisify } from 'node:util'
 
@@ -110,44 +110,22 @@ export async function prepareArchive(directory) {
   return archive
 }
 
-export async function recordE2EVerification(archive, status) {
-  if (archive.component !== 'all') {
-    throw new Error('Browser E2E requires a complete four-image archive')
-  }
-  if (status !== 'pending' && status !== 'passed') {
-    throw new Error(`Unsupported E2E verification status: ${status}`)
-  }
-  const record = {
-    version: 1,
-    result: status,
-    buildId: archive.buildId,
-    archiveSha256: archive.archiveSha256,
-    imageIds: Object.fromEntries(
-      components.map((component) => [component, archive.images[component].id]),
-    ),
-    recordedAt: new Date().toISOString(),
-  }
-  await writeFile(
-    path.join(archive.archiveDirectory, 'e2e-verification.json'),
-    `${JSON.stringify(record, null, 2)}\n`,
-  )
-}
-
-export async function requirePassingE2EVerification(archive) {
+export async function requirePassingK3dE2EVerification(archive) {
   if (archive.component !== 'all') {
     throw new Error('Deployment requires a complete four-image archive')
   }
   let record
   try {
-    record = JSON.parse(await readFile(path.join(archive.archiveDirectory, 'e2e-verification.json'), 'utf8'))
+    record = JSON.parse(await readFile(path.join(archive.archiveDirectory, 'k3d-e2e-verification.json'), 'utf8'))
   } catch {
-    throw new Error('Archive has no readable E2E verification record; run npm run test:archive first')
+    throw new Error('Archive has no readable k3d E2E verification record; run test-isolated-stack.sh first')
   }
-  if (record.version !== 1 || record.result !== 'passed' ||
-      record.buildId !== archive.buildId || record.archiveSha256 !== archive.archiveSha256 ||
+  if (record.version !== 1 || record.suite !== 'k3d-isolated' ||
+      record.result !== 'passed' || record.buildId !== archive.buildId ||
+      record.archiveSha256 !== archive.archiveSha256 ||
       Object.keys(record.imageIds ?? {}).sort().join(',') !== [...components].sort().join(',') ||
       components.some((component) => record.imageIds[component] !== archive.images[component].id)) {
-    throw new Error('Archive E2E verification does not match the exact images and checksum being deployed')
+    throw new Error('Archive k3d E2E verification does not match the exact images and checksum being deployed')
   }
   return record
 }

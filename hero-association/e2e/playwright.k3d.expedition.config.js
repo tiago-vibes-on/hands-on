@@ -9,7 +9,7 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   reporter: 'list',
   use: {
-    baseURL: 'https://k3d.heroassociation.test',
+    baseURL: 'https://heroassociation.test',
     ignoreHTTPSErrors: true,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',

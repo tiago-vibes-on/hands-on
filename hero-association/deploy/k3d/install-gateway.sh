@@ -14,9 +14,13 @@ if [[ "$(kubectl config current-context)" != 'k3d-hero-association' ]]; then
   exit 1
 fi
 
-"$script_dir/generate-local-cert.sh"
+"$script_dir/../../tls/generate-local-certs.sh"
+"$script_dir/../../tls/generate-e2e-certs.sh"
 kubectl apply -f "$script_dir/../k8s/base/namespace.yaml"
 kubectl -n hero-association create secret tls hero-association-k3d-tls \
-  --cert="$script_dir/certs/k3d.crt" --key="$script_dir/certs/k3d.key" \
+  --cert="$script_dir/../../tls/certs/local.crt" --key="$script_dir/../../tls/certs/local.key" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n hero-association create secret tls hero-association-k3d-e2e-tls \
+  --cert="$script_dir/../../tls/certs/e2e.crt" --key="$script_dir/../../tls/certs/e2e.key" \
   --dry-run=client -o yaml | kubectl apply -f -
 kubectl apply -k "$script_dir/../k8s/local"

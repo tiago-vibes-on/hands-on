@@ -29,15 +29,15 @@ spec:
             - name: HERO_ASSOCIATION_CORE_BASE_URL
               value: http://core:8081
             - name: HERO_ASSOCIATION_FRONTEND_URL
-              value: https://k3d.heroassociation.test
+              value: https://heroassociation.test
             - name: HERO_ASSOCIATION_OIDC_AUTH_SERVER_URL
               value: http://keycloak:8080/realms/hero-association
             - name: HERO_ASSOCIATION_OIDC_AUTHORIZATION_PATH
-              value: https://auth.k3d.heroassociation.test/realms/hero-association/protocol/openid-connect/auth
+              value: https://auth.heroassociation.test/realms/hero-association/protocol/openid-connect/auth
             - name: HERO_ASSOCIATION_OIDC_ISSUER
-              value: https://auth.k3d.heroassociation.test/realms/hero-association
+              value: https://auth.heroassociation.test/realms/hero-association
             - name: QUARKUS_OIDC_END_SESSION_PATH
-              value: https://auth.k3d.heroassociation.test/realms/hero-association/protocol/openid-connect/logout
+              value: https://auth.heroassociation.test/realms/hero-association/protocol/openid-connect/logout
             - name: HERO_ASSOCIATION_BFF_OIDC_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:

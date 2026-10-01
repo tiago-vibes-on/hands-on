@@ -113,7 +113,7 @@ decision; ADR 0008 defines the current library-in-Expedition approach.
   authority during the first extraction.
 - [ ] Route the existing `/api/v1/market/**` contract through BFF to Market.
   Retain k3d Envoy's five order-placement attempts per second per
-  authenticated user; local Traefik has no market limit.
+  authenticated user in both full k3d and hybrid development.
 - [ ] Test duplicate requests, timeouts, partial fills, cancellation races,
   restarts, reconciliation, and resource release. Remove Core's Market writer
   only after the new path works; never share Core's database with Market.

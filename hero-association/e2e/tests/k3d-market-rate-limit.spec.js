@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-const appUrl = 'https://k3d.heroassociation.test'
+const appUrl = 'https://heroassociation.test'
 const dawnwatchAgencyId = '019c4c00-0001-7000-8000-000000000001'
 const ironridgeAgencyId = '019c4c00-0001-7000-8000-000000000002'
 

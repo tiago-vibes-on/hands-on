@@ -15,12 +15,13 @@ inventories in one PostgreSQL database and updates trades in one transaction. Th
 exposes `GET/POST /api/v1/market/orders` and
 `DELETE /api/v1/market/orders/{orderId}`. In k3d, Envoy Gateway uses
 the BFF-validated subject to allow five order-placement attempts per
-second per authenticated user across sessions and gateway replicas. Normal local Traefik has no market rate limit.
+second per authenticated user across sessions and gateway replicas in both
+full k3d and hybrid development.
 
 The proposed service boundary is:
 
 ```text
-Browser -> Envoy Gateway (k3d) or Traefik (local) -> BFF
+Browser -> Envoy Gateway (full k3d or hybrid) -> BFF
                                                      |-> Core -> core database
                                                      `-> Market -> market database
                                                                   |

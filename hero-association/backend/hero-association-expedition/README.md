@@ -61,7 +61,7 @@ install the shared library first, then start the service with its worker
 enabled:
 
 ```bash
-./mvnw -pl hero-association-lib -am install -DskipTests
+./mvnw -pl hero-association-lib/combat-engine -am install
 cd hero-association-expedition
 HERO_ASSOCIATION_EXPEDITION_WORKER_ENABLED=true ../mvnw quarkus:dev
 ```

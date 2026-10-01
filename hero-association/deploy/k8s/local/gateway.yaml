@@ -30,6 +30,36 @@ spec:
       allowedRoutes:
         namespaces:
           from: Same
+    - name: e2e-app
+      hostname: app.e2e.heroassociation.test
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: hero-association-k3d-e2e-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              heroassociation.test/e2e-gateway: "true"
+    - name: e2e-auth
+      hostname: auth.e2e.heroassociation.test
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: hero-association-k3d-e2e-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              heroassociation.test/e2e-gateway: "true"
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -41,8 +71,8 @@ spec:
     - name: hero-association
       sectionName: http
   hostnames:
-    - k3d.heroassociation.test
-    - auth.k3d.heroassociation.test
+    - heroassociation.test
+    - auth.heroassociation.test
   rules:
     - filters:
         - type: RequestRedirect

@@ -29,7 +29,7 @@ Manager ID. Agency placement and cancellation require leadership of the
 selected agency. Reservations, refunds, and settlement use the selected
 owner's wallet and inventory. The same owner cannot match its own orders.
 In k3d, Envoy retains the five-placement-attempts-per-second limit per
-authenticated user, regardless of agency. Normal local Traefik has no
+authenticated user, regardless of agency. Hybrid local mode uses the same
 limit. The frontend refreshes personal account and agency state separately after an
 order mutation. The old agency-scoped market URLs are removed while
 the product is still in its resettable pre-production stage.
