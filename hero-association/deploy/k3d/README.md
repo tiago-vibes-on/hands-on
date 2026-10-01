@@ -284,13 +284,13 @@ checks, so Docker must be available.
 
 ## Promote a verified archive
 
-For independent Core, BFF, or frontend updates, use the nine jobs in the
+For independent Core, BFF, Expedition, or frontend updates, use the twelve jobs in the
 [local Jenkins runbook](../../ci/jenkins/README.md). A service build verifies
-its candidate together with the two images currently running here; its
+its candidate together with the other three images currently running here; its
 separate deploy job promotes only that service and rejects a changed baseline.
 The manual commands below remain the complete-stack archive workflow.
 
-For a fresh build through archived-image E2E, k3d browser, and market k6
+For a fresh build through archived-image E2E, k3d browser, Map, and market k6
 gates, run `../../pipeline/run-k3d-pipeline.sh` from this directory. It
 creates a new archive and prints its path. The commands below promote an archive that has
 already passed the separate E2E gate.
@@ -356,7 +356,7 @@ node deploy-k3d.mjs --verify-only artifacts/<build-id>/all
 ```
 
 This read-only audit requires the same passing archive E2E record and checks
-the Deployment references and every running Core, BFF, and frontend Pod image
+the Deployment references and every running Core, BFF, Expedition, and frontend Pod image
 digest against the archive. It does not rerun browser or k6 tests.
 
 The direct-build commands below still use fixed `:k3d` tags. Reapplying

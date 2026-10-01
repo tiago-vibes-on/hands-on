@@ -285,6 +285,8 @@ mana derive from hero level. New heroes start at Level 1 with all four skills
 at Level 1. The existing Hero API still returns percentage stamina for the
 frontend; a time-based API is planned separately. Combat skill and
 creature XP awards are active; agency practice is not.
+The agency-state Hero response includes cumulative `experience`, so clients
+can observe XP earned between level-ups.
 
 Combat XP is calculated separately for each living party hero from the full
 creature base XP at defeat, without a party-size or damage split. Individual
@@ -524,6 +526,10 @@ IDs must not be added for entities or exposed through the API.
   Private k3d Redis, RabbitMQ, and Expedition are staged. An explicit
   integration command enables Core admission/settlement, Expedition APIs, and
   the BFF WebSocket; an authenticated k3d journey passed, with the frontend Map now enabled.
+  The four-image local pipeline now promotes Core, BFF, Expedition, and
+  Map-enabled frontend together; the Expedition-only lane verifies the other
+  three running images before promotion. Both paths passed archive-backed,
+  authenticated k3d Map, Expedition, and market gates.
 - The Map screen is the player-facing battle view in k3d. It reuses the
   Phaser battle renderer for the party and creatures, including health, mana,
   rune slots, spells, timed hits, critical effects, and recovery animations.

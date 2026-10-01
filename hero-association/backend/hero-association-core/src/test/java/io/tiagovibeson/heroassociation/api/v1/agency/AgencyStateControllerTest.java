@@ -59,6 +59,7 @@ class AgencyStateControllerTest {
                 .then()
                 .statusCode(200)
                 .body("heroes.find { it.alias == 'Moonweaver' }.magicLevel", is(15))
+                .body("heroes.find { it.alias == 'Moonweaver' }.experience", notNullValue())
                 .body("heroes.find { it.alias == 'Moonweaver' }.healthRecoveryPerSecond", is(2))
                 .body("heroes.find { it.alias == 'Moonweaver' }.manaRecoveryPerSecond", is(10))
                 .body("heroes.find { it.alias == 'Moonweaver' }.runeSlots[1].rune.code", is("critical-chance-rune"))

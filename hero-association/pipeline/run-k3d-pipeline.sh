@@ -36,13 +36,13 @@ if [[ "$context" != 'k3d-hero-association' ]]; then
   printf 'Refusing to use Kubernetes context: %s\n' "$context" >&2
   exit 1
 fi
-kubectl --kubeconfig "$kubeconfig" -n hero-association get deployment core bff frontend >/dev/null
+kubectl --kubeconfig "$kubeconfig" -n hero-association get deployment core bff expedition frontend >/dev/null
 
 stage='k3d rollback regression tests'
 node --test "$script_dir/rollback-k3d.test.mjs" "$script_dir/core-bootstrap-job.test.mjs"
 
 stage='build and archive'
-printf 'Building Core, BFF, and frontend as %s\n' "$build_id"
+printf 'Building Core, BFF, Expedition, and frontend as %s\n' "$build_id"
 "$script_dir/build-local.sh" all "$build_id"
 
 stage='archive-backed browser E2E'

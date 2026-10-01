@@ -29,7 +29,7 @@ idempotency, retries, and recovery.
 | Agency | Membership, leadership, permissions, and upgrades | In Core; extraction planned |
 | Hero | Recruited heroes, permanent resources, XP, skills, and loadouts | In Core; extraction planned |
 | Map | Reusable field/dungeon definitions, floor layouts, and possible encounters | Not implemented; extraction planned |
-| Expedition | One persistent Party per Manager, active Map run, encounter coordination, and explicit return | Private Redis encounter, admission, settlement handoff, BFF socket, and opt-in Map UI implemented; cutover pending |
+| Expedition | One persistent Party per Manager, active Map run, encounter coordination, and explicit return | Player-facing k3d Map cutover complete; ordinary local Map remains opt-in |
 | Quest | Optional objectives, rewards, and objective progress | Current quest-based flow in Core; extraction planned |
 | Creature | Versioned creature definitions: stats, attacks, XP, and drop tables | In Core; extraction planned |
 | Social | Feed posts; proposed future scope is manager-authored text only | In Core; extraction planned |
@@ -75,8 +75,9 @@ state, settlement on return, and 100/500/1,000-concurrent-fight tests. The
 and durable Redis state. The Map path is enabled in k3d and remains opt-in
 for ordinary local development.
 [ADR 0008](adr/0008-combat-engine-in-expedition.md) supersedes the standalone
-Combat-service cutover in ADR 0007. Core remains the live quest-battle writer
-until the new path passes its cutover checks. The standalone Combat sandbox
+Combat-service cutover in ADR 0007. Expedition now owns player-facing Map
+fights. Core remains the Quest-battle writer until Quest is redesigned. The
+standalone Combat sandbox
 and its Core fact inbox have been retired.
 Market and other domains remain deferred.
 

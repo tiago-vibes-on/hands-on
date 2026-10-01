@@ -14,7 +14,7 @@ const kubeconfig = process.env.HERO_ASSOCIATION_K3D_KUBECONFIG || path.join(proj
 const cachedK3d = path.join(projectDirectory, 'deploy/k3d/.tools/k3d')
 const k3d = process.env.K3D_BIN || (existsSync(cachedK3d) ? cachedK3d : 'k3d')
 const namespace = 'hero-association'
-const components = ['core', 'bff', 'frontend']
+const components = ['core', 'bff', 'expedition', 'frontend']
 const kubectl = ['--kubeconfig', kubeconfig]
 const clusterEnvironment = { ...process.env, KUBECONFIG: kubeconfig }
 const bootstrapManifest = path.join(projectDirectory, 'deploy/k8s/backend/core-db-bootstrap.yaml')
@@ -225,7 +225,7 @@ async function recordPromotion(archive, observedPods, coreBootstrapJob) {
       id: archive.images[component].id,
       pods: observedPods[component],
     }])),
-    checks: { archiveE2E: 'passed', podImages: 'passed', browserE2E: 'passed', marketK6: 'passed' },
+    checks: { archiveE2E: 'passed', podImages: 'passed', browserE2E: 'passed', expeditionApiE2E: 'passed', mapE2E: 'passed', marketK6: 'passed' },
     recordedAt: new Date().toISOString(),
   }
   const destination = path.join(archive.archiveDirectory, 'k3d-promotion.json')
@@ -270,7 +270,7 @@ async function main() {
 
   const archive = await inspectArchive(process.argv[mode === 'promote' ? 2 : 3])
   if (mode === 'reset-core-db' && archive.promoteComponent) {
-    throw new Error('A Core database reset requires a complete three-service archive')
+    throw new Error('A Core database reset requires a complete four-service archive')
   }
   if (archive.promoteComponent) {
     const baselineComponents = components.filter((component) => component !== archive.promoteComponent)
@@ -313,6 +313,8 @@ async function main() {
     await verifyDeploymentImageReferences(archive)
     await verifyRunningPodImages(archive)
     await run('npm', ['run', 'test:k3d'], { cwd: path.join(projectDirectory, 'e2e') })
+    await run('npm', ['run', 'test:k3d:expedition'], { cwd: path.join(projectDirectory, 'e2e') })
+    await run('npm', ['run', 'test:k3d:map'], { cwd: path.join(projectDirectory, 'e2e') })
     await run('npm', ['run', 'test:market:k6'], { cwd: path.join(projectDirectory, 'e2e') })
     for (const component of promotedComponents) {
       await run('kubectl', [...kubectl, '-n', namespace, 'rollout', 'status', 'deployment/' + component, '--timeout=5m'])

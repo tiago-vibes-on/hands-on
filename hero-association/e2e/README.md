@@ -81,11 +81,12 @@ npm ci
 npm run test:archive -- ../pipeline/artifacts/<build-id>/all
 ```
 
-The runner verifies the archive checksum and all three manifest image IDs
+The runner verifies the archive checksum and all four manifest image IDs
 before changing the isolated E2E stack. It loads those images, disables
-Compose builds and pulls for Core, BFF, and frontend, and confirms the
-running containers use the recorded IDs. Keycloak, databases, Redis, and
-Traefik remain pinned Compose dependencies outside the application archive.
+Compose builds and pulls for Core, BFF, Expedition, and frontend, and confirms
+the running containers use the recorded IDs. It also runs the Expedition
+browser journey. Keycloak, databases, Redis, RabbitMQ, and Traefik remain pinned
+Compose dependencies outside the application archive.
 Only a successful browser run followed by cleanup records `result: passed`
 in the ignored archive's `e2e-verification.json`. An invalid archive is
 rejected before setup; after validation, an interrupted or failed test run

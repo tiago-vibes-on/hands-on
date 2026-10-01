@@ -2,12 +2,12 @@
 set -euo pipefail
 
 if [[ $# -ne 2 ]]; then
-  printf 'Usage: %s <core|bff|frontend> <artifact-id>\n' "$0" >&2
+  printf 'Usage: %s <core|bff|expedition|frontend> <artifact-id>\n' "$0" >&2
   exit 2
 fi
 component="$1"
 artifact_id="$2"
-[[ "$component" == core || "$component" == bff || "$component" == frontend ]] || exit 2
+[[ "$component" == core || "$component" == bff || "$component" == expedition || "$component" == frontend ]] || exit 2
 [[ "$artifact_id" =~ ^(worktree|main)-${component}-[A-Za-z0-9_.-]+$ ]] ||
   { printf 'Invalid %s artifact ID: %s\n' "$component" "$artifact_id" >&2; exit 1; }
 [[ -n "${JENKINS_AGENT_WORKDIR:-}" && -n "${HERO_ASSOCIATION_SOURCE_REPO:-}" && -n "${WORKSPACE:-}" ]] ||

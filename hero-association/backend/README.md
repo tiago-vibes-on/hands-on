@@ -44,6 +44,8 @@ Expedition player API deliberately as well. An opt-in frontend Map page
 now uses these commands and the socket. The isolated local and visible
 k3d journeys passed. Map is player-facing in k3d; ordinary local development
 keeps it opt-in, and Core Quest combat remains live.
+Agency-state Hero responses include cumulative `experience`; a successful
+fight can increase XP without immediately increasing a Hero level.
 The private settlement handoff is disabled by default. See the [Expedition README](hero-association-expedition/README.md)
 and [settlement handoff](../EXPEDITION_SETTLEMENT.md). To exercise internal
 admission, set the same uncommitted
@@ -65,6 +67,11 @@ and the [integration runbook](../deploy/k3d/EXPEDITION_INTEGRATION.md) covers
 the opt-in authenticated k3d path. Normal backend deployment does not
 enable Expedition; rerun the integration command after it. The k3d frontend
 build enables Map by default.
+
+For the routine four-service build and k3d promotion, run
+`../pipeline/run-k3d-pipeline.sh` as described in the
+[pipeline README](../pipeline/README.md). It archives Core, BFF, Expedition,
+and a Map-enabled frontend, then verifies browser, Map, and market paths.
 
 The pure combat rules and snapshots live in `hero-association-lib/combat-engine`,
 shared by Core and Expedition. The library has no Quarkus or

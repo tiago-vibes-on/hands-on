@@ -6,20 +6,21 @@ agent is a background process in the existing Ubuntu WSL installation, not
 another VM or WSL distribution. GitHub is the source repository; neither
 GitHub-hosted runners nor Floci/AWS execute these builds.
 
-Nine service jobs share the WSL agent's single executor:
+Twelve service jobs share the WSL agent's single executor:
 
 | Service | Manual uncommitted build | Trusted `main` build | Local deploy |
 | --- | --- | --- | --- |
 | Core | `hero-association-core-build-worktree` | `hero-association-core-build-main` | `hero-association-core-deploy-local` |
 | BFF | `hero-association-bff-build-worktree` | `hero-association-bff-build-main` | `hero-association-bff-deploy-local` |
+| Expedition | `hero-association-expedition-build-worktree` | `hero-association-expedition-build-main` | `hero-association-expedition-deploy-local` |
 | Frontend | `hero-association-frontend-build-worktree` | `hero-association-frontend-build-main` | `hero-association-frontend-deploy-local` |
 
-Each build creates one candidate image and a checksummed three-image archive
-using the other two images currently running in k3d. Browser E2E tests the
+Each build creates one candidate image and a checksummed four-image archive
+using the other three images currently running in k3d. Browser E2E tests the
 exact combination. A worktree build never deploys automatically; its deploy
 job is started manually with the verified artifact ID. Each successful `main`
 build triggers its corresponding deploy job. A Jenkins lock serializes the
-complete `main` build-and-deploy pairs across all three services, so a
+complete `main` build-and-deploy pairs across all four services, so a
 multi-service commit builds each candidate against the last deployed baseline.
 After the first successful `main` run, a job skips commits that change
 neither its service nor shared build, E2E, Jenkins, or k3d files.
@@ -36,6 +37,9 @@ not add a registry.
 - Docker Desktop with WSL integration (or a Linux Docker engine) and Docker
   Compose. Every service build and deploy job requires a running,
   bootstrapped Hero Association k3d cluster.
+- Expedition staged in k3d with its private Redis and RabbitMQ, plus
+  `enable-expedition-integration.sh` applied. The archived and k3d browser
+  gates now exercise the Map journey on every service promotion.
 - Java 25, Node.js 24/npm, Docker CLI, `kubectl`, `git`, `rsync`, `openssl`, and
   `curl` in the same WSL distribution. The existing ignored
   `deploy/k3d/.tools/k3d` binary is used if `k3d` is not on `PATH`.
@@ -94,8 +98,13 @@ sed -n 's/^JENKINS_ADMIN_PASSWORD=//p' .env
 ```
 
 Worktree builds are available immediately. After this configuration reaches
-GitHub `main`, its three build jobs poll that branch; a successful build
+GitHub `main`, its four build jobs poll that branch; a successful build
 automatically invokes a separate deploy-local job.
+
+When `jenkins.yaml` changes locally, wait for running jobs to finish, then
+run `docker compose -f compose.yaml restart jenkins` in this directory to
+reload the generated jobs. The `main` jobs still use GitHub's committed code.
+
 The jobs are intentionally not configured for pull requests or forks. The
 single agent executor allows one build or deployment at a time, and the Jenkins controller itself has zero executors.
 
@@ -105,7 +114,7 @@ Open <http://localhost:15180> and select the matching
 `hero-association-<service>-build-worktree` job, then choose **Build Now**.
 It snapshots tracked, staged, unstaged, and non-ignored new files before
 building only that service. Jenkins runs its tests or lint, builds the image,
-assembles a three-image archive with the current k3d BFF/Core/frontend
+assembles a four-image archive with the current k3d Core/BFF/Expedition/frontend
 baseline, and runs the archive-backed browser suite. The full archive
 is retained under the WSL agent work directory; the build record includes
 `artifact-id.txt`, the manifest, and the E2E result. If you edit source while
@@ -114,9 +123,9 @@ are not copied.
 
 To deploy, open `hero-association-<service>-deploy-local`, choose **Build with
 Parameters**, and paste the successful build artifact ID into `ARTIFACT_ID`.
-The deploy job checks the two unchanged k3d service images against the
+The deploy job checks the three unchanged k3d service images against the
 archive, imports and rolls only the selected service, verifies all running
-Pod image digests, then runs the k3d browser and market k6 suites. If the
+Pod image digests, then runs the k3d browser, Map, and market k6 suites. If the
 baseline has changed, build again before deploying. If a post-rollout gate
 fails, the selected service image is restored. No deploy job rebuilds an
 image. The `main` build jobs call these same deploy jobs automatically after

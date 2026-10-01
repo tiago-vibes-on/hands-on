@@ -14,6 +14,11 @@ services:
     image: ${HERO_ASSOCIATION_E2E_BFF_IMAGE:?Use the archive-backed E2E runner.}
     pull_policy: never
 
+  expedition:
+    build: !reset null
+    image: ${HERO_ASSOCIATION_E2E_EXPEDITION_IMAGE:?Use the archive-backed E2E runner.}
+    pull_policy: never
+
   frontend:
     build: !reset null
     image: ${HERO_ASSOCIATION_E2E_FRONTEND_IMAGE:?Use the archive-backed E2E runner.}

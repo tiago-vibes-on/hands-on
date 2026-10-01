@@ -59,11 +59,9 @@ Open `https://k3d.heroassociation.test`, sign in as User2, and choose
 **Map → Troll Field** with the seeded three-Hero Main Party. Continue starts another fight only
 after a win; Return waits for the current fight to finish before settling.
 The standalone Dockerfile and ordinary Vite development default to Map off.
-The regular Jenkins artifact build also defaults Map off until Expedition is
-included in routine promotion. For an explicit Map-enabled frontend archive,
-set `HERO_ASSOCIATION_FRONTEND_MAP_ENABLED=true` when running
-`pipeline/build-local.sh` or the k3d pipeline. Rerun the integration command
-after any routine backend promotion, whose base manifests disable it.
+The four-image local pipeline and Jenkins artifacts build Map-enabled frontend
+images by default and verify Expedition and Map before promotion. Rerun the
+integration command after base backend deployment, whose manifests disable it.
 
 ## Validate
 

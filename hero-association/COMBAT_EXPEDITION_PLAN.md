@@ -1,8 +1,8 @@
 # Combat and Expedition implementation plan
 
-Status: in progress. The shared combat library, Expedition encounter loop,
-aggregate settlement handoff, and a player-facing k3d Map journey are live.
-Ordinary local development still keeps Map opt-in. Follow
+Status: player-facing Map cutover complete in k3d; load tests deferred. The
+shared combat library, Expedition encounter loop, and aggregate settlement
+handoff are live. Ordinary local development still keeps Map opt-in. Follow
 [ADR 0008](adr/0008-combat-engine-in-expedition.md). Core Quest combat
 still runs in Core. The standalone Combat-service sandbox and its Core fact
 inbox have been retired; [SPEC.md](SPEC.md) documents the remaining runtime.
@@ -84,18 +84,19 @@ after the final load-test report without a new explicit request.
    socket visuals, and sends explicit Continue/Return commands. The feature
    flags remain off in ordinary local development. The isolated local journey passed
    entry, live/reconnected visuals, Continue, deferred Return, and Core
-   settlement. The k3d API and visible Map browser journeys passed; the restart drill and routine pipeline promotion remain open.
+   settlement. Step 7 verified k3d restart recovery and routine promotion.
    The frontend Quest board now shows information and progress without the
    old expanded combat view or its two-second sync polling.
-7. [ ] Validate local and k3d end-to-end behavior, including a two-service
-   restart drill, then switch the player-facing path. Retire the old Core
-   combat worker/sync path only after no supported flow depends on it. The
-   standalone Combat sandbox has already been removed. Keep unrelated Core behavior working and
-   document the final runtime commands.
-   Local Compose, isolated E2E, and k3d use separate RabbitMQ service accounts.
-   Private k3d Redis, RabbitMQ, and Expedition are healthy. The opt-in
-   integration command enables the authenticated Core/Expedition/BFF path,
-   which passed API and visible Map browser tests; restart and routine promotion remain open.
+7. [x] Validate the local and k3d Map journey and promote the player-facing
+   path. A paused Redis run kept its phase and state version across a Core
+   rolling update and an Expedition restart; authenticated API and visible
+   Map journeys then passed through settlement. A four-image archive-backed
+   pipeline and an Expedition-only service promotion both passed isolated
+   browser, k3d browser, Expedition, Map, and market gates. The standalone
+   Combat sandbox is removed. Core Quest combat remains intentionally live:
+   Quest start still creates a persisted `QuestCombat` for the Core worker.
+   Retire that Quest worker/sync path only with a separate Quest redesign.
+   Runtime commands are in the backend and k3d runbooks.
 8. [ ] Add and run repeatable load tests for **100, 500, and 1,000 concurrent
    fights**, not merely 100/500/1,000 requests. Exercise fights with no
    viewers and with WebSocket viewers, a disconnected browser, Continue, and
@@ -109,6 +110,6 @@ after the final load-test report without a new explicit request.
 
 ## Stop condition
 
-For now, focus on the player-facing combat flow and report remaining cutover
-checks. Do not start step 8 until the user explicitly resumes load testing.
-A later bare `next` does not authorize work outside this plan.
+The player-facing Map cutover is complete. Do not start step 8 until the user
+explicitly resumes load testing. A later bare `next` does not authorize work
+outside this plan.

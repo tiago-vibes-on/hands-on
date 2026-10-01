@@ -6,7 +6,7 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 
 const executeFile = promisify(execFile)
-const components = ['core', 'bff', 'frontend']
+const components = ['core', 'bff', 'expedition', 'frontend']
 
 function singleManifestValue(lines, name) {
   const values = lines.filter((line) => line.startsWith(`${name}=`))
@@ -112,7 +112,7 @@ export async function prepareArchive(directory) {
 
 export async function recordE2EVerification(archive, status) {
   if (archive.component !== 'all') {
-    throw new Error('Browser E2E requires a complete three-image archive')
+    throw new Error('Browser E2E requires a complete four-image archive')
   }
   if (status !== 'pending' && status !== 'passed') {
     throw new Error(`Unsupported E2E verification status: ${status}`)
@@ -135,7 +135,7 @@ export async function recordE2EVerification(archive, status) {
 
 export async function requirePassingE2EVerification(archive) {
   if (archive.component !== 'all') {
-    throw new Error('Deployment requires a complete three-image archive')
+    throw new Error('Deployment requires a complete four-image archive')
   }
   let record
   try {

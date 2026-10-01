@@ -12,8 +12,7 @@ const composeFiles = [
   path.join(e2eDirectory, 'compose.e2e.yaml'),
 ]
 const archiveComposeFile = path.join(e2eDirectory, 'compose.archive.yaml')
-const expeditionMode = process.env.HERO_ASSOCIATION_E2E_EXPEDITION === 'true'
-if (expeditionMode) composeFiles.push(path.join(e2eDirectory, 'compose.expedition.e2e.yaml'))
+let expeditionMode = process.env.HERO_ASSOCIATION_E2E_EXPEDITION === 'true'
 let activeArchive = null
 
 const e2eEnvironment = {
@@ -53,6 +52,7 @@ function composeEnvironment() {
     ...e2eEnvironment,
     HERO_ASSOCIATION_E2E_CORE_IMAGE: activeArchive.images.core.ref,
     HERO_ASSOCIATION_E2E_BFF_IMAGE: activeArchive.images.bff.ref,
+    HERO_ASSOCIATION_E2E_EXPEDITION_IMAGE: activeArchive.images.expedition.ref,
     HERO_ASSOCIATION_E2E_FRONTEND_IMAGE: activeArchive.images.frontend.ref,
   }
 }
@@ -72,6 +72,7 @@ async function verifyArchiveCompose() {
     core: 'core',
     bff: 'bff',
     'bff-secondary': 'bff',
+    ...(expeditionMode ? { expedition: 'expedition' } : {}),
     frontend: 'frontend',
   })) {
     const definition = services[service]
@@ -88,6 +89,7 @@ async function verifyRunningImages() {
     core: 'core',
     bff: 'bff',
     'bff-secondary': 'bff',
+    ...(expeditionMode ? { expedition: 'expedition' } : {}),
     frontend: 'frontend',
   })) {
     const { stdout } = await compose('ps', '-q', service)
@@ -168,8 +170,9 @@ async function configureShortLivedE2ETokens() {
   }
 }
 export default async function globalSetup({ archive } = {}) {
-  if (archive && expeditionMode) {
-    throw new Error('Expedition E2E cannot run against the three-image Core/BFF/frontend archive.')
+  expeditionMode ||= Boolean(archive?.images.expedition)
+  if (expeditionMode && !composeFiles.includes(path.join(e2eDirectory, 'compose.expedition.e2e.yaml'))) {
+    composeFiles.push(path.join(e2eDirectory, 'compose.expedition.e2e.yaml'))
   }
   activeArchive = archive ?? null
   if (activeArchive) {

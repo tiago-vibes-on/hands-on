@@ -5,7 +5,7 @@ them to k3d or store them in Floci S3 for a later AWS-lab deployment. The normal
 Vite/Quarkus development workflow remains separate.
 
 The [local Jenkins setup](../ci/jenkins/README.md) has independent Core, BFF,
-and frontend worktree builds and trusted-`main` builds, plus a deploy-local job
+Expedition, and frontend worktree builds and trusted-`main` builds, plus a deploy-local job
 for each service. The older complete-stack command below remains available
 manually. Worktree builds need a separate manual deployment; successful `main`
 builds trigger their service deploy job. A Jenkins lock serializes whole
@@ -21,10 +21,11 @@ already running, run from `hero-association/pipeline`:
 ```
 
 Optionally pass a unique build ID. The command checks the isolated cluster
-and runs rollback and Core-reset target tests before building and testing Core, BFF, and
-frontend once. It archives those images, runs the archive-backed Playwright
-gate, then imports and deploys them to k3d and runs the k3d browser and
-containerized market k6 suites. If any stage fails, later stages do not run.
+and runs rollback and Core-reset target tests before building and testing Core,
+BFF, Expedition, and frontend once. It archives those images, runs the
+archive-backed Playwright gate, then deploys them to k3d and runs the k3d
+browser, Expedition, Map, and containerized market k6 suites. If any stage
+fails, later stages do not run.
 The archive remains in ignored `artifacts/<build-id>/all/` for inspection or
 a later deployment target. It does not reset databases or modify the normal
 Compose development stack. For an intentional schema/seed change in the
@@ -40,18 +41,21 @@ repair the cluster before retrying. On WSL, prefix either command with
 ## Build and verify in separate stages
 
 From `hero-association/pipeline`, with Docker, Java 25, Node.js 24, and npm
-available, build both JVM services and the frontend image in one run:
+available, build the three JVM services and the frontend image in one run:
 
 ```bash
 ./build-local.sh all
 ```
 
-The command runs Core and BFF Maven tests, frontend lint and build, then builds
-the three Docker images. It writes a single `images.tar`, SHA-256 checksum,
+The command runs Core, BFF, and Expedition Maven tests, frontend lint and build,
+then builds four Docker images. It writes a single `images.tar`, SHA-256 checksum,
 and manifest under ignored `artifacts/<build-id>/all/`. The manifest records
 the Git revision, whether the source worktree was dirty, and each local image
 ID. The archive is the candidate to promote to multiple deployment targets;
 the older direct-build k3d scripts still use fixed `:k3d` tags.
+
+Pipeline frontend images enable Map by default; ordinary Vite development
+still keeps Map opt-in.
 
 Verify and load a completed archive without rebuilding it:
 
@@ -68,6 +72,7 @@ Each component can also run as its own build lane, with a shared explicit ID:
 
 ```bash
 ./build-local.sh core demo-001
+./build-local.sh expedition demo-001
 ./build-local.sh bff demo-001
 ./build-local.sh frontend demo-001
 ```
@@ -101,18 +106,18 @@ development suite.
 
 For a single-service promotion, Jenkins first runs `build-local.sh` for that
 component. It then uses `assemble-service-archive.mjs` to combine the candidate
-with the two live k3d images in a checksummed, three-image archive. The manifest
+with the other three live k3d images in a checksummed, four-image archive. The manifest
 includes `promote_component`. The archive browser gate tests exactly this
-combination, not an unrelated three-service rebuild. Build and deploy jobs
+combination, not an unrelated four-service rebuild. Build and deploy jobs
 share the retained artifact under the WSL agent work directory at
 `artifacts/<build-id>/all`; the Jenkins build record stores its ID and small
 evidence. A build does not change k3d.
 
-`deploy-k3d.mjs --verify-baseline` checks the two baseline Deployment
+`deploy-k3d.mjs --verify-baseline` checks the three baseline Deployment
 references and running Pod image digests before the browser gate. The deploy
 job repeats this drift check and requires the exact archive's passing E2E record.
-It imports and rolls only the promoted component. It still verifies all three
-Pods and runs the k3d browser and market k6 gates. After k6, the final Pod
+It imports and rolls only the promoted component. It verifies all four
+application Deployments and runs browser, Expedition, Map, and market k6 gates. The final Pod
 check briefly retries while autoscaling settles, but a persistent digest or
 readiness mismatch fails promotion. A failure after rollout
 restores only that component's previous reference. If either baseline changed
@@ -120,10 +125,10 @@ since the build, rebuild against the current cluster. The latest successful
 per-service deployment wins.
 
 This local mechanism needs a healthy k3d cluster even for a build, because
-the other two images are read from it. It does not create a reproducible
+the other three images are read from it. It does not create a reproducible
 release artifact for other environments. Floci publish, fetch, and frontend
 preview reject these k3d-specific composite archives; use a full
-three-image build for the separate Floci lab. Main builds use a clean GitHub
+four-image build for the separate Floci lab. Main builds use a clean GitHub
 checkout; worktree builds snapshot staged, unstaged, and non-ignored new
 files. Do not delete retained archives while a deploy job may still use them.
 
@@ -139,26 +144,26 @@ node deploy-k3d.mjs --reset-core-db artifacts/<build-id>/all
 
 This command checks the archive and its passing E2E record before loading
 any of its images into local Docker. It checks the isolated Kubernetes context
-and healthy deployments, imports the same three image tags to k3d, and rolls
-out Core, BFF, and frontend.
+and healthy deployments, imports the same four image tags to k3d, and rolls
+out Core, BFF, Expedition, and frontend.
 For a clean automation checkout, set `HERO_ASSOCIATION_K3D_KUBECONFIG` to the
 absolute path of the original ignored `deploy/k3d/.kubeconfig` and `K3D_BIN`
 to the local k3d binary. The default manual workflow still uses the
 checkout's ignored kubeconfig.
 It resolves each platform image from the verified archive and checks that
 every running application Pod reports a linked OCI image digest, not merely
-the expected tag. It then runs the k3d Playwright and containerized market
-k6 suites. A failed rollout or suite restores the previous Deployment image
+the expected tag. It then runs the k3d browser, Expedition, Map, and
+containerized market k6 suites. A failed rollout or suite restores the previous Deployment image
 references, verifies them, and reports concurrent changes without overwriting
 them. Run `node --test rollback-k3d.test.mjs` to test this failure path without
 changing the cluster. Promotion does not build images, apply bootstrap
 manifests, reset Core data, or touch normal Compose development. The
-`--reset-core-db` variant requires a complete three-service archive. After
+`--reset-core-db` variant requires a complete four-service archive. After
 checking the k3d context, exact Core database identity, archive, and passing
 archive E2E record, it imports those images, stops Core and its HPA, and
 creates a one-shot bootstrap Job with **the archived Core image**, not the
-fixed `:k3d` tag. It then starts Core, restores the HPA, promotes BFF and
-frontend, and runs the same Pod-image, browser, and k6 gates. If bootstrap
+fixed `:k3d` tag. It then starts Core, restores the HPA, promotes BFF,
+Expedition, and frontend, and runs the same Pod-image, browser, and k6 gates. If bootstrap
 fails, Core remains stopped for inspection. If a later gate fails, the
 reset-aware command leaves deployment images in place instead of attempting
 an unsafe rollback against a newly recreated schema.

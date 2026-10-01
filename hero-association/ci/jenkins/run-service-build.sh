@@ -2,13 +2,13 @@
 set -euo pipefail
 
 if [[ $# -ne 2 ]]; then
-  printf 'Usage: %s <worktree|main> <core|bff|frontend>\n' "$0" >&2
+  printf 'Usage: %s <worktree|main> <core|bff|expedition|frontend>\n' "$0" >&2
   exit 2
 fi
 mode="$1"
 component="$2"
 [[ "$mode" == worktree || "$mode" == main ]] || exit 2
-[[ "$component" == core || "$component" == bff || "$component" == frontend ]] || exit 2
+[[ "$component" == core || "$component" == bff || "$component" == expedition || "$component" == frontend ]] || exit 2
 [[ -n "${HERO_ASSOCIATION_SOURCE_REPO:-}" && -n "${JENKINS_AGENT_WORKDIR:-}" ]] ||
   { printf 'Missing Jenkins agent configuration\n' >&2; exit 1; }
 [[ "${BUILD_NUMBER:-}" =~ ^[0-9]+$ && -n "${WORKSPACE:-}" ]] ||
@@ -46,6 +46,8 @@ if [[ "$mode" == main && "${GIT_PREVIOUS_SUCCESSFUL_COMMIT:-}" =~ ^[a-f0-9]{40}$
         if [[ "$component" == core ]]; then relevant_change=true; fi ;;
       hero-association/backend/hero-association-bff/*)
         if [[ "$component" == bff ]]; then relevant_change=true; fi ;;
+      hero-association/backend/hero-association-expedition/*)
+        if [[ "$component" == expedition ]]; then relevant_change=true; fi ;;
       hero-association/frontend/*)
         if [[ "$component" == frontend ]]; then relevant_change=true; fi ;;
       hero-association/backend/*)

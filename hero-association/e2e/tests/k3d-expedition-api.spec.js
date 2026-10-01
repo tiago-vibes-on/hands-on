@@ -133,5 +133,6 @@ test('authenticated k3d Expedition enters, streams, reconnects, continues, and s
     timeout: 90_000, intervals: [1_000],
   }).toBe(204)
   const after = await (await page.request.get(`/api/v1/agencies/${agencyId}/state`)).json()
-  expect(after.personalHeroes.find(hero => hero.id === warrior.id).level).toBeGreaterThan(warrior.level)
+  expect(after.personalHeroes.find(hero => hero.id === warrior.id).experience)
+    .toBeGreaterThan(warrior.experience)
 })

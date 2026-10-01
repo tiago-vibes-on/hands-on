@@ -91,5 +91,6 @@ test('User2 default party enters Troll Field, reconnects, continues, and settles
   }).toBe(204)
 
   const settled = await (await page.request.get(`/api/v1/agencies/${agencyId}/state`)).json()
-  expect(settled.personalHeroes.find((hero) => hero.id === warrior.id).level).toBeGreaterThan(warrior.level)
+  expect(settled.personalHeroes.find((hero) => hero.id === warrior.id).experience)
+    .toBeGreaterThan(warrior.experience)
 })

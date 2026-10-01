@@ -34,29 +34,39 @@ test('accepts a single-service candidate archive', async (t) => {
   assert.deepEqual(Object.keys(archive.images), ['core'])
 })
 
+test('accepts an Expedition candidate archive', async (t) => {
+  const directory = await fixture(['component=expedition', image('expedition')])
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const archive = await inspectArchive(directory)
+  assert.equal(archive.component, 'expedition')
+  assert.deepEqual(Object.keys(archive.images), ['expedition'])
+})
+
 test('accepts a full service archive with prior baseline tags', async (t) => {
   const directory = await fixture([
     'component=all',
     'promote_component=core',
     image('core'),
     image('bff', 'main-bff-17-previous'),
+    image('expedition', 'main-expedition-18-previous'),
     image('frontend', 'main-frontend-16-previous'),
   ])
   t.after(() => rm(directory, { recursive: true, force: true }))
   const archive = await inspectArchive(directory)
   assert.equal(archive.promoteComponent, 'core')
   assert.equal(archive.images.bff.ref, 'hero-association-bff:main-bff-17-previous')
+  assert.equal(archive.images.expedition.ref, 'hero-association-expedition:main-expedition-18-previous')
 })
 
-test('keeps the existing full-build archive format', async (t) => {
-  const directory = await fixture(['component=all', ...['core', 'bff', 'frontend'].map((name) => image(name))])
+test('accepts the four-image full-build archive format', async (t) => {
+  const directory = await fixture(['component=all', ...['core', 'bff', 'expedition', 'frontend'].map((name) => image(name))])
   t.after(() => rm(directory, { recursive: true, force: true }))
   assert.equal((await inspectArchive(directory)).promoteComponent, null)
 })
 
 test('rejects a mismatched promoted image tag', async (t) => {
   const directory = await fixture([
-    'component=all', 'promote_component=core', image('core', 'wrong'), image('bff'), image('frontend'),
+    'component=all', 'promote_component=core', image('core', 'wrong'), image('bff'), image('expedition'), image('frontend'),
   ])
   t.after(() => rm(directory, { recursive: true, force: true }))
   await assert.rejects(inspectArchive(directory), /invalid core image reference/)
@@ -71,5 +81,5 @@ test('rejects promotion metadata on a one-image archive', async (t) => {
 test('rejects a wrong image count', async (t) => {
   const directory = await fixture(['component=all', image('core'), image('bff')])
   t.after(() => rm(directory, { recursive: true, force: true }))
-  await assert.rejects(inspectArchive(directory), /exactly core, bff, frontend image/)
+  await assert.rejects(inspectArchive(directory), /exactly core, bff, expedition, frontend image/)
 })
