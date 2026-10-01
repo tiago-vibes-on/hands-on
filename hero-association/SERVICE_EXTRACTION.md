@@ -68,18 +68,16 @@ would be a separate behavior change, not a completed part of this plan.
 
 ## Implementation order and progress
 
-The active ordered work is in [COMBAT_EXPEDITION_PLAN.md](COMBAT_EXPEDITION_PLAN.md):
-a shared pure combat-engine library inside an Expedition service, Redis current run
-state, settlement on return, and 100/500/1,000-concurrent-fight tests. The
-[Expedition contract](EXPEDITION_CONTRACT.md) defines run admission, lifecycle,
-and durable Redis state. The Map path is enabled in k3d and remains opt-in
-for ordinary local development.
+The player-facing Map/Expedition cutover is complete in k3d. The
+[Expedition contract](EXPEDITION_CONTRACT.md) defines its run admission,
+lifecycle, and durable Redis state.
 [ADR 0008](adr/0008-combat-engine-in-expedition.md) supersedes the standalone
-Combat-service cutover in ADR 0007. Expedition now owns player-facing Map
-fights. Core remains the Quest-battle writer until Quest is redesigned. The
-standalone Combat sandbox
-and its Core fact inbox have been retired.
-Market and other domains remain deferred.
+Combat-service cutover in ADR 0007. Expedition owns Map fights; Core remains
+the Quest-battle writer until Quest is redesigned. The standalone Combat
+sandbox and its Core fact inbox have been retired. Combat load tests and
+optional Quest objectives are deferred. The current bounded work is the
+Assets contract inside Core; Market and other service extractions remain
+deferred.
 
 ## Retired standalone Combat sandbox
 
@@ -98,9 +96,19 @@ decision; ADR 0008 defines the current library-in-Expedition approach.
 
 ### 5. Establish Assets contracts in Core
 
+The first private Core service contract now reserves Manager or agency gold
+and item stacks under UUIDv7 keys, releases unfilled quantities, and settles
+partial trades atomically. Reservations and operation receipts make exact
+retries idempotent; row locks protect competing requests. This is an internal
+boundary only: the existing public Market writer and gold-transfer path do
+not call it yet, and there is no Market-to-Core endpoint or separate Assets
+service. See [Assets contract](ASSETS_CONTRACT.md).
+
+- [x] Add and test the internal reservation, release, and trade-settlement
+  contract in Core, including duplicate requests and concurrent spending.
 - [ ] Resolve ownership of item/rune definitions and equipped runes. Give
-  Assets explicit Manager/agency ownership and atomic, idempotent reserve,
-  release, transfer, and settlement operations. Make these available to
+  Assets explicit Manager/agency authorization and an idempotent transfer
+  contract. Expose the validated reservation and settlement operations to
   Market through a private Core API. Do not create a separate Assets service
   just to start Market.
 - [ ] Define how future battle consumables are reserved or consumed without

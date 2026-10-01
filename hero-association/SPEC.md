@@ -163,6 +163,11 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
   the cancelled order. Clients refresh account and agency state separately
   after mutations. Market orders still execute inside Game Core's database
   transaction; the future Market service split is not yet implemented.
+  Core has a separate, private Assets service contract for UUIDv7-keyed
+  Manager/agency gold and item reservations, partial releases, and atomic
+  trade settlement with idempotent operation receipts. It is not yet wired
+  to the public Market path or exposed as a private Market-to-Core API.
+  See [Assets contract](ASSETS_CONTRACT.md).
 - `POST /api/v1/gold-transfers` moves existing gold between wallets in one
   Core transaction. To deposit, send
   `{ "direction": "MANAGER_TO_AGENCY", "agencyName": "Dawnwatch Agency", "amountGold": 10 }`.

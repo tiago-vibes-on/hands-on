@@ -23,16 +23,17 @@ resulting state.
   including retired Traefik milestones.
 - Follow [`SERVICE_EXTRACTION.md`](SERVICE_EXTRACTION.md) for the phased
   domain/service boundary work and its progress.
-- Current bounded work: the pure combat library and private Expedition
-  Redis encounter loop and private aggregate settlement are implemented; Core
-  combat remains live. Core admission, a disabled-by-default BFF WebSocket,
-  and a feature-flagged frontend Map flow are implemented. The isolated local browser
-  journey now passes. Next validate k3d, isolate broker permissions, and
-  switch only after the remaining cutover checks; then test 100/500/1,000
-  concurrent fights. Follow the ordered
-  [Combat and Expedition plan](COMBAT_EXPEDITION_PLAN.md) and
-  [ADR 0008](adr/0008-combat-engine-in-expedition.md). Quest objectives,
-  Market extraction, and other domains remain outside this sequence.
+- Current bounded work: the player-facing Map/Expedition cutover is complete
+  in k3d. Combat load tests remain deferred at the user's request. The
+  [local environment consolidation](LOCAL_ENVIRONMENT_PLAN.md) is complete:
+  full k3d and WSL hot-reload modes share Envoy Gateway, and Jenkins builds
+  and deployments are separate manual actions. The private Assets
+  reservation and settlement contract is staged inside Core; next, add
+  authenticated private commands and recovery before extracting Market.
+  Core Quest combat remains live until a later Quest redesign. See the
+  [Combat and Expedition plan](COMBAT_EXPEDITION_PLAN.md),
+  [service extraction plan](SERVICE_EXTRACTION.md), and
+  [ADR 0008](adr/0008-combat-engine-in-expedition.md).
 
 ## Milestone 1 — Authoritative agency management
 
@@ -227,6 +228,10 @@ Ordered implementation:
   and `DELETE /api/v1/market/orders/{orderId}`; market mutations return order
   state, while clients refresh agency state separately. See
   [ADR 0003](adr/0003-market-service-boundary.md).
+- [x] Stage the private Assets reservation/release/settlement contract in
+  Core with UUIDv7 keys, operation receipts, and concurrency tests. Public
+  Market orders and gold transfers do not use it yet; see
+  [Assets contract](ASSETS_CONTRACT.md).
 - [ ] After the Combat cutover and Assets contract in Core, extract Market as
   an independently buildable and deployable service with its own order data
   store. Keep Core authoritative for agency membership, gold, and inventory;
@@ -368,8 +373,10 @@ Ordered implementation:
   k3d, including the three-image archive E2E and post-rollout gates. Core, BFF,
   and frontend passed and their final running Pod digests matched the latest
   verified archive on 2026-09-29.
-- [ ] After these changes are committed and pushed, validate automatic polling
-  of trusted `main` and the downstream service-specific deploy jobs.
+- [x] Replace automatic polling and downstream deployment with explicit
+  manual build and deploy jobs. A push to `main` was observed without a
+  Jenkins build or k3d image change; see the
+  [local environment plan](LOCAL_ENVIRONMENT_PLAN.md).
 - [ ] Add a reviewed release and retention policy before publishing images or
   using these local artifacts outside this study environment.
 - [x] Include the containerized market k6 rate-limit test in the k3d

@@ -1,8 +1,10 @@
 # Market service extraction plan
 
 Status: design proposal. No separate Market service or RabbitMQ integration has
-been implemented yet. [ADR 0003](adr/0003-market-service-boundary.md) records
-the market route family and the implemented owner selector. The
+been implemented yet. A private [Assets contract](ASSETS_CONTRACT.md) exists
+inside Core, but the current Market writer does not call it.
+[ADR 0003](adr/0003-market-service-boundary.md) records the market route
+family and the implemented owner selector. The
 [game ownership design](GAME.md#personal-and-agency-ownership) allows both
 Manager-owned and agency-owned trades; that public contract should survive
 the service extraction. This document describes the target

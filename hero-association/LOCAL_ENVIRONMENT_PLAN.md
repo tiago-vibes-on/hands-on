@@ -1,6 +1,6 @@
 # Local Development Environment Consolidation Plan
 
-Status: in progress. This checklist tracks the move from separate Compose and k3d
+Status: complete. This checklist tracks the move from separate Compose and k3d
 application environments to one k3d-backed environment. The cluster supplies
 shared infrastructure and Envoy Gateway; selected application services can
 run on WSL with hot reload. No migration task below is complete merely because
@@ -79,23 +79,17 @@ the older Compose environment provides a similar workflow.
   Jenkins configuration change, then reload Jenkins when idle. The four live
   main jobs now have no SCM trigger or downstream deploy call; explicit main
   builds no longer skip unchanged commits.
-- [ ] Prove a Git push leaves the running environment unchanged, and a manual
+- [x] Prove a Git push leaves the running environment unchanged, and a manual
   build and separate deploy still promote the exact verified artifact.
 
-  The independent BFF build, isolated exact-archive verification, and
-  separate manual promotion were proved on 2026-10-01. The actual-push
-  observation remains open: repository instructions prohibit this agent
-  from pushing, and a dry-run or static trigger audit is not an actual push.
-
-  Read-only follow-up 2026-10-01: remote `main` remains at `c0140f9`; no new
-  push was available to observe. All four live Jenkins `build-main` jobs and
-  all four `deploy-local` jobs have empty trigger configurations, and the
-  running Core, BFF, Expedition, and frontend image references are unchanged.
-
-  An authenticated Git-plugin `notifyCommit` probe returned HTTP 401 because
-  that endpoint requires its own access token. No job queued or advanced and
-  deployment images stayed unchanged, but the rejected probe does not replace
-  observing a real push. Do not change Jenkins security just to close this gate.
+  Verified 2026-10-01: an actual push advanced remote `main` from `c0140f9`
+  to its direct child `a115e75` (committed at 13:30:29 UTC). All four live
+  Jenkins `build-main` jobs and four `deploy-local` jobs still had empty
+  trigger configurations and their recorded build numbers did not advance;
+  the Jenkins queue was empty. Core, BFF, Expedition, and frontend k3d
+  Deployment images and generations stayed at their pre-push values. The
+  independent BFF build, exact-archive verification, and separate manual
+  promotion were also proved on 2026-10-01. The agent did not commit or push.
 
 ### 3. Use one hostname and certificate source
 
