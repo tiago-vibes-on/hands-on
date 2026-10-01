@@ -3,6 +3,11 @@ import { mageSpells } from '../data/spells.js'
 const heroColors = { WARRIOR: 0xa67434, MAGE: 0x835d9a, ARCHER: 0x357c79 }
 const creatureColors = [0x7c6047, 0x8d6c4d, 0x74583e, 0x876747]
 
+export function shouldAutoContinue(run, enabled, pendingAction) {
+  return Boolean(enabled && !pendingAction && run?.phase === 'AWAITING_CONTINUE'
+    && !run.returnRequested && run.heroes?.some((hero) => hero.health > 0))
+}
+
 /** Only adapts authoritative visual data; it never runs combat mechanics. */
 export function toPhaserBattle(run, knownHeroes) {
   const visual = run.fight?.visual
@@ -28,7 +33,10 @@ export function toPhaserBattle(run, knownHeroes) {
       alive: (current?.health ?? hero.health) > 0,
       runes: known?.runeSlots ?? [null, null, null, null, null],
       spells: hero.heroClass === 'MAGE'
-        ? mageSpells.filter((spell) => magicLevel >= spell.requiredMagicLevel) : [],
+        ? mageSpells.map((spell) => ({
+          ...spell,
+          locked: magicLevel < spell.requiredMagicLevel,
+        })) : [],
       nextSpellCastAt: current?.nextSpellCastAt ?? {},
     }
   })

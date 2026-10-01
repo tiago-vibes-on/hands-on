@@ -50,7 +50,11 @@ heroes can now join a Manager's prepared party without changing ownership.
 Borrowing is free at assignment and charged only when the quest starts.
 Every other seeded Manager has a Main Party containing their personal Warrior,
 Mage, and Archer. In particular, User 2 can enter the Map immediately with
-their three-hero party. New Managers receive the same Main Party at Manager onboarding.
+their three-hero party. User 2's personal Mage is a deliberate Magic Level 15
+showcase exception with both combat spells unlocked; each member of that party
+also has two equipped runes. Other starter skills begin at Level 1, and the
+personal rune inventories remain empty. New Managers receive the same Main
+Party at Manager onboarding.
 
 | Manager | Personal gold | Personal items | Borrowing scenario |
 | --- | ---: | --- | --- |

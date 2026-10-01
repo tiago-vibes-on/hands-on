@@ -36,13 +36,16 @@ public class FightFactory {
                     hero.criticalChance(), hero.criticalDamageMultiplier(),
                     heroClass == HeroClass.MAGE ? List.of(CombatSpell.values()) : List.of()));
         }
-        Combatant troll = new Combatant(
-                UuidV7.next().toString(), creature.name(), CombatTeam.CREATURES,
-                creature.maxHealth(), creature.maxMana(), creature.maxHealth(), creature.maxMana(),
-                creature.attackDamage(), 0, creature.attackIntervalMilliseconds(),
-                creature.healthRecoveryPerSecond(), creature.manaRecoveryPerSecond(), 0,
-                creature.criticalChance(), creature.criticalDamageMultiplier(), List.of());
-        CombatBattle battle = CombatBattle.start(party, List.of(troll));
+        List<Combatant> trolls = new ArrayList<>(3);
+        for (int index = 0; index < 3; index++) {
+            trolls.add(new Combatant(
+                    UuidV7.next().toString(), creature.name(), CombatTeam.CREATURES,
+                    creature.maxHealth(), creature.maxMana(), creature.maxHealth(), creature.maxMana(),
+                    creature.attackDamage(), 0, creature.attackIntervalMilliseconds(),
+                    creature.healthRecoveryPerSecond(), creature.manaRecoveryPerSecond(), 0,
+                    creature.criticalChance(), creature.criticalDamageMultiplier(), List.of()));
+        }
+        CombatBattle battle = CombatBattle.start(party, trolls);
         return new FightState(UuidV7.next(), startedAt, seedSource.nextLong(),
                 "core-v1", "java-random-v1", BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE,
                 battle.snapshot());

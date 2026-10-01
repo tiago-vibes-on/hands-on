@@ -111,6 +111,20 @@ class SeededManagerFixtureTest {
     }
 
     @Test
+    @Transactional
+    void shouldSeedUser2MapPartyWithVisibleSpellsAndRunes() {
+        UUID user2 = UUID.fromString("019c4c00-0000-7000-8000-000000000002");
+        var heroes = heroRepository.listByManagerId(user2);
+        assertEquals(3, heroes.size());
+        assertEquals(15, heroes.stream()
+                .filter(hero -> hero.getHeroClass().name().equals("MAGE"))
+                .findFirst().orElseThrow().getMagicLevel());
+        for (var hero : heroes) {
+            assertEquals(2, hero.getRuneSlots().size());
+        }
+    }
+
+    @Test
     @TestSecurity(user = "019c4c00-0100-7000-8000-000000000002")
     void shouldSeedUser2WithLargePersonalWallet() {
         given()

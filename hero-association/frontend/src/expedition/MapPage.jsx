@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiRequestError } from '../api/agency'
 import { commandExpedition, connectExpedition, fetchActiveExpedition, startExpedition } from '../api/expedition'
 import CombatScene from '../combat/CombatScene'
-import { toPhaserBattle } from './expeditionCombat'
+import { shouldAutoContinue, toPhaserBattle } from './expeditionCombat'
 import './MapPage.css'
 
 const phases = {
@@ -10,6 +10,25 @@ const phases = {
   AWAITING_CONTINUE: 'Encounter complete',
   WIPED: 'Party defeated',
   SETTLEMENT_PENDING: 'Returning to agency',
+}
+
+async function sendAction({ action, agencyId, partyId, expeditionId, stateVersion },
+  acceptRun, setError, setPendingAction) {
+  setPendingAction(action)
+  setError(null)
+  try {
+    const current = action === 'start'
+      ? await startExpedition({ agencyId, partyId })
+      : await commandExpedition({ expeditionId, action, expectedVersion: stateVersion })
+    acceptRun(current)
+  } catch (failure) {
+    if (failure instanceof ApiRequestError && (failure.status === 409 || failure.status === 404)) {
+      try { acceptRun(await fetchActiveExpedition()) } catch { /* Keep the last known snapshot. */ }
+    }
+    setError(failure.message)
+  } finally {
+    setPendingAction(null)
+  }
 }
 
 function FightView({ run, knownHeroes, lastBattle }) {
@@ -38,6 +57,8 @@ export default function MapPage({ agencyId, managerId, heroes, preparedParties }
   const [selectedPartyId, setSelectedPartyId] = useState('')
   const [socketEpoch, setSocketEpoch] = useState(0)
   const [socketStatus, setSocketStatus] = useState('connecting')
+  const [autoContinue, setAutoContinue] = useState(false)
+  const autoContinueAttemptRef = useRef(null)
   const expeditionId = run?.expeditionId
 
   const acceptRun = useCallback((next) => {
@@ -115,27 +136,28 @@ export default function MapPage({ agencyId, managerId, heroes, preparedParties }
     && party.heroIds.every((id) => heroesById.get(id)?.ownerManagerId === managerId))
   const partyId = eligibleParties.some((party) => party.id === selectedPartyId) ? selectedPartyId : eligibleParties[0]?.id
 
-  async function submit(action) {
+  const stateVersion = run?.stateVersion
+  function submit(action) {
     if (pendingAction) return
-    setPendingAction(action)
-    setError(null)
-    try {
-      const current = action === 'start'
-        ? await startExpedition({ agencyId, partyId })
-        : await commandExpedition({ expeditionId, action, expectedVersion: run.stateVersion })
-      acceptRun(current)
-    } catch (failure) {
-      if (failure instanceof ApiRequestError && (failure.status === 409 || failure.status === 404)) {
-        try { acceptRun(await fetchActiveExpedition()) } catch { /* Keep the last known snapshot. */ }
-      }
-      setError(failure.message)
-    } finally {
-      setPendingAction(null)
-    }
+    sendAction({ action, agencyId, partyId, expeditionId, stateVersion },
+      acceptRun, setError, setPendingAction)
   }
 
+  const autoContinueReady = shouldAutoContinue(run, autoContinue, pendingAction)
+  useEffect(() => {
+    if (!autoContinueReady) return undefined
+    const attemptKey = [expeditionId, stateVersion].join(':')
+    if (autoContinueAttemptRef.current === attemptKey) return undefined
+    const timer = window.setTimeout(() => {
+      autoContinueAttemptRef.current = attemptKey
+      sendAction({ action: 'continue', agencyId, partyId, expeditionId, stateVersion },
+        acceptRun, setError, setPendingAction)
+    }, 1_500)
+    return () => window.clearTimeout(timer)
+  }, [autoContinueReady, agencyId, partyId, expeditionId, stateVersion, acceptRun])
+
   return <>
-    <header className="page-heading"><div><p className="eyebrow">Explore</p><h1>Map</h1><p className="page-heading__description">Enter a field with your party. Battles run on the server; you choose when to continue or return.</p></div></header>
+    <header className="page-heading"><div><p className="eyebrow">Explore</p><h1>Map</h1><p className="page-heading__description">Enter a field with your party. Battles run on the server; continue manually or enable auto-continue while this page is open.</p></div></header>
     {loading && <p className="map-notice" role="status">Checking your active expedition…</p>}
     {unavailable && <p className="map-notice" role="status">The Map is not enabled in this environment yet.</p>}
     {error && !unavailable && <p className="inline-error" role="alert">{error}</p>}
@@ -151,6 +173,15 @@ export default function MapPage({ agencyId, managerId, heroes, preparedParties }
       <FightView run={run} knownHeroes={heroes} lastBattle={lastBattle} />
       <div className="map-controls">
         <span className="map-controls__connection" role="status">{socketStatus === 'connected' ? 'Live' : 'Reconnecting to battle…'}</span>
+        <label className="map-controls__auto">
+          <input type="checkbox" checked={autoContinue}
+            disabled={run.returnRequested || run.phase === 'SETTLEMENT_PENDING'}
+            onChange={(event) => {
+              autoContinueAttemptRef.current = null
+              setAutoContinue(event.target.checked)
+            }} />
+          <span>Auto-continue</span>
+        </label>
         {run.phase === 'AWAITING_CONTINUE' && <button className="button button--primary" type="button" disabled={Boolean(pendingAction)} onClick={() => submit('continue')}>{pendingAction === 'continue' ? 'Continuing…' : 'Continue'}</button>}
         {run.phase !== 'SETTLEMENT_PENDING' && !run.returnRequested && <button className="button button--secondary" type="button" disabled={Boolean(pendingAction)} onClick={() => submit('return')}>{run.phase === 'FIGHTING' ? 'Return after this fight' : 'Return to agency'}</button>}
         {run.returnRequested && <span>Return requested; this fight will finish first.</span>}

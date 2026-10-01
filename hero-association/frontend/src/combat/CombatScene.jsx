@@ -100,8 +100,10 @@ function CombatScene({ battle }) {
           const x = -13 + (spellIndex * 26)
           const cooldownOverlay = this.add.graphics().setPosition(x, 104)
           elements.push(
-            this.add.rectangle(x, 104, 22, 22, 0x2a2542, 1).setStrokeStyle(1, 0x8a70bd, 0.95),
-            this.add.text(x, 104, spell.symbol, spellStyle()).setOrigin(0.5),
+            this.add.rectangle(x, 104, 22, 22, spell.locked ? 0x202638 : 0x2a2542, 1)
+              .setStrokeStyle(1, spell.locked ? 0x59667e : 0x8a70bd, 0.95),
+            this.add.text(x, 104, spell.symbol, spell.locked ? lockedSpellStyle() : spellStyle())
+              .setOrigin(0.5),
             cooldownOverlay,
           )
           cooldownOverlays.push({ spell, overlay: cooldownOverlay })
@@ -436,6 +438,10 @@ function levelStyle() {
 
 function spellStyle() {
   return { color: '#f1dc9c', fontFamily: 'system-ui, sans-serif', fontSize: '14px', fontStyle: 'bold' }
+}
+
+function lockedSpellStyle() {
+  return { color: '#77849d', fontFamily: 'system-ui, sans-serif', fontSize: '14px', fontStyle: 'bold' }
 }
 
 function runeStyle() {

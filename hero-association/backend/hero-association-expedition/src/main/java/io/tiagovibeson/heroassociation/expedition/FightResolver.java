@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 import io.tiagovibeson.heroassociation.domain.HeroClass;
 import io.tiagovibeson.heroassociation.domain.HeroProgression;
@@ -52,7 +53,8 @@ public class FightResolver {
         for (HeroState hero : run.heroes()) {
             heroes.put(hero.heroId().toString(), new MutableHero(hero));
         }
-        String creatureId = fight.openingSnapshot().creatures().getFirst().id();
+        Set<String> creatureIds = fight.openingSnapshot().creatures().stream()
+                .map(CombatantSnapshot::id).collect(java.util.stream.Collectors.toSet());
         long processedAt = 0;
         int eventCount = 0;
         long terminalAt = -1;
@@ -75,12 +77,12 @@ public class FightResolver {
             for (CombatEvent event : events) {
                 consumeLivingStamina(heroes, event.occurredAtMilliseconds() - processedAt);
                 processedAt = event.occurredAtMilliseconds();
-                awardAction(event, heroes, creatureId, fight.skillRate());
+                awardAction(event, heroes, creatureIds, fight.skillRate());
                 for (CombatHit hit : event.hits()) {
                     if (!hit.defeated()) {
                         continue;
                     }
-                    if (hit.targetId().equals(creatureId)) {
+                    if (creatureIds.contains(hit.targetId())) {
                         for (MutableHero hero : heroes.values()) {
                             if (hero.alive) {
                                 hero.experience = Math.addExact(hero.experience,
@@ -138,14 +140,14 @@ public class FightResolver {
                 .setScale(0, RoundingMode.DOWN).longValueExact();
     }
 
-    private void awardAction(CombatEvent event, Map<String, MutableHero> heroes, String creatureId,
+    private void awardAction(CombatEvent event, Map<String, MutableHero> heroes, Set<String> creatureIds,
                              BigDecimal skillRate) {
         MutableHero hero = heroes.get(event.actorId());
         if (hero == null) {
             return;
         }
         if (event.action() == CombatAction.BASIC_ATTACK
-                && event.hits().stream().anyMatch(hit -> hit.targetId().equals(creatureId))) {
+                && event.hits().stream().anyMatch(hit -> creatureIds.contains(hit.targetId()))) {
             if (hero.heroClass == HeroClass.WARRIOR) {
                 hero.award(HeroSkill.MELEE, BigDecimal.ONE, skillRate);
             } else if (hero.heroClass == HeroClass.ARCHER) {

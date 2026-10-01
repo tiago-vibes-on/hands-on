@@ -28,6 +28,9 @@
 .map-resource__fill--mana { background: #5d91ce; }
 .map-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 20px; color: var(--text-muted); font-size: 13px; }
 .map-controls__connection { margin-right: auto; }
+.map-controls__auto { display: inline-flex; align-items: center; gap: 7px; color: var(--text-strong); cursor: pointer; }
+.map-controls__auto input { accent-color: #dcb662; cursor: pointer; }
+.map-controls__auto:has(input:disabled) { opacity: .55; cursor: not-allowed; }
 @media (max-width: 800px) {
   .map-fight__sides { grid-template-columns: 1fr; }
   .map-fight__versus { text-align: center; }

@@ -81,7 +81,9 @@ after the final load-test report without a new explicit request.
    Expedition's private Redis-only API to subscribed sockets without per-frame
    Core reads. A feature-flagged frontend Map page now loads the active run,
    enters the fixed Troll Field with a prepared personal-hero Party, renders
-   socket visuals, and sends explicit Continue/Return commands. The feature
+   socket visuals for three Trolls, and sends Continue/Return commands. An
+   opt-in Map toggle can send Continue after a victory while the page is open;
+   the server never advances an encounter without that command. The feature
    flags remain off in ordinary local development. The isolated local journey passed
    entry, live/reconnected visuals, Continue, deferred Return, and Core
    settlement. Step 7 verified k3d restart recovery and routine promotion.

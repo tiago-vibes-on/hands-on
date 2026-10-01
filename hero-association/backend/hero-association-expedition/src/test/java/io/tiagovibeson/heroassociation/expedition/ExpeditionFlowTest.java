@@ -45,10 +45,13 @@ class ExpeditionFlowTest {
 
     @Test
     void runsWithoutViewerAndWaitsForExplicitContinue() {
-        PreparedEntry entry = entry(hero(HeroClass.WARRIOR, 300), troll(10));
+        PreparedEntry entry = entry(hero(HeroClass.WARRIOR, 300), troll(0));
         UUID startCommand = UuidV7.next();
         RunState started = service.startPrepared(entry, startCommand);
         assertEquals(Phase.FIGHTING, started.phase());
+        assertEquals(3, started.fight().openingSnapshot().creatures().size());
+        assertEquals(3, started.fight().openingSnapshot().creatures().stream()
+                .map(creature -> creature.id()).distinct().count());
         store.unschedule(new Member(entry.ownerManagerId(), entry.expeditionId(), started.fight().fightId()));
         assertEquals(started, service.startPrepared(entry, startCommand));
         assertThrows(RunConflictException.class,
@@ -61,7 +64,7 @@ class ExpeditionFlowTest {
         assertEquals(Phase.AWAITING_CONTINUE, won.phase());
         assertEquals(2, won.stateVersion());
         assertEquals(1, won.encounterIndex());
-        assertTrue(won.heroes().getFirst().experience() >= 100);
+        assertEquals(450, won.heroes().getFirst().experience());
         assertTrue(won.heroes().getFirst().staminaMilliseconds() < entry.heroes().getFirst().staminaMilliseconds());
         assertEquals(0, worker.tick(started.fight().startedAt().plus(Duration.ofMinutes(20))));
         assertEquals(won, service.get(entry.ownerManagerId(), entry.expeditionId()));
@@ -83,7 +86,7 @@ class ExpeditionFlowTest {
 
     @Test
     void aConflictingActiveRunReleasesOnlyTheNewReservation() {
-        PreparedEntry live = entry(hero(HeroClass.WARRIOR, 300), troll(10));
+        PreparedEntry live = entry(hero(HeroClass.WARRIOR, 300), troll(0));
         RunState liveRun = service.startPrepared(live, UuidV7.next());
         store.unschedule(new Member(live.ownerManagerId(), live.expeditionId(), liveRun.fight().fightId()));
         PreparedEntry blocked = entryWithSameManager(live);
@@ -113,13 +116,13 @@ class ExpeditionFlowTest {
 
     @Test
     void orphanCancellationFencesEveryDelayedStartForThatRunId() {
-        PreparedEntry entry = entry(hero(HeroClass.WARRIOR, 300), troll(10));
+        PreparedEntry entry = entry(hero(HeroClass.WARRIOR, 300), troll(0));
         assertTrue(store.cancelIfAbsent(entry.ownerManagerId(), entry.expeditionId()));
         assertTrue(store.cancelIfAbsent(entry.ownerManagerId(), entry.expeditionId()));
         assertThrows(RunConflictException.class, () -> service.startPrepared(entry, UuidV7.next()));
         assertEquals(null, store.get(entry.ownerManagerId(), entry.expeditionId()));
 
-        PreparedEntry live = entry(hero(HeroClass.WARRIOR, 300), troll(10));
+        PreparedEntry live = entry(hero(HeroClass.WARRIOR, 300), troll(0));
         RunState liveRun = service.startPrepared(live, UuidV7.next());
         store.unschedule(new Member(live.ownerManagerId(), live.expeditionId(), liveRun.fight().fightId()));
         assertFalse(store.cancelIfAbsent(live.ownerManagerId(), live.expeditionId()));
@@ -127,7 +130,7 @@ class ExpeditionFlowTest {
 
     @Test
     void returnDuringFightWaitsForTheTerminalBoundary() {
-        PreparedEntry entry = entry(hero(HeroClass.WARRIOR, 300), troll(10));
+        PreparedEntry entry = entry(hero(HeroClass.WARRIOR, 300), troll(0));
         RunState started = service.startPrepared(entry, UuidV7.next());
         UUID returnCommand = UuidV7.next();
         RunState returning = service.returnRun(entry.ownerManagerId(), entry.expeditionId(), returnCommand, 1);
@@ -163,7 +166,7 @@ class ExpeditionFlowTest {
 
     @Test
     void twoWorkersAndRebuiltScheduleCommitOnlyOneOutcome() throws Exception {
-        PreparedEntry entry = entry(hero(HeroClass.WARRIOR, 300), troll(10));
+        PreparedEntry entry = entry(hero(HeroClass.WARRIOR, 300), troll(0));
         RunState started = service.startPrepared(entry, UuidV7.next());
         store.unschedule(new Member(entry.ownerManagerId(), entry.expeditionId(), started.fight().fightId()));
         assertTrue(worker.rebuildDueIndex() >= 1);

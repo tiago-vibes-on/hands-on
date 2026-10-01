@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { toPhaserBattle } from './expeditionCombat.js'
+import { shouldAutoContinue, toPhaserBattle } from './expeditionCombat.js'
 
 test('Map adapts authoritative events and resources for the old animated scene', () => {
   const rune = { symbol: '✦' }
@@ -12,8 +12,12 @@ test('Map adapts authoritative events and resources for the old animated scene',
       status: 'IN_PROGRESS',
       heroes: [{ id: 'mage', health: 80, mana: 480, maxHealth: 100, maxMana: 500,
         magicLevel: 15, nextSpellCastAt: { 'fire-ball': 3_500 } }],
-      creatures: [{ id: 'troll', health: 1_980, mana: 100, maxHealth: 2_000, maxMana: 100 }],
-      recentEvents: [{ sequenceNumber: 2, actorId: 'troll', action: 'BASIC_ATTACK', hits: [] },
+      creatures: [
+        { id: 'troll-1', health: 1_980, mana: 100, maxHealth: 2_000, maxMana: 100 },
+        { id: 'troll-2', health: 2_000, mana: 100, maxHealth: 2_000, maxMana: 100 },
+        { id: 'troll-3', health: 2_000, mana: 100, maxHealth: 2_000, maxMana: 100 },
+      ],
+      recentEvents: [{ sequenceNumber: 2, actorId: 'troll-1', action: 'BASIC_ATTACK', hits: [] },
         { sequenceNumber: 1, actorId: 'mage', action: 'FIRE_BALL', hits: [] }],
     } },
   }
@@ -23,10 +27,38 @@ test('Map adapts authoritative events and resources for the old animated scene',
   assert.equal(battle.heroes[0].nextSpellCastAt['fire-ball'], 3_500)
   assert.equal(battle.heroes[0].runes[0], rune)
   assert.equal(battle.heroes[0].spells.length, 2)
+  assert.equal(battle.heroes[0].spells.every((spell) => !spell.locked), true)
+  assert.equal(battle.creatures.length, 3)
   assert.equal(battle.creatures[0].currentHealth, 1_980)
   assert.deepEqual(battle.events.map((event) => event.sequenceNumber), [1, 2])
 })
 
 test('Map has no animated fight after its active fight is cleared', () => {
   assert.equal(toPhaserBattle({ fight: null }, []), null)
+})
+
+test('Map shows locked Mage spell slots before their required Magic Levels', () => {
+  const run = {
+    creature: { name: 'Troll' },
+    heroes: [{ heroId: 'mage', name: 'Mage', heroClass: 'MAGE', health: 100, mana: 500 }],
+    fight: { visual: {
+      elapsedMilliseconds: 0, status: 'IN_PROGRESS',
+      heroes: [{ id: 'mage', health: 100, mana: 500, maxHealth: 100, maxMana: 500,
+        magicLevel: 1, nextSpellCastAt: {} }],
+      creatures: [], recentEvents: [],
+    } },
+  }
+  const battle = toPhaserBattle(run, [])
+  assert.deepEqual(battle.heroes[0].spells.map((spell) => spell.locked), [true, true])
+  assert.equal(battle.heroes[0].runes.length, 5)
+})
+
+test('Auto-continue only commands a living victory while enabled and idle', () => {
+  const ready = { phase: 'AWAITING_CONTINUE', returnRequested: false, heroes: [{ health: 1 }] }
+  assert.equal(shouldAutoContinue(ready, true, null), true)
+  assert.equal(shouldAutoContinue(ready, false, null), false)
+  assert.equal(shouldAutoContinue(ready, true, 'return'), false)
+  assert.equal(shouldAutoContinue({ ...ready, returnRequested: true }, true, null), false)
+  assert.equal(shouldAutoContinue({ ...ready, phase: 'WIPED' }, true, null), false)
+  assert.equal(shouldAutoContinue({ ...ready, heroes: [{ health: 0 }] }, true, null), false)
 })

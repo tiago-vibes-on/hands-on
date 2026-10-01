@@ -240,9 +240,11 @@ possible encounters. Expedition will own one persistent Party per Manager and
 its Map run; a Quest will be an optional objective, never a prerequisite for
 entering a Map. The first Map path will accept personal heroes only, with
 agency-hero borrowing deferred. A wipe will end battle but leave the Party
-on the Map until the Manager explicitly requests return. A win waits
-for an explicit Continue command before another fight. This planned flow
-does not yet replace the current quest-based API. See [GAME.md](GAME.md) and
+on the Map until the Manager explicitly requests return. After a win, the
+server waits for a Continue command before another fight. The Map has an
+opt-in auto-continue toggle, off by default, that sends this command after
+a short pause only while the page is open. It never advances a wipe or a
+requested return. This flow does not yet replace the current quest-based API. See [GAME.md](GAME.md) and
 [SERVICE_EXTRACTION.md](SERVICE_EXTRACTION.md).
 Starting a quest requires a prepared party whose member count is inside that
 quest's range. It changes the quest to
@@ -558,15 +560,20 @@ IDs must not be added for entities or exposed through the API.
   three running images before promotion. Both paths passed archive-backed,
   authenticated k3d Map, Expedition, and market gates.
 - The Map screen is the player-facing battle view in k3d. It reuses the
-  Phaser battle renderer for the party and creatures, including health, mana,
-  rune slots, spells, timed hits, critical effects, and recovery animations.
-  Expedition calculates the current non-interactive fight once and stores its
+  Phaser battle renderer for the party and three Trolls, including health,
+  mana, equipped rune slots, Mage spell slots, timed hits, critical effects,
+  and recovery animations. Spell slots remain visible but locked below their
+  required Magic Level. User 2's seeded personal party has equipped runes
+  and a Magic Level 15 Mage for this battle demonstration. Expedition
+  calculates the current non-interactive fight once and stores its
   event windows in Redis; visual reads do not rerun the engine. The BFF
   WebSocket sends only the current state and recent ordered events. Reconnect
   loads current state without replaying old hits. When the Map is reopened or
   the tab resumes after a gap, the browser discards pending visual effects and
   paints the current server frame immediately; only subsequent live events are
-  animated. Continue and Return remain explicit commands. The browser never decides attacks or outcomes. See
+  animated. Continue and Return remain server commands; the optional Map
+  auto-continue control sends Continue 1.5 seconds after a victory while the
+  page is open. The browser never decides attacks or outcomes. See
   [the fight timeline](COMBAT_TIMELINE.md).
 - The Quests screen shows available objectives and active or resolved progress.
   It no longer embeds the legacy Phaser scene or polls the combat-sync API.

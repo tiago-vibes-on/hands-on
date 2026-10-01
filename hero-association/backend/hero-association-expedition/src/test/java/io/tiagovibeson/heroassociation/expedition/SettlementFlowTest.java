@@ -45,7 +45,7 @@ class SettlementFlowTest {
         HeroState hero = new HeroState(UuidV7.next(), "Settlement Warrior", HeroClass.WARRIOR,
                 0, points, 300, 50, Duration.ofHours(48).toMillis(), Map.of(), 0, 2);
         CreatureProfile troll = new CreatureProfile(UuidV7.next(), 1, "Troll", 2_000, 100,
-                10, 1_600, 0, 0, 0, 2, 100);
+                0, 1_600, 0, 0, 0, 2, 100);
         PreparedEntry entry = new PreparedEntry(UuidV7.next(), UuidV7.next(), UuidV7.next(),
                 UuidV7.next(), UuidV7.next(), 1, List.of(hero), troll);
         RunState started = service.startPrepared(entry, UuidV7.next());
