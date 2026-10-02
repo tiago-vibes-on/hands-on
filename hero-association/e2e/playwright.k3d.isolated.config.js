@@ -6,6 +6,7 @@ export default defineConfig({
     'k3d-isolated-authentication.spec.js',
     'k3d-isolated-agency.spec.js',
     'gold-transfer.spec.js',
+    'rune-ownership.spec.js',
     'market-ownership.spec.js',
     'k3d-isolated-market-rate-limit.spec.js',
     'expedition.spec.js',

@@ -24,7 +24,7 @@ tests and identity data stay in disposable namespaces. Manual promotion
 still requires restoring all four daily application Deployments to full k3d
 mode.
 The runner checks the archive checksum and all five running application Pod
-image IDs before and after BFF replacement. It runs eleven browser/API cases,
+image IDs before and after BFF replacement. It runs thirteen browser/API cases,
 Core-cache-off Map replay, BFF session/outage and expiry checks, RabbitMQ
 cross-role denial, and market k6 thresholds. It marks
 `k3d-e2e-verification.json` passed only after the namespace is deleted.
@@ -35,6 +35,10 @@ deploys the candidate. Failure screenshots and traces are written to ignored
 The previous Compose-only `authentication.spec.js` and
 `market-proxy.spec.js` remain as historical test source. The active isolated
 suite reuses the gold-transfer, personal-market, and Expedition journeys.
+The isolated rune-ownership journey uses User 1 and Manager 1 to verify agency
+and personal rune inventories, equip/unequip persistence after reload, shared
+agency access, and rejection for another Manager's personal Hero or a Hero on
+a quest. Rune changes are made only in the disposable namespace.
 The unrestricted Compose market-proxy case is superseded by the Envoy limit
 test. The borrowing-quest case is deferred with Quest; it is not an active
 MVP gate.
