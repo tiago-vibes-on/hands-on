@@ -123,12 +123,13 @@
 .recruitment-board__empty { margin: 20px 0 0; color: var(--text-muted); font-size: 13px; }
 .personal-roster { margin-bottom: 28px; }
 .personal-roster__list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
-.personal-roster__hero { display: flex; align-items: flex-start; gap: 12px; min-width: 0; padding: 17px; }
+.personal-roster__hero { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; min-width: 0; padding: 17px; }
 .personal-roster__hero h3 { margin: 0 0 7px; color: var(--text-strong); font-family: var(--display-font); font-size: 17px; }
 .personal-roster__hero p:not(.eyebrow), .personal-roster__hero small, .personal-roster__inventory { color: var(--text-muted); font-size: 12px; }
 .personal-roster__hero p:not(.eyebrow) { margin: 0 0 5px; }
 .personal-roster__inventory { margin: 12px 0 0; }
-.personal-roster__hero > div:last-child { min-width: 0; }
+.personal-roster__hero > div:nth-child(2) { flex: 1; min-width: 0; }
+.personal-roster__hero .hero-loadout { flex-basis: 100%; flex-wrap: wrap; }
 .personal-roster__action, .personal-roster__hint { display: block; margin-top: 12px; }
 .personal-roster__assign { display: grid; gap: 5px; margin-top: 12px; }
 .personal-roster__assign span { color: var(--text-muted); font-size: 11px; font-weight: 700; }
@@ -255,6 +256,10 @@
 .equipment-drawer__equipped strong { color: var(--text-strong); font-size: 13px; }
 .equipment-drawer__equipped .text-button { align-self: end; }
 .equipment-drawer__items { display: grid; gap: 9px; padding-top: 18px; }
+.equipment-drawer__section { padding-top: 18px; }
+.equipment-drawer__section h3 { margin: 0; color: var(--text-strong); font-size: 14px; }
+.equipment-drawer__section .equipment-drawer__items { padding-top: 10px; }
+.equipment-drawer__pending, .equipment-drawer__empty { color: var(--text-muted); font-size: 12px; }
 .inventory-item { display: grid; grid-template-columns: 43px minmax(0, 1fr) auto; align-items: start; gap: 11px; width: 100%; padding: 11px; color: inherit; text-align: left; background: #182238; border: 1px solid #364560; border-radius: 8px; cursor: pointer; }
 .inventory-item:hover:not(:disabled) { background: #202d47; border-color: #d5ae58; }
 .inventory-item:disabled { opacity: 0.45; cursor: not-allowed; }

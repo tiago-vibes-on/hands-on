@@ -22,6 +22,7 @@ import io.tiagovibeson.heroassociation.repository.AgencyItemRepository;
 import io.tiagovibeson.heroassociation.repository.AgencyRuneRepository;
 import io.tiagovibeson.heroassociation.repository.FeedPostRepository;
 import io.tiagovibeson.heroassociation.repository.HeroRepository;
+import io.tiagovibeson.heroassociation.repository.ManagerRuneRepository;
 import io.tiagovibeson.heroassociation.repository.PartyRepository;
 import io.tiagovibeson.heroassociation.repository.QuestRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -45,6 +46,9 @@ public class AgencyStateService {
 
     @Inject
     AgencyRuneRepository agencyRuneRepository;
+
+    @Inject
+    ManagerRuneRepository managerRuneRepository;
 
     @Inject
     AgencyItemRepository agencyItemRepository;
@@ -75,9 +79,10 @@ public class AgencyStateService {
         List<Party> parties = partyRepository.list("agency.id = ?1 order by id", agencyId);
         List<Quest> quests = questRepository.list("agency.id = ?1 order by id", agencyId);
         List<AgencyRune> runeInventory = agencyRuneRepository.list("agency.id = ?1 order by rune.id", agencyId);
+        var personalRuneInventory = managerRuneRepository.listByManagerId(manager.getId());
         List<AgencyItem> itemInventory = agencyItemRepository.list("agency.id = ?1 order by item.id", agencyId);
         List<FeedPost> feedPosts = feedPostRepository.list("agency.id = ?1 order by publishedAt desc, id desc", agencyId);
         return AgencyStateResponse.from(
-                agency, heroes, personalHeroes, parties, quests, runeInventory, itemInventory, feedPosts);
+                agency, heroes, personalHeroes, parties, quests, runeInventory, personalRuneInventory, itemInventory, feedPosts);
     }
 }

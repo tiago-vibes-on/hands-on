@@ -199,7 +199,7 @@ function mapAgencyState(state) {
     stamina: hero.stamina,
     color: heroColors[hero.heroClass],
     partyId: hero.partyId,
-    status: hero.activity === 'ON_QUEST' ? 'quest' : hero.ownerManagerId ? 'personal' : 'agency',
+    status: ['ON_QUEST', 'ON_EXPEDITION'].includes(hero.activity) ? 'quest' : hero.ownerManagerId ? 'personal' : 'agency',
     activity: titleCase(hero.activity),
     spells: hero.heroClass === 'MAGE' && hero.magicLevel >= 10 ? mageSpells : undefined,
     runeSlots: hero.runeSlots.map((slot) => slot.rune ? mapRune(slot.rune) : null),
@@ -219,6 +219,7 @@ function mapAgencyState(state) {
   const resolvedQuests = state.quests.filter((quest) => quest.status === 'COMPLETED' || quest.status === 'FAILED')
   const agencyHeroes = heroes.filter((hero) => hero.status === 'agency' && !hero.partyId)
   const runeInventory = state.runeInventory.map(({ rune, quantity }) => ({ ...mapRune(rune), quantity }))
+  const personalRuneInventory = (state.personalRuneInventory ?? []).map(({ rune, quantity }) => ({ ...mapRune(rune), quantity }))
   const itemInventory = (state.itemInventory ?? []).map(({ item, quantity }) => ({ ...item, quantity }))
   const equippedRunes = Object.fromEntries(heroes.map((hero) => [hero.alias, hero.runeSlots]))
   const upgrades = [
@@ -242,6 +243,7 @@ function mapAgencyState(state) {
     resolvedQuests,
     agencyHeroes,
     runeInventory,
+    personalRuneInventory,
     itemInventory,
     equippedRunes,
     feedPosts: state.feedPosts.map((post) => ({ ...post, item: post.item ?? null, itemQuantity: post.itemQuantity ?? null })),
@@ -265,6 +267,7 @@ const fallbackGameState = {
   resolvedQuests: [],
   agencyHeroes: fallbackAgencyHeroes,
   runeInventory: initialRunes.map((rune) => ({ ...rune })),
+  personalRuneInventory: [],
   itemInventory: fallbackItemInventory,
   equippedRunes: initialEquippedRunes,
   feedPosts: [
@@ -327,32 +330,43 @@ function HeroLoadoutSlots({ hero, runes, onSelectRuneSlot }) {
   )
 }
 
-function RuneDrawer({ selectedSlot, runes, runeInventory, isUpdating, error, onClose, onEquipRune, onUnequipRune }) {
+function RuneDrawer({ selectedSlot, runes, agencyRunes, personalRunes, isUpdating, error, onClose, onEquipRune, onUnequipRune }) {
   if (!selectedSlot) {
     return null
   }
 
   const { hero, slotIndex } = selectedSlot
   const equippedRune = runes[hero.alias]?.[slotIndex]
+  const inventories = [
+    { ownerType: 'MANAGER', label: 'Personal inventory', runes: personalRunes },
+    { ownerType: 'AGENCY', label: 'Agency inventory', runes: agencyRunes },
+  ]
 
   return (
-    <div className="equipment-drawer__backdrop" onClick={onClose}>
-      <aside className="equipment-drawer" role="dialog" aria-modal="true" aria-labelledby="equipment-drawer-title" onClick={(event) => event.stopPropagation()}>
+    <div className="equipment-drawer__backdrop" onClick={isUpdating ? undefined : onClose}>
+      <aside className="equipment-drawer" role="dialog" aria-modal="true" aria-busy={isUpdating} aria-labelledby="equipment-drawer-title" onClick={(event) => event.stopPropagation()}>
         <div className="equipment-drawer__header">
-          <div><p className="eyebrow">Agency rune inventory</p><h2 id="equipment-drawer-title">Equip rune</h2><p>{hero.alias} · Rune slot {slotIndex + 1}</p></div>
-          <button className="equipment-drawer__close" type="button" aria-label="Close rune drawer" onClick={onClose}>×</button>
+          <div><p className="eyebrow">Rune equipment</p><h2 id="equipment-drawer-title">Equip rune</h2><p>{hero.alias} · Rune slot {slotIndex + 1}</p></div>
+          <button className="equipment-drawer__close" type="button" aria-label="Close rune drawer" disabled={isUpdating} onClick={onClose}>×</button>
         </div>
+        {isUpdating && <p className="equipment-drawer__pending" role="status">Saving rune change…</p>}
         {error && <p className="equipment-drawer__error" role="alert">{error}</p>}
         {equippedRune && <div className="equipment-drawer__equipped"><span>Currently equipped</span><strong>{equippedRune.symbol} {equippedRune.name}</strong><button className="text-button" type="button" disabled={isUpdating} onClick={onUnequipRune}>Unequip</button></div>}
-        <div className="equipment-drawer__items">
-          {runeInventory.map((rune) => (
-            <button className="inventory-item" type="button" key={rune.id} disabled={isUpdating || rune.quantity === 0} onClick={() => onEquipRune(rune)}>
-              <span className="inventory-item__symbol" aria-hidden="true">{rune.symbol}</span>
-              <span className="inventory-item__content"><strong>{rune.name}</strong><small>{rune.stats}</small><span>{rune.description}</span></span>
-              <span className="inventory-item__quantity">×{rune.quantity}</span>
-            </button>
-          ))}
-        </div>
+        {inventories.map(({ ownerType, label, runes: inventoryRunes }) => (
+          <section className="equipment-drawer__section" key={ownerType} aria-label={label}>
+            <h3>{label}</h3>
+            <div className="equipment-drawer__items">
+              {inventoryRunes.length === 0 && <p className="equipment-drawer__empty">No runes available.</p>}
+              {inventoryRunes.map((rune) => (
+                <button className="inventory-item" type="button" key={rune.id} disabled={isUpdating || rune.quantity === 0} onClick={() => onEquipRune(rune, ownerType)}>
+                  <span className="inventory-item__symbol" aria-hidden="true">{rune.symbol}</span>
+                  <span className="inventory-item__content"><strong>{rune.name}</strong><small>{rune.stats}</small><span>{rune.description}</span></span>
+                  <span className="inventory-item__quantity">×{rune.quantity}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
       </aside>
     </div>
   )
@@ -489,7 +503,7 @@ function HeroCards({ roster, runes, onSelectRuneSlot, onChangeActivity, isUpdati
   )
 }
 
-function Heroes({ agency, manager, heroes, activeParties, agencyHeroes, preparedParties, runes, availableRecruits, isRecruitingHero, recruitmentError, isUpdatingActivity, activityError, isUpdatingParty, partyError, isCreatingParty, partyName, onPartyNameChange, onCreateParty, onCancelCreateParty, onStartCreateParty, onRecruitHero, onSelectRuneSlot, onChangeActivity, onAddToParty, onRemoveFromParty, onSetBorrowingFee, isUpdatingBorrowingFee, borrowingFeeError }) {
+function Heroes({ agency, manager, heroes, activeParties, agencyHeroes, preparedParties, runes, personalRuneInventory, availableRecruits, isRecruitingHero, recruitmentError, isUpdatingActivity, activityError, isUpdatingParty, partyError, isCreatingParty, partyName, onPartyNameChange, onCreateParty, onCancelCreateParty, onStartCreateParty, onRecruitHero, onSelectRuneSlot, onChangeActivity, onAddToParty, onRemoveFromParty, onSetBorrowingFee, isUpdatingBorrowingFee, borrowingFeeError }) {
   const personalHeroes = heroes.filter((hero) => hero.ownerManagerId === manager?.id)
 
   return (
@@ -511,10 +525,11 @@ function Heroes({ agency, manager, heroes, activeParties, agencyHeroes, prepared
                   : preparedParties.length > 0 ? <label className="personal-roster__assign"><span>Assign to party</span><select defaultValue="" disabled={isUpdatingParty} onChange={(event) => { const partyId = event.target.value; event.target.value = ''; if (partyId) { onAddToParty(hero, partyId) } }}><option value="" disabled>Select a party</option>{preparedParties.map((party) => <option key={party.id} value={party.id}>{party.name}</option>)}</select></label>
                   : <small className="personal-roster__hint">Create a party to assign this hero.</small>}
               </div>
+              <HeroLoadoutSlots hero={hero} runes={runes} onSelectRuneSlot={onSelectRuneSlot} />
             </article>
           ))}
         </div>
-        <p className="personal-roster__inventory">Personal inventory: {manager?.items?.length ?? 0} item types · {manager?.runes?.length ?? 0} rune types</p>
+        <p className="personal-roster__inventory">Personal inventory: {manager?.items?.length ?? 0} item types · {personalRuneInventory.filter((rune) => rune.quantity > 0).length} rune types</p>
       </section>
       <section className="panel recruitment-board" aria-labelledby="recruitment-heading">
         <div className="panel__header"><div><p className="eyebrow">Recruitment board</p><h2 id="recruitment-heading">Available heroes</h2><p className="recruitment-board__description">The initial recruits are free. Recruit for yourself by default, or for the agency if you lead it.</p></div><span className="status">{availableRecruits.length} available</span></div>
@@ -842,6 +857,7 @@ function App() {
   const [isCreatingAgency, setIsCreatingAgency] = useState(false)
   const [accountRefresh, setAccountRefresh] = useState(0)
   const [runeInventory, setRuneInventory] = useState(() => initialRunes.map((rune) => ({ ...rune })))
+  const [personalRuneInventory, setPersonalRuneInventory] = useState([])
   const [equippedRunes, setEquippedRunes] = useState(() => Object.fromEntries(Object.entries(initialEquippedRunes).map(([hero, runes]) => [hero, [...runes]])))
   const [selectedSlot, setSelectedSlot] = useState(null)
   const [isUpdatingLoadout, setIsUpdatingLoadout] = useState(false)
@@ -868,6 +884,7 @@ function App() {
   const [isRecruitingHero, setIsRecruitingHero] = useState(false)
   const [recruitmentError, setRecruitmentError] = useState(null)
   const stateRefreshInFlight = useRef(false)
+  const runeMutationInFlight = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -875,7 +892,7 @@ function App() {
     let activeAgencyId
 
     async function refreshAgencyState() {
-      if (document.visibilityState !== 'visible' || stateRefreshInFlight.current) {
+      if (document.visibilityState !== 'visible' || stateRefreshInFlight.current || runeMutationInFlight.current) {
         return
       }
 
@@ -887,13 +904,14 @@ function App() {
 
         const [rawState, orders, recruits, currentAccount] = await Promise.all([fetchAgencyState(activeAgencyId), fetchMarketOrders(), fetchRecruits(), fetchAccount()])
         const state = mapAgencyState(rawState)
-        if (cancelled) {
+        if (cancelled || runeMutationInFlight.current) {
           return
         }
 
         setAccount(currentAccount)
         setGameState(state)
         setRuneInventory(state.runeInventory)
+        setPersonalRuneInventory(state.personalRuneInventory)
         setEquippedRunes(state.equippedRunes)
         setMarketOrders(orders)
         setAvailableRecruits(recruits)
@@ -983,98 +1001,119 @@ function App() {
     const state = mapAgencyState(rawState)
     setGameState(state)
     setRuneInventory(state.runeInventory)
+    setPersonalRuneInventory(state.personalRuneInventory)
     setEquippedRunes(state.equippedRunes)
   }
 
-  function equipRuneLocally(rune) {
+  function changeRuneQuantity(inventory, rune, amount) {
+    const existing = inventory.find((entry) => entry.id === rune.id)
+    if (existing) {
+      return inventory.map((entry) => entry.id === rune.id ? { ...entry, quantity: entry.quantity + amount } : entry)
+    }
+    return amount > 0 ? [...inventory, { ...rune, quantity: amount }] : inventory
+  }
+
+  function equipRuneLocally(rune, sourceOwnerType, closeDrawer = true) {
     if (!selectedSlot || rune.quantity === 0) {
       return
     }
-
     const { hero, slotIndex } = selectedSlot
     const heroRunes = equippedRunes[hero.alias] ?? Array(5).fill(null)
     const previousRune = heroRunes[slotIndex]
     if (previousRune?.id === rune.id) {
-      setSelectedSlot(null)
+      if (closeDrawer) setSelectedSlot(null)
       return
     }
-
     setEquippedRunes((allRunes) => ({
       ...allRunes,
       [hero.alias]: heroRunes.map((equippedRune, index) => index === slotIndex ? rune : equippedRune),
     }))
-    setRuneInventory((runes) => runes.map((inventoryRune) => {
-      const leavingInventory = inventoryRune.id === rune.id ? 1 : 0
-      const returningToInventory = inventoryRune.id === previousRune?.id ? 1 : 0
-      const quantityChange = returningToInventory - leavingInventory
-      return quantityChange === 0 ? inventoryRune : { ...inventoryRune, quantity: inventoryRune.quantity + quantityChange }
-    }))
-    setSelectedSlot(null)
+    if (sourceOwnerType === 'AGENCY') {
+      setRuneInventory((inventory) => changeRuneQuantity(inventory, rune, -1))
+    }
+    setPersonalRuneInventory((inventory) => {
+      const afterEquip = sourceOwnerType === 'MANAGER' ? changeRuneQuantity(inventory, rune, -1) : inventory
+      return previousRune ? changeRuneQuantity(afterEquip, previousRune, 1) : afterEquip
+    })
+    if (closeDrawer) setSelectedSlot(null)
   }
 
-  async function equipRune(rune) {
-    if (!selectedSlot || rune.quantity === 0) {
+  async function equipRune(rune, sourceOwnerType) {
+    if (!selectedSlot || rune.quantity === 0 || isUpdatingLoadout) {
       return
     }
-
+    const { hero, slotIndex } = selectedSlot
+    if (equippedRunes[hero.alias]?.[slotIndex]?.id === rune.id) {
+      setSelectedSlot(null)
+      return
+    }
     if (apiStatus !== 'ready') {
-      equipRuneLocally(rune)
+      equipRuneLocally(rune, sourceOwnerType)
       return
     }
-
+    const before = { agencyRunes: runeInventory, personalRunes: personalRuneInventory, equipped: equippedRunes }
+    runeMutationInFlight.current = true
     setIsUpdatingLoadout(true)
     setLoadoutError(null)
+    equipRuneLocally(rune, sourceOwnerType, false)
     try {
-      const { hero, slotIndex } = selectedSlot
       const state = await equipHeroRune({
         agencyId: gameState.agency.id,
         heroId: hero.id,
         slotIndex,
         runeId: rune.id,
+        sourceOwnerType,
       })
       applyRemoteAgencyState(state)
       setSelectedSlot(null)
     } catch (error) {
+      try {
+        applyRemoteAgencyState(await fetchAgencyState(gameState.agency.id))
+      } catch {
+        setRuneInventory(before.agencyRunes)
+        setPersonalRuneInventory(before.personalRunes)
+        setEquippedRunes(before.equipped)
+      }
       setLoadoutError(error.message)
     } finally {
+      runeMutationInFlight.current = false
       setIsUpdatingLoadout(false)
     }
   }
 
-  function unequipRuneLocally() {
+  function unequipRuneLocally(closeDrawer = true) {
     if (!selectedSlot) {
       return
     }
-
     const { hero, slotIndex } = selectedSlot
     const heroRunes = equippedRunes[hero.alias] ?? Array(5).fill(null)
     const previousRune = heroRunes[slotIndex]
     if (!previousRune) {
       return
     }
-
     setEquippedRunes((allRunes) => ({
       ...allRunes,
       [hero.alias]: heroRunes.map((rune, index) => index === slotIndex ? null : rune),
     }))
-    setRuneInventory((runes) => runes.map((rune) => rune.id === previousRune.id ? { ...rune, quantity: rune.quantity + 1 } : rune))
-    setSelectedSlot(null)
+    setPersonalRuneInventory((inventory) => changeRuneQuantity(inventory, previousRune, 1))
+    if (closeDrawer) setSelectedSlot(null)
   }
 
   async function unequipRune() {
-    if (!selectedSlot) {
+    if (!selectedSlot || isUpdatingLoadout) {
       return
     }
-
     if (apiStatus !== 'ready') {
       unequipRuneLocally()
       return
     }
-
+    const { hero, slotIndex } = selectedSlot
+    const before = { agencyRunes: runeInventory, personalRunes: personalRuneInventory, equipped: equippedRunes }
+    runeMutationInFlight.current = true
     setIsUpdatingLoadout(true)
     setLoadoutError(null)
+    unequipRuneLocally(false)
     try {
-      const { hero, slotIndex } = selectedSlot
       const state = await unequipHeroRune({
         agencyId: gameState.agency.id,
         heroId: hero.id,
@@ -1083,8 +1122,16 @@ function App() {
       applyRemoteAgencyState(state)
       setSelectedSlot(null)
     } catch (error) {
+      try {
+        applyRemoteAgencyState(await fetchAgencyState(gameState.agency.id))
+      } catch {
+        setRuneInventory(before.agencyRunes)
+        setPersonalRuneInventory(before.personalRunes)
+        setEquippedRunes(before.equipped)
+      }
       setLoadoutError(error.message)
     } finally {
+      runeMutationInFlight.current = false
       setIsUpdatingLoadout(false)
     }
   }
@@ -1482,7 +1529,7 @@ function App() {
 
   const pages = {
     overview: <Overview agency={gameState.agency} metrics={gameState.metrics} activeParty={gameState.activeParty} questHeroes={gameState.questHeroes} onNavigate={setActivePage} />,
-    heroes: <Heroes agency={gameState.agency} manager={account?.manager} heroes={gameState.heroes} activeParties={gameState.activeParties} agencyHeroes={gameState.agencyHeroes} preparedParties={gameState.preparedParties.filter((party) => party.ownerManagerId === account?.manager?.id)} runes={equippedRunes} availableRecruits={availableRecruits} isRecruitingHero={isRecruitingHero} recruitmentError={recruitmentError} isUpdatingActivity={isUpdatingActivity} activityError={activityError} isUpdatingParty={isUpdatingParty} partyError={partyError} isCreatingParty={isCreatingParty} partyName={partyName} onPartyNameChange={setPartyName} onCreateParty={handleCreateParty} onCancelCreateParty={cancelCreatingParty} onStartCreateParty={startCreatingParty} onRecruitHero={handleRecruitHero} onSelectRuneSlot={(hero, slotIndex) => { setLoadoutError(null); setSelectedSlot({ hero, slotIndex }) }} onChangeActivity={updateHeroActivity} onAddToParty={assignHeroToParty} onRemoveFromParty={removeHeroFromPreparedParty} onSetBorrowingFee={updateHeroBorrowingFee} isUpdatingBorrowingFee={isUpdatingBorrowingFee} borrowingFeeError={borrowingFeeError} />,
+    heroes: <Heroes agency={gameState.agency} manager={account?.manager} heroes={gameState.heroes} activeParties={gameState.activeParties} agencyHeroes={gameState.agencyHeroes} preparedParties={gameState.preparedParties.filter((party) => party.ownerManagerId === account?.manager?.id)} runes={equippedRunes} personalRuneInventory={personalRuneInventory} availableRecruits={availableRecruits} isRecruitingHero={isRecruitingHero} recruitmentError={recruitmentError} isUpdatingActivity={isUpdatingActivity} activityError={activityError} isUpdatingParty={isUpdatingParty} partyError={partyError} isCreatingParty={isCreatingParty} partyName={partyName} onPartyNameChange={setPartyName} onCreateParty={handleCreateParty} onCancelCreateParty={cancelCreatingParty} onStartCreateParty={startCreatingParty} onRecruitHero={handleRecruitHero} onSelectRuneSlot={(hero, slotIndex) => { if (isUpdatingLoadout) return; setLoadoutError(null); setSelectedSlot({ hero, slotIndex }) }} onChangeActivity={updateHeroActivity} onAddToParty={assignHeroToParty} onRemoveFromParty={removeHeroFromPreparedParty} onSetBorrowingFee={updateHeroBorrowingFee} isUpdatingBorrowingFee={isUpdatingBorrowingFee} borrowingFeeError={borrowingFeeError} />,
     quests: <Quests activeParty={gameState.activeParty} activeParties={gameState.activeParties} availableQuests={gameState.availableQuests} resolvedQuests={gameState.resolvedQuests} preparedParties={gameState.preparedParties.filter((party) => party.ownerManagerId === account?.manager?.id)} heroes={gameState.heroes} managerGold={account?.manager?.gold ?? 0} isStartingQuest={isStartingQuest} questError={questError} onStartQuest={handleStartQuest} />,
     ...(expeditionEnabled ? { map: <Suspense fallback={<p role="status">Loading Map…</p>}><MapPage key={gameState.agency.id} agencyId={gameState.agency.id} managerId={account?.manager?.id} heroes={gameState.heroes} preparedParties={gameState.preparedParties} itemInventory={gameState.itemInventory} runeInventory={runeInventory} /></Suspense> } : {}),
     agency: <Agency agency={gameState.agency} manager={account?.manager} canTransferAgencyGold={account?.agencyMemberships?.some((membership) => membership.agencyId === gameState.agency.id && membership.role === 'LEADER')} upgrades={gameState.upgrades} runeInventory={runeInventory} itemInventory={gameState.itemInventory} isTransferringGold={isTransferringGold} transferError={transferError} transferNotice={transferNotice} onTransferGold={handleTransferGold} />,
@@ -1504,7 +1551,7 @@ function App() {
         <div className="sidebar__bottom"><div className="player-card"><span className="player-card__avatar">{account?.manager?.displayName?.slice(0, 1).toUpperCase() ?? session?.identity?.username?.slice(0, 1).toUpperCase() ?? 'U'}</span><span><strong>{account?.manager?.displayName ?? session?.identity?.username ?? gameState.agency.leaderName}</strong><small>{account?.manager ? 'Manager' : 'Signed in'}</small></span><button className="text-button player-card__logout" type="button" onClick={handleLogout}>Sign out</button></div></div>
       </aside>
       <main className="main-content"><div className="main-content__inner">{apiStatus !== 'ready' && <p className={`api-status api-status--${apiStatus}`} role="status">{apiStatus === 'loading' ? 'Loading agency state…' : 'Backend unavailable. Showing the local fixture.'}</p>}{pages[activePage]}</div></main>
-      <RuneDrawer selectedSlot={selectedSlot} runes={equippedRunes} runeInventory={runeInventory} isUpdating={isUpdatingLoadout} error={loadoutError} onClose={() => { setLoadoutError(null); setSelectedSlot(null) }} onEquipRune={equipRune} onUnequipRune={unequipRune} />
+      <RuneDrawer selectedSlot={selectedSlot} runes={equippedRunes} agencyRunes={runeInventory} personalRunes={personalRuneInventory} isUpdating={isUpdatingLoadout} error={loadoutError} onClose={() => { setLoadoutError(null); setSelectedSlot(null) }} onEquipRune={equipRune} onUnequipRune={unequipRune} />
     </div>
   )
 }

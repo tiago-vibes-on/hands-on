@@ -55,13 +55,14 @@ resulting state.
 - [x] Model agency storage for gold, runes, and stackable item materials.
   Market reservations and transfers are implemented; quest loot remains to be
   added.
-- [x] Add commands to equip and unequip a rune, atomically moving it between
-  agency inventory and a hero's five rune slots.
-- [x] Lock a hero's rune loadout while the hero is on a quest.
-- [x] Validate that a rune belongs to the agency and that a target slot exists.
-  Rune-class compatibility is deliberately out of scope for this milestone.
-- [x] Update the agency-state response and frontend rune drawer to use the
-  persisted loadout commands.
+- [x] Equip and unequip runes atomically among Manager inventory, agency
+  inventory, and a Hero's five equipped slots. Unequip returns to the acting
+  Manager by default; Heroes have no loose rune inventory.
+- [x] Permit rune changes only at the agency, including for personal Heroes.
+- [x] Validate agency membership, personal Hero ownership, source inventory,
+  and slot bounds. Rune-class compatibility remains out of scope.
+- [x] Show both inventories in the frontend rune drawer and persist each
+  change asynchronously without a page-wide loading state.
 
 ## Milestone 3 — Quest lifecycle
 

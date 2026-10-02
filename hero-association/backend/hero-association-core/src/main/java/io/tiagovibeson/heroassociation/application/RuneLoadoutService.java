@@ -13,11 +13,16 @@ import io.tiagovibeson.heroassociation.domain.AgencyRune;
 import io.tiagovibeson.heroassociation.domain.Hero;
 import io.tiagovibeson.heroassociation.domain.HeroActivity;
 import io.tiagovibeson.heroassociation.domain.HeroRune;
+import io.tiagovibeson.heroassociation.domain.Manager;
+import io.tiagovibeson.heroassociation.domain.ManagerRune;
 import io.tiagovibeson.heroassociation.domain.Rune;
+import io.tiagovibeson.heroassociation.domain.RuneInventoryOwnerType;
 import io.tiagovibeson.heroassociation.repository.AgencyRepository;
 import io.tiagovibeson.heroassociation.repository.AgencyRuneRepository;
 import io.tiagovibeson.heroassociation.repository.HeroRepository;
 import io.tiagovibeson.heroassociation.repository.HeroRuneRepository;
+import io.tiagovibeson.heroassociation.repository.ManagerRepository;
+import io.tiagovibeson.heroassociation.repository.ManagerRuneRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -40,28 +45,38 @@ public class RuneLoadoutService {
     AgencyRuneRepository agencyRuneRepository;
 
     @Inject
+    ManagerRepository managerRepository;
+
+    @Inject
+    ManagerRuneRepository managerRuneRepository;
+
+    @Inject
     AgencyStateService agencyStateService;
 
     @Inject
     AgencyAccessService agencyAccessService;
 
     @Transactional
-    public AgencyStateResponse equip(UUID agencyId, UUID heroId, int slotIndex, UUID runeId) {
-        Agency agency = findAgency(agencyId);
+    public AgencyStateResponse equip(UUID agencyId, UUID heroId, int slotIndex, UUID runeId,
+            RuneInventoryOwnerType sourceOwnerType) {
         agencyAccessService.requireMembership(agencyId);
-        Hero hero = findHero(agencyId, heroId);
+        Manager manager = lockCurrentManager();
+        lockAgency(agencyId);
+        Hero hero = findHero(agencyId, heroId, manager.getId());
         validateHeroAvailableForLoadout(hero);
         validateSlot(slotIndex);
-        AgencyRune agencyRune = findAvailableRune(agencyId, runeId);
         HeroRune equippedRune = findEquippedRune(heroId, slotIndex);
+        if (equippedRune != null && equippedRune.getRune().getId().equals(runeId)) {
+            return agencyStateService.findState(agencyId);
+        }
+        Rune rune = takeRune(agencyId, manager.getId(), runeId, sourceOwnerType);
 
-        agencyRune.decreaseQuantity();
         if (equippedRune == null) {
-            heroRuneRepository.persist(new HeroRune(hero, agencyRune.getRune(), slotIndex));
+            heroRuneRepository.persist(new HeroRune(hero, rune, slotIndex));
         } else {
             Rune previousRune = equippedRune.getRune();
-            equippedRune.replaceRune(agencyRune.getRune());
-            returnRuneToInventory(agency, previousRune);
+            equippedRune.replaceRune(rune);
+            returnRuneToManager(manager, previousRune);
         }
 
         return agencyStateService.findState(agencyId);
@@ -69,30 +84,41 @@ public class RuneLoadoutService {
 
     @Transactional
     public AgencyStateResponse unequip(UUID agencyId, UUID heroId, int slotIndex) {
-        Agency agency = findAgency(agencyId);
         agencyAccessService.requireMembership(agencyId);
-        Hero hero = findHero(agencyId, heroId);
+        Manager manager = lockCurrentManager();
+        lockAgency(agencyId);
+        Hero hero = findHero(agencyId, heroId, manager.getId());
         validateHeroAvailableForLoadout(hero);
         validateSlot(slotIndex);
         HeroRune equippedRune = findEquippedRune(heroId, slotIndex);
 
         if (equippedRune != null) {
-            returnRuneToInventory(agency, equippedRune.getRune());
+            returnRuneToManager(manager, equippedRune.getRune());
             heroRuneRepository.delete(equippedRune);
         }
 
         return agencyStateService.findState(agencyId);
     }
 
-    private Agency findAgency(UUID agencyId) {
-        return agencyRepository.findByIdOptional(agencyId)
+    private Agency lockAgency(UUID agencyId) {
+        return agencyRepository.findForUpdate(agencyId)
                 .orElseThrow(() -> new AgencyNotFoundException(agencyId));
     }
 
-    private Hero findHero(UUID agencyId, UUID heroId) {
-        return heroRepository.find("id = ?1 and agency.id = ?2", heroId, agencyId)
-                .firstResultOptional()
+    private Manager lockCurrentManager() {
+        Manager current = agencyAccessService.currentManager();
+        return managerRepository.findForUpdate(current.getId()).orElseThrow();
+    }
+
+    private Hero findHero(UUID agencyId, UUID heroId, UUID managerId) {
+        Hero hero = heroRepository.findForUpdate(heroId)
                 .orElseThrow(() -> new HeroNotFoundException(heroId));
+        boolean agencyHero = hero.getAgency() != null && hero.getAgency().getId().equals(agencyId);
+        boolean personalHero = hero.getOwnerManager() != null && hero.getOwnerManager().getId().equals(managerId);
+        if (!agencyHero && !personalHero) {
+            throw new HeroNotFoundException(heroId);
+        }
+        return hero;
     }
 
     private void validateHeroAvailableForLoadout(Hero hero) {
@@ -107,14 +133,23 @@ public class RuneLoadoutService {
         }
     }
 
-    private AgencyRune findAvailableRune(UUID agencyId, UUID runeId) {
-        AgencyRune agencyRune = agencyRuneRepository.find("agency.id = ?1 and rune.id = ?2", agencyId, runeId)
-                .firstResult();
-        if (agencyRune == null || agencyRune.getQuantity() == 0) {
-            throw new RuneNotAvailableException(runeId);
+    private Rune takeRune(UUID agencyId, UUID managerId, UUID runeId, RuneInventoryOwnerType sourceOwnerType) {
+        if (sourceOwnerType == RuneInventoryOwnerType.AGENCY) {
+            AgencyRune agencyRune = agencyRuneRepository.find("agency.id = ?1 and rune.id = ?2", agencyId, runeId)
+                    .firstResult();
+            if (agencyRune == null || agencyRune.getQuantity() == 0) {
+                throw new RuneNotAvailableException(runeId, "agency");
+            }
+            agencyRune.decreaseQuantity();
+            return agencyRune.getRune();
         }
-
-        return agencyRune;
+        ManagerRune managerRune = managerRuneRepository.find("manager.id = ?1 and rune.id = ?2", managerId, runeId)
+                .firstResult();
+        if (managerRune == null || managerRune.getQuantity() == 0) {
+            throw new RuneNotAvailableException(runeId, "manager");
+        }
+        managerRune.decreaseQuantity(1);
+        return managerRune.getRune();
     }
 
     private HeroRune findEquippedRune(UUID heroId, int slotIndex) {
@@ -122,13 +157,13 @@ public class RuneLoadoutService {
                 .firstResult();
     }
 
-    private void returnRuneToInventory(Agency agency, Rune rune) {
-        AgencyRune agencyRune = agencyRuneRepository.find("agency.id = ?1 and rune.id = ?2", agency.getId(), rune.getId())
+    private void returnRuneToManager(Manager manager, Rune rune) {
+        ManagerRune managerRune = managerRuneRepository.find("manager.id = ?1 and rune.id = ?2", manager.getId(), rune.getId())
                 .firstResult();
-        if (agencyRune == null) {
-            agencyRuneRepository.persist(new AgencyRune(agency, rune, 1));
+        if (managerRune == null) {
+            managerRuneRepository.persist(new ManagerRune(manager, rune, 1));
         } else {
-            agencyRune.increaseQuantity();
+            managerRune.increaseQuantity(1);
         }
     }
 }

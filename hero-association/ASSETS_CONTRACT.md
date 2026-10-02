@@ -5,6 +5,16 @@ contract prepares the first Market extraction described in
 [Market architecture](MARKET_ARCHITECTURE.md). There is no separate Assets
 service or public Assets endpoint.
 
+Rune ownership has three scopes in Core: Manager inventory (`manager_rune`),
+agency inventory (`agency_rune`), and equipped Hero slots (`hero_rune`). Heroes
+have no unequipped rune inventory or gold. An agency member can equip an
+available rune from their own or that agency's inventory onto an agency Hero
+or one of their personal Heroes at the agency. Equipping transfers it to the
+Hero slot; replacing or unequipping sends the previous rune to the acting
+Manager's inventory by default. Each command persists atomically. Heroes on
+quests or Expeditions cannot change equipment. Agency rune access does not
+change the existing leader-only agency gold and Market permissions.
+
 Core owns Manager and agency gold and item inventories. A reservation deducts
 the selected owner's available gold or item quantity in the same database
 transaction that records an `asset_reservation` row. BUY reservations bind an

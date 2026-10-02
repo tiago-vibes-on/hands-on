@@ -279,6 +279,14 @@ orders.
 - `POST /api/v1/market/orders` (JSON body includes `ownerType`, `side`, `itemId`, `quantity`, and `priceGoldPerItem`; include `agencyId` only when `ownerType` is `AGENCY`)
 - `DELETE /api/v1/market/orders/{orderId}`
 
+Rune equip requests use `{ "runeId": "UUID", "sourceOwnerType": "MANAGER" }`
+or `"AGENCY"` as the source. Any agency member can use agency runes; only the
+authenticated owner can change a personal Hero. A Hero owns equipped runes
+only. Replacing or unequipping transfers the old rune to the acting Manager's
+inventory. Changes are rejected while the Hero is on a quest or Expedition.
+Gold and agency Market permissions remain leader-only where already required.
+The agency state includes both `runeInventory` and `personalRuneInventory`.
+
 Market mutations return the order's owner type, ID, name, and status, not
 account or agency state. `MANAGER` uses the authenticated Manager's personal
 wallet and inventory; `AGENCY` requires leadership and uses agency assets.
@@ -296,8 +304,9 @@ mana, and 100% stamina. Agency leaders can explicitly claim a recruit for the ag
 Agency state returns the agency and leader, Agency, Training, Rest, Size,
 Reputation, and Intelligence upgrade levels, agency and personal heroes and
 class recovery values,
-parties with quests and member IDs, agency item and rune inventory, and each
-hero's five rune slots. The initial item inventory contains stackable
+parties with quests and member IDs, agency item and rune inventory, the
+caller's personal rune inventory, and each hero's five rune slots. The initial
+item inventory contains stackable
 materials; item equipment and quest loot are pending. Rest represents the
 agency's recovery facilities; there is no Medical
 Level, and its concrete upgrade effect remains to be defined. Quest definitions

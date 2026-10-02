@@ -51,6 +51,8 @@ PostgreSQL, Redis, and RabbitMQ before packaging their JVM images with
 checksummed archive. Candidate builds require all four daily application
 services in full k3d mode and never promote them automatically. Direct Maven
 builds remain independent and may use local Dev Services or Testcontainers.
+Core tests do not retain PostgreSQL Dev Services across runs, even when
+Testcontainers reuse is enabled globally on the developer machine.
 Before deployment, the disposable k3d E2E gate must run those exact images,
 verify every application Pod image ID against the archive, and pass browser,
 session, isolated Core-cache fallback, BFF outage, and market k6 checks through
@@ -102,15 +104,18 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
 - `GET /api/v1/agencies/{agencyId}/state` returns an agency, its leader and
   upgrade levels, agency heroes in `heroes`, the caller's personal heroes
   and agency-party participants in `personalHeroes`, parties and quests,
-  rune and item inventory, hero rune slots, feed posts, and any persisted
-  quest-combat snapshot. Party records expose `ownerManagerId`; hero records
-  expose `ownerManagerId` only for personally owned heroes and expose
-  `borrowingFeeGold` (default 0) for each hero.
+  agency rune and item inventory, the caller's `personalRuneInventory`, hero
+  rune slots, feed posts, and any persisted quest-combat snapshot. Party records
+  expose `ownerManagerId`; Hero records expose `ownerManagerId` only for
+  personally owned heroes and `borrowingFeeGold` (default 0) for each hero.
 - `PUT /api/v1/agencies/{agencyId}/heroes/{heroId}/rune-slots/{slotIndex}`
-  equips the requested available rune in a slot and returns the updated agency
-  state.
+  takes `{ "runeId": "...", "sourceOwnerType": "MANAGER" | "AGENCY" }`,
+  equips the available rune from that inventory, and returns updated agency
+  state. Any agency member can use agency runes for an agency Hero or one of
+  their own personal Heroes while the Hero is at the agency.
 - `DELETE /api/v1/agencies/{agencyId}/heroes/{heroId}/rune-slots/{slotIndex}`
-  unequips a rune and returns the updated agency state.
+  unequips a rune into the acting Manager's inventory and returns updated
+  agency state.
 - `PUT /api/v1/agencies/{agencyId}/heroes/{heroId}/activity` changes an
   agency hero's activity to `TRAINING` or `RESTING` and returns the updated
   agency state.
@@ -201,9 +206,14 @@ mana recovery. Every five seconds, a background worker restores agency heroes'
 health and mana from their elapsed time: `TRAINING` uses the base class rate
 and `RESTING` uses twice that rate. The same worker recovers stamina at one
 stamina minute per real minute in Training or the agency Rest Level rate while Resting.
-Equipping and replacing runes atomically moves one rune between the agency
-inventory and a hero slot. A rune that is unavailable in inventory or a hero
-who is on a quest returns `409 Conflict`; a slot outside 0 through 4 returns
+Manager and agency rune inventories contain only unequipped runes. A Hero owns
+only the runes in its five equipped slots, not gold or a separate inventory.
+Equipping transfers one rune atomically from the chosen Manager or agency
+inventory to a Hero slot. Replacing or unequipping transfers the old rune to
+the acting Manager's inventory by default. Any agency member can use that
+agency's runes; this does not change leader-only agency gold and Market rules.
+The Hero must be at the agency, not on a quest or Expedition. An unavailable
+rune or away Hero returns `409 Conflict`; a slot outside 0 through 4 returns
 `400 Bad Request`.
 Agency item inventory contains stackable materials. The seed contains Magic
 Crystals and Iron Ingots; item equipment and quest drops are not implemented
@@ -654,10 +664,12 @@ IDs must not be added for entities or exposed through the API.
   Elara also equips a Critical Damage Rune. Each initial troll has a 10%
   critical-hit chance.
 - The Agency screen shows API-loaded stackable items and runes with quantities
-  and descriptions. Clicking a hero rune slot opens a rune drawer that
-  persists equipping, replacing, and removing an available rune through the
-  loadout API. Item stacks can be reserved by market orders; item equipment,
-  quest loot, and compatibility rules are not implemented yet.
+  and descriptions. Clicking an agency or personal Hero rune slot opens a
+  drawer with the caller's personal and agency rune inventories. Each equip,
+  replace, or unequip request persists immediately; the frontend updates
+  optimistically without a page-wide loading state and reconciles on failure.
+  Item stacks can be reserved by market orders; item equipment, quest loot,
+  and compatibility rules are not implemented yet.
 - The Market screen loads the live global order book, creates buy or sell
   orders from the agency's item inventory, and cancels the agency's own open
   orders. It refreshes through the normal five-second browser polling.

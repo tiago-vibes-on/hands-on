@@ -28,7 +28,7 @@ public class RuneLoadoutController {
             @PathParam("heroId") UUID heroId,
             @PathParam("slotIndex") int slotIndex,
             @Valid EquipRuneRequest request) {
-        return runeLoadoutService.equip(agencyId, heroId, slotIndex, request.runeId());
+        return runeLoadoutService.equip(agencyId, heroId, slotIndex, request.runeId(), request.sourceOwnerType());
     }
 
     @DELETE

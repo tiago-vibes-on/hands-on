@@ -22,6 +22,11 @@ browser -> hero-association-bff -> hero-association-core -> Core PostgreSQL
   API. It validates the `hero-association-core` bearer-token audience for every
   API call, listens on port `8081`, and is not published by Docker Compose.
 
+Core persists rune equipment on every equip or unequip command. The authenticated
+Manager may choose their personal or their agency's rune inventory; any agency
+member may use agency runes, but agency gold permissions are unchanged.
+Personal and agency Heroes can equip only while at the agency.
+
 `hero-association-expedition` is an opt-in Quarkus service
 with a Redis-backed encounter loop. Core admission supplies a pinned Hero
 baseline, and Redis fences orphan release against delayed Start commands.
@@ -94,6 +99,9 @@ infrastructure dependencies. From `backend/`, a clean build runs
 reservation and settlement tests use disposable PostgreSQL and Redis via
 Testcontainers. From `backend/`, run
 `./mvnw -pl hero-association-core -am -Dtest=AssetsServiceTest -Dsurefire.failIfNoSpecifiedTests=false test`.
+Core test PostgreSQL Dev Services are removed after the test JVM exits, even if
+`~/.testcontainers.properties` enables global container reuse. This does not
+affect the k3d Core or Keycloak databases.
 
 Existing local databases may retain the retired `combat_battle_registration`
 and `combat_progression_inbox` tables. They are not used by the new code;

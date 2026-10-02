@@ -61,11 +61,11 @@ export async function recruitHeroForAgency({ agencyId, recruitId }) {
   return request(`/api/v1/agencies/${agencyId}/recruits/${recruitId}/claim`, { method: 'POST' })
 }
 
-export async function equipHeroRune({ agencyId, heroId, slotIndex, runeId }) {
+export async function equipHeroRune({ agencyId, heroId, slotIndex, runeId, sourceOwnerType }) {
   return request(`/api/v1/agencies/${agencyId}/heroes/${heroId}/rune-slots/${slotIndex}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ runeId }),
+    body: JSON.stringify({ runeId, sourceOwnerType }),
   })
 }
 

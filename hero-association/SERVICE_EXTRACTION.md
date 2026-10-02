@@ -27,13 +27,13 @@ idempotency, retries, and recovery.
 | --- | --- | --- |
 | Account | Manager profile and Keycloak-subject mapping, not login credentials | In Core; extraction planned |
 | Agency | Membership, leadership, permissions, and upgrades | In Core; extraction planned |
-| Hero | Recruited heroes, permanent resources, XP, skills, and loadouts | In Core; extraction planned |
+| Hero | Recruited heroes, permanent resources, XP, skills, and equipment eligibility | In Core; extraction planned |
 | Map | Reusable field/dungeon definitions, floor layouts, and possible encounters | Not implemented; extraction planned |
 | Expedition | One persistent Party per Manager, active Map run, encounter coordination, and explicit return | Player-facing k3d Map cutover complete; ordinary local Map remains opt-in |
 | Quest | Optional objectives, rewards, and objective progress | Current quest-based flow in Core; extraction planned |
 | Creature | Versioned creature definitions: stats, attacks, XP, and drop tables | In Core; extraction planned |
 | Social | Feed posts; proposed future scope is manager-authored text only | In Core; extraction planned |
-| Assets | Manager/agency gold, unequipped item and rune inventories, transfers, and reservations | In Core; extraction planned |
+| Assets | Manager/agency gold and inventories; Hero-owned equipped runes; transfers and reservations | In Core; extraction planned |
 | Market | Orders, matching, trade history, and order state | In Core; extraction planned |
 | Combat rules | Pure battle calculation in a library; Expedition owns active run state | Shared library in Core and Expedition |
 
@@ -56,12 +56,16 @@ choose to return. The current Core quest flow and its borrowing fee remain
 unchanged until the new Map path is cut over.
 
 `hero-association-assets` is the planned service name for Assets.
-It serves two distinct owners: a Manager and an agency. An agency leader may
-manage agency assets, but those assets do not become personal property. Agency
-owns membership and leadership decisions; Assets enforces the resulting
-authorization for agency operations. Heroes, agency upgrades, quest state,
-and market orders are outside Assets. Decide ownership of item/rune definitions
-and equipped runes before extracting Assets.
+Manager and agency own gold, item stacks, and unequipped rune inventories;
+a Hero owns only its equipped runes, without gold or a loose inventory.
+Assets must be queryable by Manager, agency, or Hero owner ID. Every member
+of an agency may move that agency's runes to a Hero; unequipping returns the
+rune to the acting Manager by default. Existing leader-only agency gold and
+Market permissions are unchanged. Agency owns membership and leadership;
+Hero owns Hero identity, progression, and at-agency eligibility. Equipped
+rune ownership and slot assignment belong in Assets when extracted.
+Item/rune definition ownership is still to be decided before extraction.
+Agency upgrades, quest state, and market orders are outside Assets.
 
 The existing feed supports more than manager-authored text. Simplifying it
 would be a separate behavior change, not a completed part of this plan.
@@ -106,11 +110,13 @@ service. See [Assets contract](ASSETS_CONTRACT.md).
 
 - [x] Add and test the internal reservation, release, and trade-settlement
   contract in Core, including duplicate requests and concurrent spending.
-- [ ] Resolve ownership of item/rune definitions and equipped runes. Give
-  Assets explicit Manager/agency authorization and an idempotent transfer
-  contract. Expose the validated reservation and settlement operations to
-  Market through a private Core API. Do not create a separate Assets service
-  just to start Market.
+- [x] Define Manager, agency, and equipped-Hero rune ownership and test the
+  Core transfer commands.
+- [ ] Decide ownership of item/rune definitions. Give Assets explicit
+  Manager/agency/Hero authorization and an idempotent transfer contract.
+  Expose validated reservation and settlement operations to Market through
+  a private Core API. Do not create a separate Assets service just to start
+  Market.
 - [ ] Define how future battle consumables are reserved or consumed without
   double spending; this does not block the initial read-only combat stream.
 

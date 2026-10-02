@@ -16,6 +16,7 @@ import io.tiagovibeson.heroassociation.domain.Hero;
 import io.tiagovibeson.heroassociation.domain.HeroRune;
 import io.tiagovibeson.heroassociation.domain.HeroSkill;
 import io.tiagovibeson.heroassociation.domain.Item;
+import io.tiagovibeson.heroassociation.domain.ManagerRune;
 import io.tiagovibeson.heroassociation.domain.Party;
 import io.tiagovibeson.heroassociation.domain.Quest;
 import io.tiagovibeson.heroassociation.domain.QuestCombat;
@@ -31,6 +32,7 @@ public record AgencyStateResponse(
         List<HeroResponse> heroes,
         List<HeroResponse> personalHeroes,
         List<InventoryRuneResponse> runeInventory,
+        List<InventoryRuneResponse> personalRuneInventory,
         List<InventoryItemResponse> itemInventory,
         List<FeedPostResponse> feedPosts) {
 
@@ -41,6 +43,7 @@ public record AgencyStateResponse(
             List<Party> parties,
             List<Quest> quests,
             List<AgencyRune> runeInventory,
+            List<ManagerRune> personalRuneInventory,
             List<AgencyItem> itemInventory,
             List<FeedPost> feedPosts) {
         Map<UUID, List<UUID>> heroIdsByParty = Stream.concat(heroes.stream(), personalHeroes.stream())
@@ -56,6 +59,7 @@ public record AgencyStateResponse(
                 heroes.stream().map(HeroResponse::from).toList(),
                 personalHeroes.stream().map(HeroResponse::from).toList(),
                 runeInventory.stream().map(InventoryRuneResponse::from).toList(),
+                personalRuneInventory.stream().map(InventoryRuneResponse::from).toList(),
                 itemInventory.stream().map(InventoryItemResponse::from).toList(),
                 feedPosts.stream().map(FeedPostResponse::from).toList());
     }
@@ -323,6 +327,10 @@ public record AgencyStateResponse(
 
         private static InventoryRuneResponse from(AgencyRune agencyRune) {
             return new InventoryRuneResponse(RuneResponse.from(agencyRune.getRune()), agencyRune.getQuantity());
+        }
+
+        private static InventoryRuneResponse from(ManagerRune managerRune) {
+            return new InventoryRuneResponse(RuneResponse.from(managerRune.getRune()), managerRune.getQuantity());
         }
     }
 
