@@ -1,8 +1,11 @@
 # Hero Association Game Core
 
 Game Core is the private Quarkus service that owns Hero Association game rules
-and PostgreSQL state. The public BFF forwards the browser's existing API calls
-to this service without changing the API contract. See
+and its own PostgreSQL state. Assets owns all wallets, catalogs, inventory
+and equipment; Market owns orders. Core composes bounded private Assets
+snapshots and persists equipment, Quest and Expedition workflows before
+delivering economic commands outside its transactions. BFF routes game calls
+to Core and forwards caller-generated operation keys. See
 [`../README.md`](../README.md) for the complete service topology.
 
 ## Prerequisites
@@ -55,18 +58,19 @@ mixed-service mode, interruption recovery, and intentional Core reset.
 Direct `./mvnw test` remains independently runnable and may start local
 Dev Services; backend candidate builds use disposable k3d dependencies.
 
-### Pre-cutover Expedition settlement (off by default)
+### Assets workflows and Expedition settlement
 
-Core can reserve a personal-Hero Party under one UUIDv7 Expedition ID and
-stores the exact baseline in `expedition_reservation`. No browser or private
-entry route calls this method yet. A dedicated RabbitMQ consumer can apply one
-frozen Expedition aggregate to Hero and Manager Assets in the same transaction
-as the reservation receipt. Duplicate bytes are harmless; a changed baseline
-or conflicting payload is rejected. Core publishes a separate owner-applied
-acknowledgment only after SQL commit. This consumer remains disabled until
-authenticated admission is connected. See
-[Expedition settlement](../../EXPEDITION_SETTLEMENT.md) for the handoff and
-local broker settings.
+Equipment and Quest starts require a UUIDv7 operation key. Core fences the
+participating Heroes and Party while a command is unresolved. A durable worker
+retries the same Assets command; `GET /api/v1/asset-operations/{operationKey}`
+reports its status to the initiating Manager. An uncertain delivery returns
+`202`; only a verified receipt allows Core to finish or release the fence.
+
+Expedition admission reserves eligible personal Heroes before pinning Assets
+loadouts. Return credits Assets once before Core applies Hero progression and
+confirms the aggregate. Duplicate delivery cannot repeat credit or XP. See
+[Assets recovery](../../ASSETS_RECOVERY.md) and
+[Expedition settlement](../../EXPEDITION_SETTLEMENT.md).
 
 ### Development database reset
 
@@ -74,10 +78,9 @@ Until Flyway is introduced, the development and test profiles drop and
 recreate the database schema on startup, then load deterministic game data from
 `src/main/resources/import.sql`. The seed contains Dawnwatch Agency, its
 leader and six heroes, the three globally available recruitment NPCs, Broken
-Pass Party, an in-progress troll quest and its initial combat snapshot, seven
-rune definitions, Magic Crystals, Iron Ingots, agency rune inventory, the
-party's equipped runes, two feed posts, Ironridge Exchange, and its open market
-orders. It also seeds manager1 through manager10 across Dawnwatch, Ironridge,
+Pass Party, an in-progress troll quest and its initial combat snapshot, pinned combat rune snapshots and two feed posts. Assets' separate seed owns
+the seven rune definitions, items, wallets, loose inventory, equipped slots
+and reservations for Market's two seeded orders. It also seeds manager1 through manager10 across Dawnwatch, Ironridge,
 and Silverkeep Guild. Every seeded Manager has three personal starter heroes,
 most have zero personal gold, and User 2 has 100,000 personal gold for
 local testing. Manager 3 and Manager 4 have small personal item stacks for
@@ -254,8 +257,8 @@ but not agency membership. A claim assigns the NPC to the Manager's personal
 roster. An agency leader can instead explicitly claim a recruit for the agency
 through `POST /api/v1/agencies/{agencyId}/recruits/{recruitId}/claim`. A recruit
 can be claimed only once across both routes. Agency-specific commands require
-membership. Only `LEADER` can claim for an agency or create or cancel market
-orders.
+membership. Only `LEADER` can claim for an agency or authorize agency Market
+reservations; personal Market reservations require the authenticated owner.
 
 - `GET /api/v1/account`
 - `POST /api/v1/account/manager`
@@ -275,26 +278,24 @@ orders.
 - `PUT /api/v1/agencies/{agencyId}/quests/{questId}/start`
 - `POST /api/v1/agencies/{agencyId}/quests/{questId}/combat/sync`
 - `POST /api/v1/agencies/{agencyId}/feed-posts`
-- `GET /api/v1/market/orders`
-- `POST /api/v1/market/orders` (JSON body includes `ownerType`, `side`, `itemId`, `quantity`, and `priceGoldPerItem`; include `agencyId` only when `ownerType` is `AGENCY`)
-- `DELETE /api/v1/market/orders/{orderId}`
 
-Rune equip requests use `{ "runeId": "UUID", "sourceOwnerType": "MANAGER" }`
+Rune equip requests use `{ "operationKey": "UUIDv7", "runeId": "UUID", "sourceOwnerType": "MANAGER" }`
 or `"AGENCY"` as the source. Any agency member can use agency runes; only the
 authenticated owner can change a personal Hero. A Hero owns equipped runes
 only. Replacing or unequipping transfers the old rune to the acting Manager's
 inventory. Changes are rejected while the Hero is on a quest or Expedition.
 Gold and agency Market permissions remain leader-only where already required.
-The agency state includes both `runeInventory` and `personalRuneInventory`.
+Unequip requires `X-Operation-Key: UUIDv7`. A confirmed change returns `200`;
+unknown delivery returns `202` with a durable operation reference. The agency
+state includes both `runeInventory` and `personalRuneInventory`.
 
-Market mutations return the order's owner type, ID, name, and status, not
-account or agency state. `MANAGER` uses the authenticated Manager's personal
-wallet and inventory; `AGENCY` requires leadership and uses agency assets.
-Refresh both `GET /api/v1/account` and
-`GET /api/v1/agencies/{agencyId}/state` after placing or cancelling an order.
-Core still executes matching and resource transfers in one PostgreSQL
-transaction until Market is extracted as its own service.
-
+Market's public routes are implemented by the separate Market service,
+proxied through BFF. Core's old order routes return 404. Its retired
+private Assets routes also return `404`; Assets now hosts the reservation,
+settlement and closure contract. Core hosts only current-player authority RPCs
+and uses a separate credential for Assets snapshots and staged commands. See
+[Assets contract](../../ASSETS_CONTRACT.md) and the
+[Assets module](../hero-association-assets/README.md).
 
 The initial global board contains free Level 1 NPCs. A candidate is globally
 unique, so a successful claim removes it from every Manager's board. The claim
@@ -311,21 +312,23 @@ materials; item equipment and quest loot are pending. Rest represents the
 agency's recovery facilities; there is no Medical
 Level, and its concrete upgrade effect remains to be defined. Quest definitions
 include their description, creature objective,
-party-size range, duration estimate, gold reward, and status. Equipping or
-replacing a rune decrements its agency inventory quantity and returns any
-replaced rune to inventory in the same transaction. An unknown agency or hero
-returns `404 Not Found`; an unavailable rune or an attempt to change a quest
-hero's loadout returns `409 Conflict`. Agency heroes can switch between
+party-size range, duration estimate, gold reward, and status. Assets atomically moves a rune from the selected inventory to its slot and
+returns any previous rune to the acting Manager. Core protects Hero eligibility
+with a durable fence until the receipt is confirmed. An unknown agency or hero
+returns `404 Not Found`; an unavailable rune returns `404`, and an attempt to change an away Hero's
+loadout returns `409 Conflict`. Agency heroes can switch between
 `TRAINING` and `RESTING`; a hero on a quest cannot change activity and returns
 `409 Conflict`. A manager can create a uniquely named prepared party and add
 or remove available agency heroes. Prepared members keep their activity until
 a quest starts. An in-progress quest party cannot have its membership changed,
 and a hero already on a quest cannot move to another party; both return `409
 Conflict`. Starting an `AVAILABLE` quest requires JSON body
-`{ "partyId": "...", "expectedBorrowingFeeGold": 0 }`. Core sums the
+`{ "operationKey": "UUIDv7", "partyId": "...", "expectedBorrowingFeeGold": 0 }`. Core sums the
 agency-owned party heroes' fees and, only when the quote matches and the
-Manager has enough personal gold, transfers that total to the agency and
-moves all members to `ON_QUEST` in the same transaction. The leader pays
+Manager has enough personal gold, stages one immutable command. Assets transfers
+the fee and pins loadouts atomically; Core then confirms the receipt and moves
+all members to `ON_QUEST` in its own transaction. Pending delivery returns `202`
+and the worker recovers without charging twice. The leader pays
 when borrowing too. A stale quote or insufficient funds returns `409 Conflict`
 without charging. A party outside the quest's required size returns `400 Bad
 Request`. The resulting quest state includes its persisted start and
@@ -357,7 +360,7 @@ agency. A post may reference one item stack and a positive quantity currently
 held by the agency; this does not consume or reserve that inventory. Membership
 authorization is enforced; feed visibility beyond an agency is not implemented
 yet.
-The market exposes the global open order book and lets an agency create or
+The separate Market service exposes the global open order book and lets an agency create or
 cancel its own orders. A buy order reserves its maximum gold value, while a
 sell order reserves its items. Compatible orders match by price and creation
 time at the resting order's price. The buyer receives the item, the seller

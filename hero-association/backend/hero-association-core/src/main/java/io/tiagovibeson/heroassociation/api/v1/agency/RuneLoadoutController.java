@@ -23,20 +23,21 @@ public class RuneLoadoutController {
     @PUT
     @Path("/{slotIndex}")
     @Consumes(MediaType.APPLICATION_JSON)
-    public AgencyStateResponse equip(
+    public jakarta.ws.rs.core.Response equip(
             @PathParam("agencyId") UUID agencyId,
             @PathParam("heroId") UUID heroId,
             @PathParam("slotIndex") int slotIndex,
             @Valid EquipRuneRequest request) {
-        return runeLoadoutService.equip(agencyId, heroId, slotIndex, request.runeId(), request.sourceOwnerType());
+        return runeLoadoutService.equip(agencyId, heroId, slotIndex, request.runeId(), request.sourceOwnerType(), request.operationKey());
     }
 
     @DELETE
     @Path("/{slotIndex}")
-    public AgencyStateResponse unequip(
+    public jakarta.ws.rs.core.Response unequip(
             @PathParam("agencyId") UUID agencyId,
             @PathParam("heroId") UUID heroId,
-            @PathParam("slotIndex") int slotIndex) {
-        return runeLoadoutService.unequip(agencyId, heroId, slotIndex);
+            @PathParam("slotIndex") int slotIndex,
+            @jakarta.ws.rs.HeaderParam("X-Operation-Key") UUID operationKey) {
+        return runeLoadoutService.unequip(agencyId, heroId, slotIndex, operationKey);
     }
 }

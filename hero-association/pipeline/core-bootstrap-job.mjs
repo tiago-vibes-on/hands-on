@@ -28,3 +28,9 @@ export function assertCoreDatabaseIdentity(identity) {
     throw new Error('Refusing to reset an unexpected Core database: ' + identity)
   }
 }
+
+export function assertNoActiveExpeditions(unsettledReservations, activeKeys) {
+  if (unsettledReservations !== '0' || activeKeys.trim() !== '') {
+    throw new Error('Return all active Expeditions and wait for acknowledged settlement before resetting Core and Market')
+  }
+}

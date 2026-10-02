@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-market-data
+  namespace: hero-association
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-market
+  namespace: hero-association
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: postgres-market
+  template:
+    metadata:
+      labels:
+        app: postgres-market
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:18.6-alpine3.24
+          env:
+            - name: POSTGRES_DB
+              value: hero_association_market
+            - name: POSTGRES_USER
+              value: hero_association_market
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: hero-association-market-credentials
+                  key: MARKET_DATABASE_PASSWORD
+          ports:
+            - name: postgres
+              containerPort: 5432
+          startupProbe:
+            exec:
+              command: [pg_isready, -U, hero_association_market, -d, hero_association_market]
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command: [pg_isready, -U, hero_association_market, -d, hero_association_market]
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres-market-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-market
+  namespace: hero-association
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres-market
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres

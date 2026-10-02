@@ -5,5 +5,5 @@ import java.util.UUID;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 
-public record StartQuestRequest(@NotNull UUID partyId, @NotNull @PositiveOrZero Long expectedBorrowingFeeGold) {
+public record StartQuestRequest(@NotNull UUID operationKey, @NotNull UUID partyId, @NotNull @PositiveOrZero Long expectedBorrowingFeeGold) {
 }

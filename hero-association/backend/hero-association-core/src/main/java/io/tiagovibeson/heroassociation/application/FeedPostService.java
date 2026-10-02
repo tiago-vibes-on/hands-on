@@ -14,7 +14,6 @@ import io.tiagovibeson.heroassociation.domain.FeedPostAuthorType;
 import io.tiagovibeson.heroassociation.domain.Hero;
 import io.tiagovibeson.heroassociation.domain.Item;
 import io.tiagovibeson.heroassociation.repository.AgencyRepository;
-import io.tiagovibeson.heroassociation.repository.AgencyItemRepository;
 import io.tiagovibeson.heroassociation.repository.FeedPostRepository;
 import io.tiagovibeson.heroassociation.repository.HeroRepository;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -33,8 +32,7 @@ public class FeedPostService {
     @Inject
     FeedPostRepository feedPostRepository;
 
-    @Inject
-    AgencyItemRepository agencyItemRepository;
+    @Inject io.tiagovibeson.heroassociation.application.assets.AssetsClient assets;
 
     @Inject
     AgencyStateService agencyStateService;
@@ -77,14 +75,11 @@ public class FeedPostService {
             throw new InvalidFeedPostItemException("An attached item quantity must be at least one.");
         }
 
-        AgencyItem agencyItem = agencyItemRepository.find("agency.id = ?1 and item.id = ?2", agency.getId(), itemId)
-                .firstResultOptional()
+        var snapshot = assets.snapshot(java.util.List.of(new io.tiagovibeson.heroassociation.application.assets.AssetsClient.OwnerRequest("AGENCY", agency.getId())), java.util.List.of());
+        var entry = snapshot.owner(agency.getId()).items().stream().filter(item -> item.item().id().equals(itemId)).findFirst()
                 .orElseThrow(() -> new InvalidFeedPostItemException("The attached item is not in this agency inventory."));
-        if (itemQuantity > agencyItem.getQuantity()) {
-            throw new InvalidFeedPostItemException("The attached item quantity exceeds the agency inventory.");
-        }
-
-        return new ItemAttachment(agencyItem.getItem(), itemQuantity);
+        if (itemQuantity > entry.quantity()) throw new InvalidFeedPostItemException("The attached item quantity exceeds the agency inventory.");
+        return new ItemAttachment(entry.item().value(), itemQuantity);
     }
 
     private String authorNameFor(Agency agency, FeedPostAuthorType authorType, UUID authorId) {

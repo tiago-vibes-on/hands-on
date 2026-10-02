@@ -3,6 +3,8 @@ kind: Kustomization
 namespace: hero-association-components
 resources:
   - ../backend/postgres-core.yaml
+  - ../backend/postgres-market.yaml
+  - ../backend/postgres-assets.yaml
   - ../backend/redis-core.yaml
   - ../backend/redis-bff.yaml
   - ../expedition/rabbitmq.yaml

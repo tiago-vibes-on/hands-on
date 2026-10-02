@@ -9,7 +9,7 @@ kube=(kubectl --kubeconfig "$kubeconfig")
 [[ "$("${kube[@]}" config current-context)" == k3d-hero-association ]] ||
   { printf 'Refusing a Kubernetes context other than k3d-hero-association.\n' >&2; exit 1; }
 
-for service in core bff expedition frontend; do
+for service in core bff expedition market assets frontend; do
   replicas="$("${kube[@]}" -n hero-association get "deployment/$service" -o jsonpath='{.spec.replicas}')"
   ready="$("${kube[@]}" -n hero-association get "deployment/$service" -o jsonpath='{.status.readyReplicas}')"
   selector="$("${kube[@]}" -n hero-association get "service/$service" -o jsonpath='{.spec.selector.hybrid}')"
@@ -20,4 +20,4 @@ for service in core bff expedition frontend; do
   fi
 done
 
-printf 'All four application services are in full k3d mode.\n'
+printf 'All six application services are in full k3d mode.\n'

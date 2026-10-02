@@ -28,11 +28,11 @@ public class QuestController {
     @PUT
     @Path("/{questId}/start")
     @Consumes(MediaType.APPLICATION_JSON)
-    public AgencyStateResponse startQuest(
+    public jakarta.ws.rs.core.Response startQuest(
             @PathParam("agencyId") UUID agencyId,
             @PathParam("questId") UUID questId,
             @NotNull @Valid StartQuestRequest request) {
-        return questStartService.startQuest(agencyId, questId, request.partyId(), request.expectedBorrowingFeeGold());
+        return questStartService.startQuest(agencyId, questId, request.partyId(), request.expectedBorrowingFeeGold(), request.operationKey());
     }
 
     @POST

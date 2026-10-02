@@ -6,7 +6,7 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 
 const executeFile = promisify(execFile)
-const components = ['core', 'bff', 'expedition', 'frontend']
+const components = ['core', 'bff', 'expedition', 'market', 'assets', 'frontend']
 
 function singleManifestValue(lines, name) {
   const values = lines.filter((line) => line.startsWith(`${name}=`))
@@ -112,7 +112,7 @@ export async function prepareArchive(directory) {
 
 export async function requirePassingK3dE2EVerification(archive) {
   if (archive.component !== 'all') {
-    throw new Error('Deployment requires a complete four-image archive')
+    throw new Error('Deployment requires a complete six-image archive')
   }
   let record
   try {

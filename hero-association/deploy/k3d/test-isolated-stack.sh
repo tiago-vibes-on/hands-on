@@ -8,7 +8,7 @@ kubeconfig="${HERO_ASSOCIATION_K3D_KUBECONFIG:-$script_dir/.kubeconfig}"
 ca_certificate="${HERO_ASSOCIATION_LOCAL_CA_CERTIFICATE:-$project_dir/tls/certs/local-ca.crt}"
 namespace=hero-association-e2e
 if [[ $# -gt 1 ]]; then
-  printf 'Usage: %s [FOUR_IMAGE_ARCHIVE_DIRECTORY]\n' "$0" >&2
+  printf 'Usage: %s [SIX_IMAGE_ARCHIVE_DIRECTORY]\n' "$0" >&2
   exit 2
 fi
 temporary_directory="$(mktemp -d /tmp/hero-association-e2e.XXXXXXXX)"
@@ -58,12 +58,14 @@ if [[ -n "$archive_directory" ]]; then
   core_image="$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).images.core.ref' "$candidate_file")"
   bff_image="$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).images.bff.ref' "$candidate_file")"
   expedition_image="$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).images.expedition.ref' "$candidate_file")"
+  market_image="$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).images.market.ref' "$candidate_file")"
+  assets_image="$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).images.assets.ref' "$candidate_file")"
   frontend_image="$(node -p 'JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).images.frontend.ref' "$candidate_file")"
   k3d_binary="${K3D_BIN:-$script_dir/.tools/k3d}"
   "$k3d_binary" image import "$core_image" "$bff_image" \
-    "$expedition_image" "$frontend_image" --cluster hero-association
+    "$expedition_image" "$market_image" "$assets_image" "$frontend_image" --cluster hero-association
 else
-  for service in core bff expedition frontend; do
+  for service in core bff expedition market assets frontend; do
     image="$(kc -n hero-association get deployment "$service" \
       -o jsonpath='{.spec.template.spec.containers[0].image}')"
     if [[ -z "$image" ]]; then
@@ -74,13 +76,15 @@ else
       core) core_image="$image" ;;
       bff) bff_image="$image" ;;
       expedition) expedition_image="$image" ;;
+      market) market_image="$image" ;;
+      assets) assets_image="$image" ;;
       frontend) frontend_image="$image" ;;
     esac
   done
 fi
 
 
-for key in CORE_DATABASE_PASSWORD KEYCLOAK_DATABASE_PASSWORD \
+for key in CORE_DATABASE_PASSWORD MARKET_DATABASE_PASSWORD ASSETS_DATABASE_PASSWORD HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY HERO_ASSOCIATION_ASSETS_MARKET_SERVICE_KEY KEYCLOAK_DATABASE_PASSWORD \
   KEYCLOAK_ADMIN_PASSWORD HERO_ASSOCIATION_BFF_OIDC_CLIENT_SECRET \
   HERO_ASSOCIATION_BFF_OIDC_STATE_SECRET HERO_ASSOCIATION_BFF_CSRF_TOKEN_SIGNATURE_KEY \
   HERO_ASSOCIATION_EXPEDITION_RABBITMQ_PASSWORD \
@@ -113,6 +117,12 @@ kc -n "$namespace" create secret generic hero-association-k3d-credentials \
   --from-file="$temporary_directory/HERO_ASSOCIATION_BFF_OIDC_CLIENT_SECRET" \
   --from-file="$temporary_directory/HERO_ASSOCIATION_BFF_OIDC_STATE_SECRET" \
   --from-file="$temporary_directory/HERO_ASSOCIATION_BFF_CSRF_TOKEN_SIGNATURE_KEY"
+kc -n "$namespace" create secret generic hero-association-market-credentials \
+  --from-file="$temporary_directory/MARKET_DATABASE_PASSWORD" \
+  --from-file="$temporary_directory/HERO_ASSOCIATION_ASSETS_MARKET_SERVICE_KEY"
+kc -n "$namespace" create secret generic hero-association-assets-credentials \
+  --from-file="$temporary_directory/ASSETS_DATABASE_PASSWORD" \
+  --from-file="$temporary_directory/HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY"
 kc -n "$namespace" create secret generic hero-association-expedition-credentials \
   --from-file="$temporary_directory/HERO_ASSOCIATION_EXPEDITION_RABBITMQ_PASSWORD" \
   --from-file="$temporary_directory/HERO_ASSOCIATION_EXPEDITION_WORKER_RABBITMQ_PASSWORD" \
@@ -131,8 +141,10 @@ kubectl kustomize "$project_dir/deploy/k8s/e2e" | sed \
     -e "s#hero-association-core:k3d#$core_image#g" \
     -e "s#hero-association-bff:k3d#$bff_image#g" \
     -e "s#hero-association-expedition:k3d#$expedition_image#g" \
+    -e "s#hero-association-market:k3d#$market_image#g" \
+    -e "s#hero-association-assets:k3d#$assets_image#g" \
     -e "s#hero-association-frontend:k3d#$frontend_image#g" | kc apply -f -
-for workload in deployment/postgres-core deployment/postgres-keycloak \
+for workload in deployment/postgres-core deployment/postgres-market deployment/postgres-assets deployment/postgres-keycloak \
   deployment/redis-bff deployment/redis-core statefulset/redis-expedition \
   statefulset/rabbitmq-expedition; do
   kc -n "$namespace" rollout status "$workload" --timeout=5m
@@ -195,7 +207,33 @@ bootstrap_job="$(kc create -f "$project_dir/deploy/k8s/backend/core-db-bootstrap
   ' | kc create -f - -o jsonpath='{.metadata.name}')"
 kc -n "$namespace" wait --for=condition=complete "job/$bootstrap_job" --timeout=5m
 
-for workload in deployment/keycloak deployment/core deployment/expedition \
+market_bootstrap_job="$(kc create -f "$project_dir/deploy/k8s/backend/market-db-bootstrap.yaml" \
+  --dry-run=client -o json | HERO_ASSOCIATION_E2E_MARKET_IMAGE="$market_image" node -e '
+    let input = "";
+    process.stdin.on("data", chunk => input += chunk);
+    process.stdin.on("end", () => {
+      const job = JSON.parse(input);
+      job.metadata.namespace = "hero-association-e2e";
+      job.spec.template.spec.containers[0].image = process.env.HERO_ASSOCIATION_E2E_MARKET_IMAGE;
+      process.stdout.write(JSON.stringify(job));
+    });
+  ' | kc create -f - -o jsonpath='{.metadata.name}')"
+kc -n "$namespace" wait --for=condition=complete "job/$market_bootstrap_job" --timeout=5m
+
+assets_bootstrap_job="$(kc create -f "$project_dir/deploy/k8s/backend/assets-db-bootstrap.yaml" \
+  --dry-run=client -o json | HERO_ASSOCIATION_E2E_ASSETS_IMAGE="$assets_image" node -e '
+    let input = "";
+    process.stdin.on("data", chunk => input += chunk);
+    process.stdin.on("end", () => {
+      const job = JSON.parse(input);
+      job.metadata.namespace = "hero-association-e2e";
+      job.spec.template.spec.containers[0].image = process.env.HERO_ASSOCIATION_E2E_ASSETS_IMAGE;
+      process.stdout.write(JSON.stringify(job));
+    });
+  ' | kc create -f - -o jsonpath='{.metadata.name}')"
+kc -n "$namespace" wait --for=condition=complete "job/$assets_bootstrap_job" --timeout=5m
+
+for workload in deployment/keycloak deployment/core deployment/market deployment/assets deployment/expedition \
   deployment/bff deployment/frontend; do
   kc -n "$namespace" rollout status "$workload" --timeout=5m
 done
@@ -236,6 +274,28 @@ docker run --rm --init --network k3d-hero-association --ipc host \
   --volume "$project_dir/e2e:/work" --workdir /work \
   "$playwright_image" \
   npx playwright test --config playwright.k3d.isolated.config.js
+
+mkdir -m 700 "$temporary_directory/assets-session"
+run_assets_phase() {
+  docker run --rm --init --network k3d-hero-association --ipc host \
+    --add-host "app.e2e.heroassociation.test:$gateway_ip" \
+    --add-host "auth.e2e.heroassociation.test:$gateway_ip" \
+    --user "$(id -u):$(id -g)" \
+    --volume "$project_dir/e2e:/work" \
+    --volume "$temporary_directory/assets-session:/session" --workdir /work \
+    "$playwright_image" npx playwright test \
+      --config playwright.k3d.isolated.assets.config.js --grep "$1"
+}
+run_assets_phase 'before Assets outage'
+kc -n "$namespace" scale deployment/assets --replicas=0
+kc -n "$namespace" wait --for=delete pod -l app=assets --timeout=2m
+run_assets_phase 'Assets outage leaves'
+kc -n "$namespace" rollout restart deployment/core
+kc -n "$namespace" rollout status deployment/core --timeout=5m
+kc -n "$namespace" scale deployment/assets --replicas=2
+kc -n "$namespace" rollout status deployment/assets --timeout=5m
+run_assets_phase 'Core restart and Assets recovery'
+printf 'Assets outage retained the Core Hero fence; restart recovery completed the original command once.\n'
 
 # Creature definitions must still be available from PostgreSQL when only
 # this disposable Core cache is unavailable.
@@ -364,7 +424,7 @@ kc wait --for=delete "namespace/$namespace" --timeout=5m
 created=false
 if [[ -n "$archive_directory" ]]; then
   node "$project_dir/e2e/k3d-candidate-archive.mjs" pass "$candidate_file"
-  printf 'Exact four-image archive verified in disposable k3d and recorded as passed.\n'
+  printf 'Exact six-image archive verified in disposable k3d and recorded as passed.\n'
 else
   printf 'Disposable full-stack E2E browser checks completed.\n'
 fi

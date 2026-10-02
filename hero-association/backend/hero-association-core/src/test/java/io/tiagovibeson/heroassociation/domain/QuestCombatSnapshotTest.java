@@ -25,6 +25,7 @@ class QuestCombatSnapshotTest {
 
     @Inject
     HeroRepository heroRepository;
+    @Inject io.tiagovibeson.heroassociation.application.assets.AssetsClient assets;
 
     @Inject
     QuestRepository questRepository;
@@ -36,6 +37,7 @@ class QuestCombatSnapshotTest {
     @TestTransaction
     void shouldApplyEquippedCriticalRunesToANewCombatSnapshot() {
         Hero moonweaver = heroRepository.findById(MOONWEAVER_ID);
+        assets.decorate(List.of(moonweaver), assets.snapshot(List.of(), List.of(moonweaver.getId())).heroes());
         Quest trollQuest = questRepository.findById(TROLL_QUEST_ID);
 
         QuestCombat combat = QuestCombat.start(trollQuest, List.of(moonweaver),
@@ -63,7 +65,7 @@ class QuestCombatSnapshotTest {
                 .findFirst()
                 .orElseThrow()
                 .getRune();
-        equippedChanceRune.replaceRune(otherRune);
+        moonweaver.replaceRuneSnapshot(List.of(new HeroRune(moonweaver, otherRune, equippedChanceRune.getSlotIndex())));
         assertEquals("critical-chance-rune", pinnedChanceRune.getRuneCode());
         assertEquals(0.01, moonweaverSnapshot.getCriticalChance(), 0.000_001);
         assertEquals(1, moonweaverSnapshot.getHeroLevel());

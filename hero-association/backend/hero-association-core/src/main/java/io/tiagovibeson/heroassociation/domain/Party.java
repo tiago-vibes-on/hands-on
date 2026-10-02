@@ -27,6 +27,19 @@ public class Party extends UuidEntity {
     @OneToOne(mappedBy = "party", fetch = FetchType.LAZY)
     private Quest quest;
 
+    @jakarta.persistence.Column(name = "pending_asset_operation")
+    private java.util.UUID pendingAssetOperation;
+    public java.util.UUID getPendingAssetOperation() { return pendingAssetOperation; }
+    public void requireNoPendingAssets() {
+        if (pendingAssetOperation != null) throw new jakarta.ws.rs.WebApplicationException(jakarta.ws.rs.core.Response.status(409)
+                .entity(java.util.Map.of("message", "Party has a pending asset operation.", "operationKey", pendingAssetOperation)).build());
+    }
+    public void fenceAssets(java.util.UUID id) { requireNoPendingAssets(); pendingAssetOperation = id; }
+    public void finishAssets(java.util.UUID id) {
+        if (!id.equals(pendingAssetOperation)) throw new IllegalStateException("Party asset fence differs from workflow.");
+        pendingAssetOperation = null;
+    }
+
     protected Party() {
     }
 

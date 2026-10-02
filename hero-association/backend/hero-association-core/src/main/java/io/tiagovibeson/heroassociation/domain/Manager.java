@@ -17,8 +17,7 @@ public class Manager extends UuidEntity {
     @Column(name = "display_name_normalized", nullable = false, unique = true, length = 100)
     private String displayNameNormalized;
 
-    @Column(nullable = false)
-    @org.hibernate.annotations.ColumnDefault("0")
+    @jakarta.persistence.Transient
     private long gold;
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)
@@ -46,17 +45,6 @@ public class Manager extends UuidEntity {
         return gold;
     }
 
-    public void increaseGold(long amount) {
-        if (amount < 0) {
-            throw new IllegalArgumentException("Gold increase cannot be negative.");
-        }
-        gold = Math.addExact(gold, amount);
-    }
+    public void projectGold(long value) { gold = value; }
 
-    public void decreaseGold(long amount) {
-        if (amount < 0 || amount > gold) {
-            throw new IllegalArgumentException("Manager gold cannot become negative.");
-        }
-        gold -= amount;
-    }
 }

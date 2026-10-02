@@ -33,8 +33,8 @@ idempotency, retries, and recovery.
 | Quest | Optional objectives, rewards, and objective progress | Current quest-based flow in Core; extraction planned |
 | Creature | Versioned creature definitions: stats, attacks, XP, and drop tables | In Core; extraction planned |
 | Social | Feed posts; proposed future scope is manager-authored text only | In Core; extraction planned |
-| Assets | Manager/agency gold and inventories; Hero-owned equipped runes; transfers and reservations | In Core; extraction planned |
-| Market | Orders, matching, trade history, and order state | In Core; extraction planned |
+| Assets | Manager/agency gold and inventories; Hero-owned equipped runes; transfers and reservations | Extracted to `hero-association-assets`; local six-image cutover complete |
+| Market | Orders, matching, trade history, and order state | Extracted to `hero-association-market` |
 | Combat rules | Pure battle calculation in a library; Expedition owns active run state | Shared library in Core and Expedition |
 
 Map defines `FIELD` and `DUNGEON` locations, reusable layouts, and possible
@@ -55,7 +55,7 @@ wipe ends the fight and prevents new encounters, but does not return the Party a
 choose to return. The current Core quest flow and its borrowing fee remain
 unchanged until the new Map path is cut over.
 
-`hero-association-assets` is the planned service name for Assets.
+`hero-association-assets` implements Assets.
 Manager and agency own gold, item stacks, and unequipped rune inventories;
 a Hero owns only its equipped runes, without gold or a loose inventory.
 Assets must be queryable by Manager, agency, or Hero owner ID. Every member
@@ -64,7 +64,7 @@ rune to the acting Manager by default. Existing leader-only agency gold and
 Market permissions are unchanged. Agency owns membership and leadership;
 Hero owns Hero identity, progression, and at-agency eligibility. Equipped
 rune ownership and slot assignment belong in Assets when extracted.
-Item/rune definition ownership is still to be decided before extraction.
+Assets owns item and rune definitions; Core receives read-only projections.
 Agency upgrades, quest state, and market orders are outside Assets.
 
 The existing feed supports more than manager-authored text. Simplifying it
@@ -79,9 +79,13 @@ lifecycle, and durable Redis state.
 Combat-service cutover in ADR 0007. Expedition owns Map fights; Core remains
 the Quest-battle writer until Quest is redesigned. The standalone Combat
 sandbox and its Core fact inbox have been retired. Combat load tests and
-optional Quest objectives are deferred. The current bounded work is the
-Assets contract inside Core; Market and other service extractions remain
-deferred.
+optional Quest objectives are deferred. The Assets extraction and exact
+six-image local cutover are complete. Market's order book and recovery
+are already separate. Assets owns economic mutations; Core retains player
+permission decisions and durable Hero/Quest/Expedition workflows. See the
+[Assets architecture](ASSETS_ARCHITECTURE.md) and
+[recovery protocol](ASSETS_RECOVERY.md). Other service extractions remain
+separate work.
 
 ## Retired standalone Combat sandbox
 
@@ -98,45 +102,54 @@ decision; ADR 0008 defines the current library-in-Expedition approach.
   Maps, or target a dungeon; it never gates entry to a Map. Apply progress
   from authoritative Combat and Expedition outcomes, not browser reports.
 
-### 5. Establish Assets contracts in Core
+### 5. Establish Assets contracts in Core (completed before extraction)
 
 The first private Core service contract now reserves Manager or agency gold
 and item stacks under UUIDv7 keys, releases unfilled quantities, and settles
 partial trades atomically. Reservations and operation receipts make exact
 retries idempotent; row locks protect competing requests. This is an internal
-boundary only: the existing public Market writer and gold-transfer path do
-not call it yet, and there is no Market-to-Core endpoint or separate Assets
-service. See [Assets contract](ASSETS_CONTRACT.md).
+boundary with a dedicated private HTTP API called by the separate Market
+service. At this completed boundary milestone, Assets was still in Core.
+Gold transfers have their own atomic,
+idempotent receipts. See
+[Assets contract](ASSETS_CONTRACT.md).
 
 - [x] Add and test the internal reservation, release, and trade-settlement
   contract in Core, including duplicate requests and concurrent spending.
 - [x] Define Manager, agency, and equipped-Hero rune ownership and test the
   Core transfer commands.
-- [ ] Decide ownership of item/rune definitions. Give Assets explicit
-  Manager/agency/Hero authorization and an idempotent transfer contract.
-  Expose validated reservation and settlement operations to Market through
-  a private Core API. Do not create a separate Assets service just to start
-  Market.
+- [x] Assign item/rune definitions to the Assets boundary (now extracted).
+  Enforce Manager/agency permissions on private reservation commands and
+  retain the existing Hero equipment authorization. Add idempotent gold
+  transfer receipts and expose reservation/settlement through a private
+  Core API with a dedicated service credential.
+- [x] Define durable placement, settlement, cancellation, and retry recovery.
+  Add Core status/receipt reads and a permanent closure primitive, including
+  close-before-reserve and concurrent retry checks. The Market worker and
+  pending-state frontend are delivered during extraction.
 - [ ] Define how future battle consumables are reserved or consumed without
   double spending; this does not block the initial read-only combat stream.
 
-### 6. Extract Market
+### 6. Extract Market (completed)
 
-- [ ] Follow [Market architecture](MARKET_ARCHITECTURE.md): Market owns its
+- [x] Follow [Market architecture](MARKET_ARCHITECTURE.md): Market owns its
   order database; Assets in Core remains the resource and reservation
   authority during the first extraction.
-- [ ] Route the existing `/api/v1/market/**` contract through BFF to Market.
+- [x] Route the existing `/api/v1/market/**` contract through BFF to Market.
   Retain k3d Envoy's five order-placement attempts per second per
   authenticated user in both full k3d and hybrid development.
-- [ ] Test duplicate requests, timeouts, partial fills, cancellation races,
+- [x] Test duplicate requests, timeouts, partial fills, cancellation races,
   restarts, reconciliation, and resource release. Remove Core's Market writer
   only after the new path works; never share Core's database with Market.
 
 ### 7. Extract the remaining domains and retire Core
 
-- [ ] Extract Assets after defining its ledger, reservation protocol, agency
-  permission checks, and failure recovery. It takes over resource authority
-  for Market, transfers, and quest payouts.
+- [x] Define Assets mutation/read ownership and permission/recovery contracts.
+  See [Assets architecture](ASSETS_ARCHITECTURE.md).
+- [x] Implement the independently built Assets service and separate database;
+  move wallets, inventories, catalogs, equipment, reservations and receipts.
+- [x] Complete exact six-image isolated verification and local cutover of Core,
+  Assets and Market. Quest economic rewards remain separate future work.
 - [ ] Move Quest, Hero, Agency, Account, Creature, and Social out of
   Core in an order based on their dependencies. Decide whether each needs its
   own service or belongs with a related domain; none remains in Core

@@ -14,7 +14,7 @@ and behavior are established. New domain logic should have clear internal
 boundaries; cohesive domains such as Market are intended to become separate
 services later, with their own data and reliable cross-domain contracts. See
 [ADR 0004](adr/0004-core-as-temporary-modular-monolith.md). This is an
-architecture direction, not an implemented service split.
+architecture direction; Market and Assets now have independent services and databases.
 
 The backend is split into independently buildable services:
 
@@ -30,8 +30,8 @@ The backend is split into independently buildable services:
   responsibilities into the following packages:
 
   - `domain`: JPA models for accounts, managers, agency memberships, agencies,
-    heroes, parties, quests, runes, stackable items, feed posts, market orders, agency
-    inventory, and equipped hero runes; it consumes the pure, non-persistent
+    heroes, parties, quests, and feed posts; asset values are immutable projections
+    from Assets, while combat keeps its own pinned rune snapshots; it consumes the pure, non-persistent
     `hero-association-lib/combat-engine` rules engine
   - `application`: game-state use cases
   - `application.exception`: application exceptions
@@ -39,16 +39,24 @@ The backend is split into independently buildable services:
   - `api.v1.error`: HTTP error responses and exception mapping
   - `repository`: Panache repositories for game-state reads
 
+- `backend/hero-association-market`: order placement, matching, trade and recovery
+  records on port `8084`, with its own PostgreSQL database.
+- `backend/hero-association-assets`: wallets, loose inventory, catalogs, equipped
+  slots, reservations, immutable receipts and available-resource postings on port
+  `8085`, with its own PostgreSQL database. Core retains permissions, eligibility
+  and durable orchestration; no service reads another service's database.
+  See [the extraction audit and contracts](ASSETS_ARCHITECTURE.md).
+
 `AgencyStateService` coordinates the initial state query. An unknown agency is
 translated to `404 Not Found` at the Core API boundary. The BFF preserves that
 status and response body for the browser.
 
 ## Local build validation
 
-The local pipeline tests Core, BFF, and Expedition against disposable k3d
+The local pipeline tests Core, BFF, Expedition, and Market against disposable k3d
 PostgreSQL, Redis, and RabbitMQ before packaging their JVM images with
 `-DskipTests`; frontend lint and build stay local. The images are saved in one
-checksummed archive. Candidate builds require all four daily application
+checksummed archive. Candidate builds require all six daily application
 services in full k3d mode and never promote them automatically. Direct Maven
 builds remain independent and may use local Dev Services or Testcontainers.
 Core tests do not retain PostgreSQL Dev Services across runs, even when
@@ -65,13 +73,13 @@ passing record before loading images or importing them into the cluster. Only af
 E2E, and market k6 pass does promotion write a local result. See
 [the pipeline guide](pipeline/README.md).
 
-Jenkins has independent Core, BFF, Expedition, and frontend build jobs for an
+Jenkins has independent Core, BFF, Expedition, Market, Assets, and frontend build jobs for an
 uncommitted worktree and trusted `main`, plus one deploy-local job per service.
-A service build tests its new image together with the other three currently
+A service build tests its new image together with the other five currently
 deployed k3d images in one checksummed archive. Both build modes are manual;
 no Git polling or successful build automatically deploys. A shared Jenkins
 lock serializes trusted-`main` builds. An explicit deploy job rejects a
-changed baseline, promotes only the candidate image, verifies all four
+changed baseline, promotes only the candidate image, verifies all six
 running Pod digests, runs browser E2E and market k6, and rolls back the
 target service if a post-rollout gate fails. The latest successful deployment
 of a service wins; this local lab does not coordinate cross-service releases.
@@ -109,12 +117,12 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
   expose `ownerManagerId`; Hero records expose `ownerManagerId` only for
   personally owned heroes and `borrowingFeeGold` (default 0) for each hero.
 - `PUT /api/v1/agencies/{agencyId}/heroes/{heroId}/rune-slots/{slotIndex}`
-  takes `{ "runeId": "...", "sourceOwnerType": "MANAGER" | "AGENCY" }`,
+  takes `{ "operationKey": "UUIDv7", "runeId": "...", "sourceOwnerType": "MANAGER" | "AGENCY" }`,
   equips the available rune from that inventory, and returns updated agency
   state. Any agency member can use agency runes for an agency Hero or one of
   their own personal Heroes while the Hero is at the agency.
 - `DELETE /api/v1/agencies/{agencyId}/heroes/{heroId}/rune-slots/{slotIndex}`
-  unequips a rune into the acting Manager's inventory and returns updated
+  requires `X-Operation-Key: UUIDv7`, unequips a rune into the acting Manager's inventory and returns updated
   agency state.
 - `PUT /api/v1/agencies/{agencyId}/heroes/{heroId}/activity` changes an
   agency hero's activity to `TRAINING` or `RESTING` and returns the updated
@@ -131,20 +139,21 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
 - `DELETE /api/v1/agencies/{agencyId}/parties/{partyId}/heroes/{heroId}`
   removes a hero from the authenticated Manager's prepared party.
 - `PUT /api/v1/agencies/{agencyId}/quests/{questId}/start` starts an available
-  quest with the authenticated Manager's `partyId` and nonnegative
-  `expectedBorrowingFeeGold` in its request body. Core rechecks the sum of
-  the party's agency-hero fees and, only for a valid start, atomically moves
-  that amount from the party Manager's personal wallet to the agency treasury.
+  quest with a UUIDv7 `operationKey`, the authenticated Manager's `partyId`,
+  and nonnegative `expectedBorrowingFeeGold`. Core validates eligibility and
+  the quote, then stages a durable workflow. Assets atomically pays the fee
+  and pins loadouts; Core starts the Quest after confirming that receipt.
   Stale quotes and insufficient personal gold return `409 Conflict` without
-  starting the quest or charging the Manager. These mutations return the
-  updated agency state; another Manager's party appears as not found.
+  starting the quest or charging the Manager. Confirmed changes return the
+  updated agency state (`200`); uncertain delivery returns a durable operation
+  reference (`202`). Another Manager's party appears as not found.
 - `POST /api/v1/agencies/{agencyId}/quests/{questId}/combat/sync` advances an
   existing combat snapshot by elapsed wall time and returns the updated agency
   state.
 - `POST /api/v1/agencies/{agencyId}/feed-posts` creates an agency-scoped text
   post and returns the updated agency state.
 - `GET /api/v1/market/orders` returns the global open market order book.
-- `POST /api/v1/market/orders` accepts `ownerType` (`MANAGER` or `AGENCY`),
+- `POST /api/v1/market/orders` accepts a caller-generated UUIDv7 `placementId`, `ownerType` (`MANAGER` or `AGENCY`),
   `side`, `itemId`, `quantity`, and `priceGoldPerItem`. `agencyId` is required
   only for an agency order and forbidden for a personal order. Core derives the
   personal Manager from the authenticated identity; an agency order requires
@@ -166,29 +175,55 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
   its personal Manager owner or a leader of its agency owner. It releases the
   remaining reservation to that same owner's wallet or inventory and returns
   the cancelled order. Clients refresh account and agency state separately
-  after mutations. Market orders still execute inside Game Core's database
-  transaction; the future Market service split is not yet implemented.
-  Core has a separate, private Assets service contract for UUIDv7-keyed
-  Manager/agency gold and item reservations, partial releases, and atomic
-  trade settlement with idempotent operation receipts. It is not yet wired
-  to the public Market path or exposed as a private Market-to-Core API.
-  See [Assets contract](ASSETS_CONTRACT.md).
+  after mutations. BFF routes `/api/v1/market/**` to the independently runnable
+  Market service and its own PostgreSQL database and account. Assets owns wallets, inventories and catalog definitions. Core retains
+  player identity and agency permission checks.
+  The old Core Market routes and order writer have been removed.
+  A confirmed placement returns `201` with the order. An uncertain reservation
+  returns `202` with `{ id, status, orderId, message }` for the placement;
+  `GET /api/v1/market/placements/{placementId}` is restricted to its original
+  JWT subject. Exact retries reuse the ID and immutable payload; reuse by
+  another subject or with another payload returns `409`.
+  `GET /api/v1/market/orders/{orderId}` checks current owner permission through
+  Core. Cancellation returns `202` while pending trades or closure remain
+  unresolved, and `200` only after confirmed closure. Pending cancellation
+  freezes new matching; its allocated trades still settle. Responses include
+  `quantityPending`; available quantity is `quantityRemaining - quantityPending`.
+  Market records placement, trade, and cancellation work before delivering
+  authenticated private commands. Assets' `/internal/v1/assets/**` requires a
+  dedicated Market service credential; context and new reservations also
+  require the player's Assets-audience token. Assets obtains Manager identity or agency
+  leadership from Core using the original token, then commits its mutation locally. Market validates its
+  own token audience and forwards the original token only during player calls;
+  no JWT is persisted. Workers use receipts, 60-second claims and stable keys
+  to recover delivery after failures and restart. An unconfirmed reservation
+  is permanently closed before the placement is abandoned. Assets applies the
+  existing seller fee and buyer price-improvement refund in one transaction.
+  See [Assets contract](ASSETS_CONTRACT.md), [recovery](ASSETS_RECOVERY.md), and
+  [Market architecture](MARKET_ARCHITECTURE.md). Public trade history is future work.
 - `POST /api/v1/gold-transfers` moves existing gold between wallets in one
-  Core transaction. To deposit, send
-  `{ "direction": "MANAGER_TO_AGENCY", "agencyName": "Dawnwatch Agency", "amountGold": 10 }`.
+  Assets transaction. BFF routes this endpoint directly to Assets. To deposit, send
+  `{ "operationKey": "<UUIDv7>", "direction": "MANAGER_TO_AGENCY", "agencyName": "Dawnwatch Agency", "amountGold": 10 }`.
   The sender is always the authenticated Manager; any Manager may deposit
   into any existing agency without membership. To withdraw, the agency
   leader sends
-  `{ "direction": "AGENCY_TO_MANAGER", "agencyName": "Dawnwatch Agency", "managerName": "User 2", "amountGold": 10 }`.
+  `{ "operationKey": "<UUIDv7>", "direction": "AGENCY_TO_MANAGER", "agencyName": "Dawnwatch Agency", "managerName": "User 2", "amountGold": 10 }`.
   The recipient may be any existing Manager, including the leader. Names are
   matched case-insensitively after trimming whitespace. The positive whole
   amount moves exactly: no market fee, agency share, payment, or reward is
   applied. The response contains both wallet owners and their new balances.
   Invalid input returns `400`, unauthorized withdrawal `403`, an unknown
   agency or recipient `404`, and insufficient gold or an overflowing
-  destination wallet `409`. Requests are not yet idempotent; clients must
-  not automatically retry an ambiguous response. Transfer receipts and
-  request idempotency are required before cross-service wallet operations.
+  destination wallet `409`. A caller-generated RFC UUIDv7 `operationKey`
+  is required; missing or invalid keys return `400`. Assets commits an
+  `asset_command_receipt` with both wallet changes. Exact retries by the same
+  Manager return the original response and balance snapshot without moving
+  gold again; changed inputs or requester return `409`. Normalize names by
+  trimming and matching case-insensitively. The frontend retains uncertain
+  keys in session storage, scoped to Manager and inputs, across retries and
+  same-tab reloads. It clears a key after confirmation and state refresh or
+  definitive rejection, while network failures, authentication expiry, and
+  server errors retain it. Refresh account/agency state for current balances.
 - An unknown agency returns `404 Not Found` with an error message.
 
 The initial recruitment board contains Alden Steelward (Warrior), Seris
@@ -256,6 +291,31 @@ opt-in auto-continue toggle, off by default, that sends this command after
 a short pause only while the page is open. It never advances a wipe or a
 requested return. This flow does not yet replace the current quest-based API. See [GAME.md](GAME.md) and
 [SERVICE_EXTRACTION.md](SERVICE_EXTRACTION.md).
+Equipment and Quest-start commands require a caller-generated UUIDv7 operation
+key. Quest-start JSON adds `operationKey` to `partyId` and
+`expectedBorrowingFeeGold`. Core stages the authorized intent and persists Hero
+and Party eligibility fences before sending the economic command to Assets
+outside its transaction. Assets commits one atomic command receipt; Core verifies
+it before starting combat or clearing the equipment fence. Confirmed requests
+return `200` with agency state. Unknown delivery returns `202` with
+`{ operationKey, kind, status, rejectionStatus, message }`. The initiating Manager
+reads that shape at `GET /api/v1/asset-operations/{operationKey}`. An exact replay
+retains the actor and immutable payload; changed inputs return `409`. A definitive
+rejection clears eligibility fences, while a contradictory receipt keeps them
+and marks the operation `CONFLICT`. A one-second Core worker recovers pending
+operations using stable keys, 60-second claims and bounded backoff without storing
+player tokens. The frontend saves these keys in session storage and reconciles
+status across reloads. All wallet and inventory changes now execute in Assets.
+Signed-in equipment changes require a working backend connection; a temporary
+outage does not move runes in the browser's local display inventory.
+
+Expedition admission reserves Core Heroes before obtaining an immutable Assets
+loadout snapshot. Return credit and Hero progression have separate local
+transactions with a durable Core cursor; broker acknowledgement follows both.
+Duplicate or lost delivery cannot repeat asset credit or Hero XP. Capacity
+overflow leaves return pending until capacity is freed. See
+[Assets contracts](ASSETS_CONTRACT.md) and [recovery](ASSETS_RECOVERY.md).
+
 Starting a quest requires a prepared party whose member count is inside that
 quest's range. It changes the quest to
 `IN_PROGRESS`, links it to the party, and changes every party member to
@@ -361,24 +421,28 @@ IDs must not be added for entities or exposed through the API.
 - Database tables use singular entity names, including `agency`, `manager`,
   `hero`, `party`, `quest`, `creature_definition`, `quest_combat`, `quest_combatant`,
   `quest_combatant_rune`, `quest_combat_event`, `quest_combat_hit`,
-  `rune`, `agency_rune`, `item`,
-  `agency_item`, `manager_item`, `manager_rune`, `hero_rune`,
-  `feed_post`, and `market_order`. A hero is either recruitable,
+  `asset_workflow`, `expedition_reservation` and `feed_post`. Core's Manager and agency tables contain no wallet balance.
+  Assets stores `asset_wallet`, `asset_stack`, `rune`, `item`, `hero_rune`,
+  `asset_reservation`, `asset_reservation_closure`, `asset_operation_receipt`,
+  `asset_command_receipt`, and `asset_ledger_entry`. Market's separate database stores `market_book`,
+  `market_placement`, `market_order`, and `market_trade`. A hero is either recruitable,
   agency-owned, or Manager-owned; personal heroes cannot be recruited by
   an agency.
 - The standalone Combat sandbox and Core Combat-fact inbox were retired.
   Core Quest combat and Expedition Map combat still use the same pure
   `hero-association-lib/combat-engine` library; only Expedition owns live
   Map fight timelines and returns aggregated progress to Core.
-- Until Flyway is introduced, Core's development and test profiles drop and
+- Until Flyway is introduced, Core, Assets and Market development and test profiles drop and
   recreate the schema on startup, then load deterministic state from
   `import.sql`. Packaged Docker Compose explicitly keeps this disposable
-  reset behavior. The k3d lab instead runs a single bootstrap Job only when
-  its Core schema is absent or an explicit reset is requested; normal Core
-  Pods validate the schema without modifying data. For a schema-changing
+  reset behavior. The k3d lab instead runs a single bootstrap Job per database when
+  a schema is absent or an explicit reset is requested; normal Core, Assets and
+  Market Pods validate their schemas without modifying data. For a schema-changing
   archive, explicit reset-aware promotion verifies the full archive and E2E
-  result, stops Core and its HPA, bootstraps only the k3d Core database using
-  the exact archived Core image, restores Core and its HPA, then runs the normal
+  result, refuses unfinished Expeditions, stops admission and application traffic, drains all writers, refuses unresolved
+  asset workflows, then recreates Core, Assets and Market from matching seeds,
+  bootstraps all three databases using their exact archived images, restores all
+  services and HPAs, then runs the normal
   Pod-image, browser, and k6 gates. Keycloak and Redis data remain untouched. Because a data reset is not reversible by restoring an
   older image, failures after reset do not automatically roll back images.
   The seed contains
@@ -409,8 +473,8 @@ IDs must not be added for entities or exposed through the API.
 - The active local environment is the k3d cluster. Envoy Gateway serves
   `heroassociation.test` and `auth.heroassociation.test` in full k3d and
   hybrid mode; there is no separate daily Traefik gateway. Core and Keycloak
-  PostgreSQL, BFF/Core/Expedition Redis, RabbitMQ, Keycloak, and observability
-  stay in k3d. Core, BFF, Expedition, and frontend can independently use
+  PostgreSQL, Market PostgreSQL, BFF/Core/Expedition Redis, RabbitMQ, Keycloak,
+  and observability stay in k3d. Core, BFF, Expedition, Market, Assets, and frontend can independently use
   k3d Pods or private WSL hot-reload processes behind their stable Services.
   A selected service's k3d Pods stop before its host process starts, and its
   previous replica count, route, and HPA are restored on exit. The first
@@ -434,8 +498,8 @@ IDs must not be added for entities or exposed through the API.
   Only labeled E2E namespaces may attach Routes to them. The test leaf
   certificate uses the ignored local CA; hostnames resolve only inside test
   runners. A disposable full-stack runner creates independent databases,
-  Redis, RabbitMQ, Keycloak, and application Pods. It runs ten browser
-  journeys and k6 market thresholds with 30-second test tokens and a
+  Redis, RabbitMQ, Keycloak, and application Pods. It runs sixteen browser/API
+  cases and k6 market thresholds with 30-second test tokens and a
   two-second BFF refresh skew. A saved session survives replacement of both
   disposable BFF replicas. An outage of only the disposable BFF Redis
   denies that session; fresh login succeeds after Redis recovery. Source
@@ -565,9 +629,9 @@ IDs must not be added for entities or exposed through the API.
   Private k3d Redis, RabbitMQ, and Expedition are staged. An explicit
   integration command enables Core admission/settlement, Expedition APIs, and
   the BFF WebSocket; an authenticated k3d journey passed, with the frontend Map now enabled.
-  The four-image local pipeline now promotes Core, BFF, Expedition, and
+  The six-image local pipeline promotes Core, BFF, Expedition, Market, Assets, and
   Map-enabled frontend together; the Expedition-only lane verifies the other
-  three running images before promotion. Both paths passed archive-backed,
+  four running images before promotion. Both paths passed archive-backed,
   authenticated k3d Map, Expedition, and market gates.
 - The Map screen is the player-facing battle view in k3d. It reuses the
   Phaser battle renderer for the party and three Trolls, including health,
@@ -671,8 +735,9 @@ IDs must not be added for entities or exposed through the API.
   Item stacks can be reserved by market orders; item equipment, quest loot,
   and compatibility rules are not implemented yet.
 - The Market screen loads the live global order book, creates buy or sell
-  orders from the agency's item inventory, and cancels the agency's own open
-  orders. It refreshes through the normal five-second browser polling.
+  orders from personal or agency assets, and cancels orders owned by the
+  Manager or an agency they lead. The browser keeps pending IDs in session
+  storage across reloads and shows pending placement/cancellation until confirmed. It refreshes through the normal five-second browser polling.
 - The Feed screen loads agency-scoped posts from the API and can publish a
   text post as the agency, its leader, or one of its heroes. A post can show
   one non-consuming agency item-stack attachment. Feed visibility and
@@ -762,13 +827,14 @@ traffic and scaling dashboards, retains Prometheus, Loki, and
 Tempo data for up to 24 hours, and uses ephemeral storage that is cleared
 when the observability Pod is replaced.
 
-A build-once local delivery lane packages tested Core, BFF, and Expedition
+A build-once local delivery lane packages tested Core, BFF, Expedition, Market and Assets
 JVM images plus the frontend image in a checksummed archive. The disposable
 k3d archive gate records a matching passing result before promotion is
-allowed. Normal promotion imports those exact images, updates the four k3d
+allowed. Normal promotion imports those exact images, updates the six k3d
 application Deployments, waits for rollouts, and runs k3d browser tests. A
 failed normal rollout or test restores prior image references. An explicit
-`--reset-core-db` promotion requires a complete verified archive, resets
-only the k3d Core database using that archive's Core image, then runs the same
-gates; it cannot safely roll back to an older Core image after resetting data.
-Neither mode changes the normal development stack.
+`--reset-game-db` promotion requires a complete verified archive, refuses
+unfinished Expeditions and asset workflows, stops all application services, and
+resets Core, Assets and Market using
+their archived images before running the same gates. `--reset-core-db` is an
+alias. A reset cannot safely roll back to older images after replacing data.

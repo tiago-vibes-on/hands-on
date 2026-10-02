@@ -10,7 +10,7 @@ if [[ "$map_enabled" != true && "$map_enabled" != false ]]; then
 fi
 
 usage() {
-  printf 'Usage: %s [all|core|bff|expedition|frontend] [build-id]\n' "$0" >&2
+  printf 'Usage: %s [all|core|bff|expedition|market|assets|frontend] [build-id]\n' "$0" >&2
   exit 2
 }
 
@@ -20,8 +20,8 @@ fi
 
 component="${1:-all}"
 case "$component" in
-  all) services=(core bff expedition frontend) ;;
-  core|bff|expedition|frontend) services=("$component") ;;
+  all) services=(core bff expedition market assets frontend) ;;
+  core|bff|expedition|market|assets|frontend) services=("$component") ;;
   *) usage ;;
 esac
 
@@ -66,10 +66,10 @@ for service in "${services[@]}"; do
       (cd "$module_dir" && ./mvnw --batch-mode -DskipTests package)
       docker build --tag "hero-association-$service:$build_id" "$module_dir"
       ;;
-    expedition)
+    expedition|market|assets)
       backend_dir="$project_dir/backend"
-      (cd "$backend_dir" && ./mvnw --batch-mode -pl hero-association-expedition -am -DskipTests package)
-      docker build --file "$backend_dir/hero-association-expedition/Dockerfile" --tag "hero-association-expedition:$build_id" "$backend_dir"
+      (cd "$backend_dir" && ./mvnw --batch-mode -pl "hero-association-$service" -am -DskipTests package)
+      docker build --file "$backend_dir/hero-association-$service/Dockerfile" --tag "hero-association-$service:$build_id" "$backend_dir"
       ;;
     frontend)
       (cd "$project_dir/frontend" && npm ci && npm run lint && VITE_EXPEDITION_ENABLED="$map_enabled" npm run build)

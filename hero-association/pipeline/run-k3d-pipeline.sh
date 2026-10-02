@@ -6,13 +6,13 @@ project_dir="$script_dir/.."
 kubeconfig="${HERO_ASSOCIATION_K3D_KUBECONFIG:-$project_dir/deploy/k3d/.kubeconfig}"
 
 reset_core_db=false
-if [[ "${1:-}" == "--reset-core-db" ]]; then
+if [[ "${1:-}" == "--reset-core-db" || "${1:-}" == "--reset-game-db" ]]; then
   reset_core_db=true
   shift
 fi
 
 if [[ $# -gt 1 ]]; then
-  printf 'Usage: %s [--reset-core-db] [build-id]\n' "$0" >&2
+  printf 'Usage: %s [--reset-game-db] [build-id]\n' "$0" >&2
   exit 2
 fi
 
@@ -39,7 +39,7 @@ fi
 HERO_ASSOCIATION_K3D_KUBECONFIG="$kubeconfig" "$project_dir/deploy/k3d/require-full-k3d.sh"
 
 stage='k3d rollback regression tests'
-node --test "$script_dir/rollback-k3d.test.mjs" "$script_dir/core-bootstrap-job.test.mjs"
+node --test "$script_dir/rollback-k3d.test.mjs" "$script_dir/core-bootstrap-job.test.mjs" "$script_dir/market-bootstrap-job.test.mjs" "$script_dir/assets-bootstrap-job.test.mjs"
 
 stage='build and archive'
 printf 'Building Core, BFF, Expedition, and frontend as %s\n' "$build_id"

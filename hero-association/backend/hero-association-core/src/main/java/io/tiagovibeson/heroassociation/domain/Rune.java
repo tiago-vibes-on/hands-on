@@ -1,65 +1,33 @@
 package io.tiagovibeson.heroassociation.domain;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Table;
+import java.util.UUID;
 
-@Entity
-@Table(name = "rune")
-public class Rune extends UuidEntity {
-
-    @Column(nullable = false, unique = true, length = 50)
-    private String code;
-
-    @Column(nullable = false, length = 100)
-    private String name;
-
-    @Column(nullable = false, length = 10)
-    private String symbol;
-
-    @Column(nullable = false, length = 100)
-    private String stats;
-
-    @Column(nullable = false, length = 255)
-    private String description;
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 30)
-    private RuneEffect effect;
-
-    @Column(name = "effect_value", nullable = false)
-    private double effectValue;
-
-    protected Rune() {
+/** Immutable projection supplied by Assets; not a Core database entity. */
+public final class Rune {
+    private final UUID id;
+    private final String code;
+    private final String name;
+    private final String symbol;
+    private final String stats;
+    private final String description;
+    private final RuneEffect effect;
+    private final double effectValue;
+    public Rune(UUID id, String code, String name, String symbol, String stats, String description, RuneEffect effect, double effectValue) {
+        this.id = id;
+        this.code = code;
+        this.name = name;
+        this.symbol = symbol;
+        this.stats = stats;
+        this.description = description;
+        this.effect = effect;
+        this.effectValue = effectValue;
     }
-
-    public String getCode() {
-        return code;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getSymbol() {
-        return symbol;
-    }
-
-    public String getStats() {
-        return stats;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public RuneEffect getEffect() {
-        return effect;
-    }
-
-    public double getEffectValue() {
-        return effectValue;
-    }
+    public UUID getId() { return id; }
+    public String getCode() { return code; }
+    public String getName() { return name; }
+    public String getSymbol() { return symbol; }
+    public String getStats() { return stats; }
+    public String getDescription() { return description; }
+    public RuneEffect getEffect() { return effect; }
+    public double getEffectValue() { return effectValue; }
 }

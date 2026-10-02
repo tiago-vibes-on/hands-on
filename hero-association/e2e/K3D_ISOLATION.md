@@ -31,7 +31,7 @@ resources, E2E routes, issuer settings, and no autoscalers. Run it through the
 script, not with `kubectl apply -k`: the script generates private credentials,
 bootstraps the test databases and RabbitMQ, and cleans up the namespace.
 
-From `hero-association`, run either a smoke with the four images currently
+From `hero-association`, run either a smoke with the five images currently
 deployed in the daily k3d namespace or an exact archived candidate check:
 
 ```bash
@@ -59,7 +59,7 @@ Redis, confirms the saved session fails closed, restores Redis, and confirms
 a fresh login works. It expires that new session token-state key in the
 disposable Redis and checks that the saved cookie fails closed before k6.
 
-Archive mode checks the archive checksum, imports all four images, bootstraps
+Archive mode checks the archive checksum, imports all five images, bootstraps
 with the archived Core image, and verifies all running application Pod image IDs
 against the OCI archive. It records a pass in
 `k3d-e2e-verification.json` only after namespace deletion. Manual and Jenkins
@@ -85,7 +85,7 @@ RabbitMQ cross-role AMQP 403 checks, all ten browser cases, the cache and
 session resilience phases, and k6 thresholds.
 
 Core, BFF, and Expedition Maven component tests have a separate disposable
-dependency lane: `./deploy/k3d/test-isolated-components.sh [core|bff|expedition|all]`.
+dependency lane: `./deploy/k3d/test-isolated-components.sh [core|bff|expedition|market|all]`.
 It creates private PostgreSQL, Redis, and RabbitMQ resources, runs Maven over
 loopback port-forwards with Dev Services disabled, and removes the namespace.
 The two direct RabbitMQ Testcontainers transport assertions are represented by

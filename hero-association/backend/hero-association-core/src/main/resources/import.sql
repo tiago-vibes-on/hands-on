@@ -180,94 +180,20 @@ INSERT INTO manager (id, display_name, display_name_normalized, account_id) VALU
         '019c4c00-0000-7000-8000-000000000110');
 
 -- Disposable borrowing fixtures: no gold, below/exact price, and enough for multiple heroes.
-UPDATE manager SET gold = 25 WHERE id = '019c4c00-0000-7000-8000-000000000003';
-UPDATE manager SET gold = 25 WHERE id = '019c4c00-0000-7000-8000-000000000202';
-UPDATE manager SET gold = 20 WHERE id = '019c4c00-0000-7000-8000-000000000203';
-UPDATE manager SET gold = 200 WHERE id = '019c4c00-0000-7000-8000-000000000204';
 
 -- Large local-only wallet for user2 to exercise game and market flows.
-UPDATE manager SET gold = 100000 WHERE id = '019c4c00-0000-7000-8000-000000000002';
 
-INSERT INTO agency (
-    id,
-    name,
-    name_normalized,
-    leader_id,
-    gold,
-    reputation,
-    agency_level,
-    training_level,
-    rest_level,
-    size_level,
-    reputation_level,
-    intelligence_level)
-VALUES (
-    '019c4c00-0001-7000-8000-000000000001',
-    'Dawnwatch Agency',
-    'dawnwatch agency',
-    '019c4c00-0000-7000-8000-000000000001',
-    2480,
-    340,
-    4,
-    4,
-    3,
-    4,
-    3,
-    3);
+INSERT INTO agency (id, name, name_normalized, leader_id, reputation, agency_level, training_level, rest_level, size_level, reputation_level, intelligence_level) VALUES
+    ('019c4c00-0001-7000-8000-000000000001', 'Dawnwatch Agency', 'dawnwatch agency', '019c4c00-0000-7000-8000-000000000001', 340, 4, 4, 3, 4, 3, 3);
 
-INSERT INTO agency (
-    id,
-    name,
-    name_normalized,
-    leader_id,
-    gold,
-    reputation,
-    agency_level,
-    training_level,
-    rest_level,
-    size_level,
-    reputation_level,
-    intelligence_level)
-VALUES (
-    '019c4c00-0001-7000-8000-000000000002',
-    'Ironridge Exchange',
-    'ironridge exchange',
-    '019c4c00-0000-7000-8000-000000000002',
-    14800,
-    120,
-    2,
-    2,
-    2,
-    2,
-    2,
-    2);
 
-INSERT INTO agency (
-    id,
-    name,
-    name_normalized,
-    leader_id,
-    gold,
-    reputation,
-    agency_level,
-    training_level,
-    rest_level,
-    size_level,
-    reputation_level,
-    intelligence_level)
-VALUES (
-    '019c4c00-0001-7000-8000-000000000003',
-    'Silverkeep Guild',
-    'silverkeep guild',
-    '019c4c00-0000-7000-8000-000000000208',
-    1200,
-    40,
-    1,
-    1,
-    1,
-    1,
-    1,
-    1);
+INSERT INTO agency (id, name, name_normalized, leader_id, reputation, agency_level, training_level, rest_level, size_level, reputation_level, intelligence_level) VALUES
+    ('019c4c00-0001-7000-8000-000000000002', 'Ironridge Exchange', 'ironridge exchange', '019c4c00-0000-7000-8000-000000000002', 120, 2, 2, 2, 2, 2, 2);
+
+
+INSERT INTO agency (id, name, name_normalized, leader_id, reputation, agency_level, training_level, rest_level, size_level, reputation_level, intelligence_level) VALUES
+    ('019c4c00-0001-7000-8000-000000000003', 'Silverkeep Guild', 'silverkeep guild', '019c4c00-0000-7000-8000-000000000208', 40, 1, 1, 1, 1, 1, 1);
+
 
 INSERT INTO agency_member (id, agency_id, manager_id, role, joined_at) VALUES
     (
@@ -794,95 +720,33 @@ SET hero_level = 1,
 FROM hero
 WHERE combatant.hero_id = hero.id;
 
-INSERT INTO rune (id, code, name, symbol, stats, description, effect, effect_value) VALUES
-    ('019c4c00-0020-7000-8000-000000000001', 'attack-rune', 'Attack Rune', '✦', '+8 attack', 'A carved rune that strengthens every basic attack.', 'ATTACK', 8),
-    ('019c4c00-0020-7000-8000-000000000002', 'guard-rune', 'Guard Rune', '◈', '+6 armor', 'A protective rune etched with an unbroken circle.', 'ARMOR', 6),
-    ('019c4c00-0020-7000-8000-000000000003', 'vitality-rune', 'Vitality Rune', '✚', '+20 health', 'A living rune that reinforces a hero''s endurance.', 'HEALTH', 20),
-    ('019c4c00-0020-7000-8000-000000000004', 'haste-rune', 'Haste Rune', '🪶', '+4% attack speed', 'A quicksilver rune that accelerates basic attacks.', 'ATTACK_SPEED', 0.04),
-    ('019c4c00-0020-7000-8000-000000000005', 'mana-rune', 'Mana Rune', '♦', '+30 mana', 'A blue rune that stores a reserve of magical energy.', 'MANA', 30),
-    ('019c4c00-0020-7000-8000-000000000006', 'critical-chance-rune', 'Critical Chance Rune', '✧', '+1% critical chance', 'A precise rune that gives its bearer a chance to critically strike.', 'CRITICAL_CHANCE', 0.01),
-    ('019c4c00-0020-7000-8000-000000000007', 'critical-damage-rune', 'Critical Damage Rune', '✹', '+10% critical damage', 'A forceful rune that increases the damage dealt by critical hits.', 'CRITICAL_DAMAGE', 0.1);
 
-INSERT INTO item (id, code, name, symbol, description) VALUES
-    ('019c4c00-0070-7000-8000-000000000001', 'magic-crystal', 'Magic Crystal', '◇', 'A concentrated shard of arcane energy used in trade and crafting.'),
-    ('019c4c00-0070-7000-8000-000000000002', 'iron-ingot', 'Iron Ingot', '▰', 'Refined iron ready for weapons, armor, or trade.');
 
-INSERT INTO agency_item (id, agency_id, item_id, quantity) VALUES
-    ('019c4c00-0080-7000-8000-000000000001', '019c4c00-0001-7000-8000-000000000001', '019c4c00-0070-7000-8000-000000000001', 3),
-    ('019c4c00-0080-7000-8000-000000000002', '019c4c00-0001-7000-8000-000000000001', '019c4c00-0070-7000-8000-000000000002', 24),
-    ('019c4c00-0080-7000-8000-000000000003', '019c4c00-0001-7000-8000-000000000002', '019c4c00-0070-7000-8000-000000000002', 48);
 
-INSERT INTO manager_item (id, manager_id, item_id, quantity) VALUES
-    ('019c4c00-0081-7000-8000-000000000001', '019c4c00-0000-7000-8000-000000000203', '019c4c00-0070-7000-8000-000000000001', 2),
-    ('019c4c00-0081-7000-8000-000000000002', '019c4c00-0000-7000-8000-000000000204', '019c4c00-0070-7000-8000-000000000002', 5);
 
-INSERT INTO market_order (
-    id,
-    agency_id,
-    item_id,
-    side,
-    status,
-    quantity_remaining,
-    price_gold_per_item,
-    created_at)
-VALUES
-    (
-        '019c4c00-0090-7000-8000-000000000001',
-        '019c4c00-0001-7000-8000-000000000002',
-        '019c4c00-0070-7000-8000-000000000001',
-        'BUY',
-        'OPEN',
-        2,
-        100,
-        CURRENT_TIMESTAMP - INTERVAL '10 minutes'),
-    (
-        '019c4c00-0090-7000-8000-000000000002',
-        '019c4c00-0001-7000-8000-000000000002',
-        '019c4c00-0070-7000-8000-000000000002',
-        'SELL',
-        'OPEN',
-        12,
-        16,
-        CURRENT_TIMESTAMP - INTERVAL '5 minutes');
 
-INSERT INTO agency_rune (id, agency_id, rune_id, quantity) VALUES
-    ('019c4c00-0030-7000-8000-000000000001', '019c4c00-0001-7000-8000-000000000001', '019c4c00-0020-7000-8000-000000000001', 1),
-    ('019c4c00-0030-7000-8000-000000000002', '019c4c00-0001-7000-8000-000000000001', '019c4c00-0020-7000-8000-000000000002', 0),
-    ('019c4c00-0030-7000-8000-000000000003', '019c4c00-0001-7000-8000-000000000001', '019c4c00-0020-7000-8000-000000000003', 1),
-    ('019c4c00-0030-7000-8000-000000000004', '019c4c00-0001-7000-8000-000000000001', '019c4c00-0020-7000-8000-000000000004', 0),
-    ('019c4c00-0030-7000-8000-000000000005', '019c4c00-0001-7000-8000-000000000001', '019c4c00-0020-7000-8000-000000000005', 0),
-    ('019c4c00-0030-7000-8000-000000000006', '019c4c00-0001-7000-8000-000000000001', '019c4c00-0020-7000-8000-000000000006', 0),
-    ('019c4c00-0030-7000-8000-000000000007', '019c4c00-0001-7000-8000-000000000001', '019c4c00-0020-7000-8000-000000000007', 0);
 
-INSERT INTO hero_rune (id, hero_id, rune_id, slot_index) VALUES
-    ('019c4c00-0040-7000-8000-000000000001', '019c4c00-0010-7000-8000-000000000001', '019c4c00-0020-7000-8000-000000000001', 0),
-    ('019c4c00-0040-7000-8000-000000000002', '019c4c00-0010-7000-8000-000000000001', '019c4c00-0020-7000-8000-000000000002', 1),
-    ('019c4c00-0040-7000-8000-000000000003', '019c4c00-0010-7000-8000-000000000001', '019c4c00-0020-7000-8000-000000000006', 2),
-    ('019c4c00-0040-7000-8000-000000000004', '019c4c00-0010-7000-8000-000000000002', '019c4c00-0020-7000-8000-000000000005', 0),
-    ('019c4c00-0040-7000-8000-000000000005', '019c4c00-0010-7000-8000-000000000002', '019c4c00-0020-7000-8000-000000000006', 1),
-    ('019c4c00-0040-7000-8000-000000000006', '019c4c00-0010-7000-8000-000000000002', '019c4c00-0020-7000-8000-000000000007', 2),
-    ('019c4c00-0040-7000-8000-000000000007', '019c4c00-0010-7000-8000-000000000003', '019c4c00-0020-7000-8000-000000000003', 0),
-    ('019c4c00-0040-7000-8000-000000000008', '019c4c00-0010-7000-8000-000000000003', '019c4c00-0020-7000-8000-000000000004', 1),
-    ('019c4c00-0040-7000-8000-000000000009', '019c4c00-0010-7000-8000-000000000003', '019c4c00-0020-7000-8000-000000000006', 2);
 
-INSERT INTO quest_combatant_rune (
-    id, combatant_id, rune_id, slot_index, rune_code, effect, effect_value)
-SELECT snapshots.snapshot_id::uuid, combatant.id, rune.id, slot.slot_index,
-       rune.code, rune.effect, rune.effect_value
-FROM (VALUES
-    ('019c4c00-0052-7000-8000-000000000001', '019c4c00-0040-7000-8000-000000000001'),
-    ('019c4c00-0052-7000-8000-000000000002', '019c4c00-0040-7000-8000-000000000002'),
-    ('019c4c00-0052-7000-8000-000000000003', '019c4c00-0040-7000-8000-000000000003'),
-    ('019c4c00-0052-7000-8000-000000000004', '019c4c00-0040-7000-8000-000000000004'),
-    ('019c4c00-0052-7000-8000-000000000005', '019c4c00-0040-7000-8000-000000000005'),
-    ('019c4c00-0052-7000-8000-000000000006', '019c4c00-0040-7000-8000-000000000006'),
-    ('019c4c00-0052-7000-8000-000000000007', '019c4c00-0040-7000-8000-000000000007'),
-    ('019c4c00-0052-7000-8000-000000000008', '019c4c00-0040-7000-8000-000000000008'),
-    ('019c4c00-0052-7000-8000-000000000009', '019c4c00-0040-7000-8000-000000000009')
-) AS snapshots(snapshot_id, hero_rune_id)
-JOIN hero_rune AS slot ON slot.id = snapshots.hero_rune_id::uuid
-JOIN quest_combatant AS combatant ON combatant.hero_id = slot.hero_id
-JOIN rune ON rune.id = slot.rune_id;
+
+-- Economic seed state is now in Assets; reset Core, Assets and Market together.
+
+
+
+
+
+
+
+INSERT INTO quest_combatant_rune (id, combatant_id, rune_id, slot_index, rune_code, effect, effect_value) VALUES
+    ('019c4c00-0052-7000-8000-000000000001', '019c4c00-0051-7000-8000-000000000001', '019c4c00-0020-7000-8000-000000000001', 0, 'attack-rune', 'ATTACK', 8),
+    ('019c4c00-0052-7000-8000-000000000002', '019c4c00-0051-7000-8000-000000000001', '019c4c00-0020-7000-8000-000000000002', 1, 'guard-rune', 'ARMOR', 6),
+    ('019c4c00-0052-7000-8000-000000000003', '019c4c00-0051-7000-8000-000000000001', '019c4c00-0020-7000-8000-000000000006', 2, 'critical-chance-rune', 'CRITICAL_CHANCE', 0.01),
+    ('019c4c00-0052-7000-8000-000000000004', '019c4c00-0051-7000-8000-000000000002', '019c4c00-0020-7000-8000-000000000005', 0, 'mana-rune', 'MANA', 30),
+    ('019c4c00-0052-7000-8000-000000000005', '019c4c00-0051-7000-8000-000000000002', '019c4c00-0020-7000-8000-000000000006', 1, 'critical-chance-rune', 'CRITICAL_CHANCE', 0.01),
+    ('019c4c00-0052-7000-8000-000000000006', '019c4c00-0051-7000-8000-000000000002', '019c4c00-0020-7000-8000-000000000007', 2, 'critical-damage-rune', 'CRITICAL_DAMAGE', 0.1),
+    ('019c4c00-0052-7000-8000-000000000007', '019c4c00-0051-7000-8000-000000000003', '019c4c00-0020-7000-8000-000000000003', 0, 'vitality-rune', 'HEALTH', 20),
+    ('019c4c00-0052-7000-8000-000000000008', '019c4c00-0051-7000-8000-000000000003', '019c4c00-0020-7000-8000-000000000004', 1, 'haste-rune', 'ATTACK_SPEED', 0.04),
+    ('019c4c00-0052-7000-8000-000000000009', '019c4c00-0051-7000-8000-000000000003', '019c4c00-0020-7000-8000-000000000006', 2, 'critical-chance-rune', 'CRITICAL_CHANCE', 0.01);
+
 
 INSERT INTO feed_post (
     id,
@@ -944,10 +808,3 @@ WHERE manager_id = '019c4c00-0000-7000-8000-000000000002'
   AND hero_class = 'MAGE';
 
 -- Equip user2's three personal Map heroes so the live battle shows rune loadouts.
-INSERT INTO hero_rune (id, hero_id, rune_id, slot_index) VALUES
-    ('019c4c00-0041-7000-8000-000000000001', '019c4c00-0030-7001-8000-000000000002', '019c4c00-0020-7000-8000-000000000001', 0),
-    ('019c4c00-0041-7000-8000-000000000002', '019c4c00-0030-7001-8000-000000000002', '019c4c00-0020-7000-8000-000000000002', 1),
-    ('019c4c00-0041-7000-8000-000000000003', '019c4c00-0030-7002-8000-000000000002', '019c4c00-0020-7000-8000-000000000005', 0),
-    ('019c4c00-0041-7000-8000-000000000004', '019c4c00-0030-7002-8000-000000000002', '019c4c00-0020-7000-8000-000000000007', 1),
-    ('019c4c00-0041-7000-8000-000000000005', '019c4c00-0030-7003-8000-000000000002', '019c4c00-0020-7000-8000-000000000004', 0),
-    ('019c4c00-0041-7000-8000-000000000006', '019c4c00-0030-7003-8000-000000000002', '019c4c00-0020-7000-8000-000000000006', 1);

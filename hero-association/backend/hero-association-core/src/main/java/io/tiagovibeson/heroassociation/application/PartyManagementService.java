@@ -108,6 +108,7 @@ public class PartyManagementService {
     }
 
     private void validateMembershipCanChange(Party party, Hero hero) {
+        party.requireNoPendingAssets(); hero.requireNoPendingAssets();
         if (isOnQuest(party)) {
             throw new PartyOnQuestException(party.getId());
         }

@@ -43,8 +43,7 @@ Keycloak subject across sessions and gateway replicas. It returns `429` with
 `Retry-After: 1` on excess requests and fails closed if gateway rate-limit
 state is unavailable. Full k3d and hybrid development both use the same
 Envoy market limit.
-BFF Redis continues to store OIDC session state. Core validates order data
-and permissions.
+BFF Redis continues to store OIDC session state. Market validates order data; Assets obtains current owner permissions from Core.
 
 In the k3d lab, BFF exports OTLP traces, HTTP/JVM metrics, and structured
 logs. Its Core proxy creates a client span and forwards W3C trace context
@@ -63,3 +62,15 @@ On WSL with Docker Desktop, run
 container ports are not reachable through `localhost`. Tests disable OIDC,
 use a local Game Core stub, and start an isolated Redis container. The
 Playwright suite validates real sessions and cross-replica market limiting.
+
+The BFF routes `/api/v1/market/**` to the independent Market service via
+`HERO_ASSOCIATION_MARKET_BASE_URL` (development default port 17084). It forwards
+the server-held player token and preserves pending `202` responses. The BFF
+has no Market database credential or private Assets service key; Market alone
+calls Assets. The BFF client token includes Core, Market and Assets audiences.
+
+BFF routes `POST /api/v1/gold-transfers` directly to Assets through
+`HERO_ASSOCIATION_ASSETS_BASE_URL` (development port 17085). It forwards only
+the player token and trace context, and holds neither private Assets key. Core
+equipment DELETE requests preserve the caller's `X-Operation-Key`; equipment
+and Quest responses preserve pending `202` status and operation bodies.

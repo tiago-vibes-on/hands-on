@@ -1,16 +1,16 @@
 # Expedition settlement handoff
 
-Status: private and feature-flagged. Core Quest combat remains the live path.
-The opt-in Expedition entry calls the authenticated Core admission API and
-accepts its pinned Hero baseline; the isolated browser E2E exercises Return
-and Core settlement, but normal local development and k3d are not cut over.
+Status: implemented in the local six-service stack. The opt-in Map entry calls
+Core admission and accepts its pinned Hero baseline. Core owns Hero eligibility
+and progression; Assets owns loadouts and carried resource credit.
 
 ## Ownership and delivery
 
 1. Core's `ExpeditionAdmissionService.reserve` locks the Party and its personal
    Heroes, verifies Manager membership and availability, applies agency
-   recovery, changes their activity to `ON_EXPEDITION`, and saves an immutable
-   baseline under the UUIDv7 Expedition ID. A repeat with the same IDs returns
+   recovery, changes their activity to `ON_EXPEDITION`, and records a provisional
+   reservation under the UUIDv7 Expedition ID. Outside that transaction it obtains
+   an immutable Assets loadout receipt, then confirms the pinned baseline. A repeat with the same IDs returns
    the baseline; a settled ID cannot be reused. Only the opt-in Expedition entry calls it.
 2. At Return, Expedition's Redis command or terminal-fight script atomically
    changes the run to `SETTLEMENT_PENDING` and writes a no-TTL, Manager-sharded
@@ -23,11 +23,13 @@ and Core settlement, but normal local development and k3d are not cut over.
    durable `hero-association.core.expedition-settlement.v1` queue, and records
    broker confirmation in Redis. It retries until owner application is
    acknowledged. A broker confirmation is **not** an owner acknowledgment.
-4. Core requires the matching reservation and unchanged baseline. It applies
-   the entire aggregate and stores the payload SHA-256 digest plus `appliedAt`
-   on that reservation in one PostgreSQL transaction. Replaying identical
-   bytes is a no-op; different bytes for the same Expedition ID are rejected.
-   A failed transaction changes neither the Hero/Assets nor the receipt.
+4. Core validates the entire aggregate against the unchanged reservation
+   baseline before staging an asset workflow. Assets credits carried gold, items
+   and runes atomically with a stable command receipt. Core validates that receipt,
+   then applies Hero progression and stores the payload digest and `appliedAt`
+   together with workflow completion in one Core transaction. Uncertain delivery
+   remains pending. Exact retries cannot credit Assets or Hero XP twice; conflicting
+   bytes are rejected.
 5. Only after that transaction commits does Core publish a separate durable
    `hero-association.expedition.settlement-ack.v1` event. If this publish or
    the original message acknowledgment fails, RabbitMQ redelivers the original
@@ -43,7 +45,7 @@ gold/items/runes are provisionally supported by settlement even though the
 current fixed Troll encounter produces no loot. The agency's share of future
 Map gold still needs a defined accounting rule before enabling gold drops.
 
-## Local verification and cutover gaps
+## Local verification
 
 `backend/compose.expedition.yaml` starts a dedicated AOF/noeviction Redis and
 RabbitMQ for this private path. The broker is at localhost port `15675` and
@@ -76,8 +78,8 @@ From `backend/`, run the independent component suites:
 Tests cover Redis freeze/cleanup, due-index repair, publish failure/retry,
 matching and duplicate owner acknowledgments, RabbitMQ routing/confirmation,
 Core reservation, unchanged-baseline enforcement, and exact-once Hero/Assets
-application. The isolated browser flow now passes; a full two-service
-restart drill and k3d validation remain in the cutover step.
+application. The isolated browser flow now passes; the six-service archive gate verifies the k3d path. Core workflow tests cover
+lost Assets receipts and acknowledgement gating.
 
 Before cutover, validate the k3d path and full cross-service failure/restart
 drill, then switch player traffic deliberately. Local Compose and isolated

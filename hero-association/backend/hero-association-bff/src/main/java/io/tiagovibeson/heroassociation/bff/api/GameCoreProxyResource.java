@@ -5,6 +5,8 @@ import java.util.Optional;
 
 import io.tiagovibeson.heroassociation.bff.core.GameCoreClient;
 import io.tiagovibeson.heroassociation.bff.expedition.ExpeditionClient;
+import io.tiagovibeson.heroassociation.bff.market.MarketClient;
+import io.tiagovibeson.heroassociation.bff.assets.AssetsClient;
 import io.quarkus.oidc.AccessTokenCredential;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.security.Authenticated;
@@ -37,6 +39,12 @@ public class GameCoreProxyResource {
 
     @Inject
     ExpeditionClient expeditionClient;
+
+    @Inject
+    MarketClient marketClient;
+
+    @Inject
+    AssetsClient assetsClient;
 
     @Inject
     SecurityIdentity securityIdentity;
@@ -102,6 +110,18 @@ public class GameCoreProxyResource {
                     headers.getHeaderString(HttpHeaders.CONTENT_TYPE), accessToken, body);
         }
 
+        if ("v1/market".equals(path) || path != null && path.startsWith("v1/market/")) {
+            return marketClient.forward(method, path, uriInfo.getRequestUri().getRawQuery(),
+                    headers.getHeaderString(HttpHeaders.ACCEPT),
+                    headers.getHeaderString(HttpHeaders.CONTENT_TYPE), accessToken, body);
+        }
+
+        if ("v1/gold-transfers".equals(path)) {
+            return assetsClient.forward(method, path, uriInfo.getRequestUri().getRawQuery(),
+                    headers.getHeaderString(HttpHeaders.ACCEPT),
+                    headers.getHeaderString(HttpHeaders.CONTENT_TYPE), accessToken, body);
+        }
+
         return gameCoreClient.forward(
                 method,
                 path,
@@ -109,7 +129,8 @@ public class GameCoreProxyResource {
                 headers.getHeaderString(HttpHeaders.ACCEPT),
                 headers.getHeaderString(HttpHeaders.CONTENT_TYPE),
                 accessToken,
-                body);
+                body,
+                headers.getHeaderString("X-Operation-Key"));
     }
 
     private String accessToken() {

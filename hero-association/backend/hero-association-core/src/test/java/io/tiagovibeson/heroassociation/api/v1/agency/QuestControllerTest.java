@@ -78,8 +78,8 @@ class QuestControllerTest {
     private Response startQuest(String partyId, long expectedBorrowingFeeGold) {
         return given()
                 .contentType(ContentType.JSON)
-                .body("{\"partyId\":\"%s\",\"expectedBorrowingFeeGold\":%d}"
-                        .formatted(partyId, expectedBorrowingFeeGold))
+                .body("{\"partyId\":\"%s\",\"expectedBorrowingFeeGold\":%d,\"operationKey\":\"%s\"}"
+                        .formatted(partyId, expectedBorrowingFeeGold, io.tiagovibeson.heroassociation.domain.UuidV7.next()))
                 .when()
                 .put("/api/v1/agencies/%s/quests/%s/start".formatted(AGENCY_ID, LOST_COURIER_QUEST_ID));
     }

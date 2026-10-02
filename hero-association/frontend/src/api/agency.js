@@ -1,9 +1,10 @@
 let csrfToken = null
 
 export class ApiRequestError extends Error {
-  constructor(message, status) {
+  constructor(message, status, operation = null) {
     super(message)
     this.status = status
+    this.operation = operation
   }
 }
 
@@ -61,17 +62,18 @@ export async function recruitHeroForAgency({ agencyId, recruitId }) {
   return request(`/api/v1/agencies/${agencyId}/recruits/${recruitId}/claim`, { method: 'POST' })
 }
 
-export async function equipHeroRune({ agencyId, heroId, slotIndex, runeId, sourceOwnerType }) {
+export async function equipHeroRune({ agencyId, heroId, slotIndex, runeId, sourceOwnerType, operationKey }) {
   return request(`/api/v1/agencies/${agencyId}/heroes/${heroId}/rune-slots/${slotIndex}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ runeId, sourceOwnerType }),
+    body: JSON.stringify({ runeId, sourceOwnerType, operationKey }),
   })
 }
 
-export async function unequipHeroRune({ agencyId, heroId, slotIndex }) {
+export async function unequipHeroRune({ agencyId, heroId, slotIndex, operationKey }) {
   return request(`/api/v1/agencies/${agencyId}/heroes/${heroId}/rune-slots/${slotIndex}`, {
     method: 'DELETE',
+    headers: { 'X-Operation-Key': operationKey },
   })
 }
 
@@ -111,11 +113,11 @@ export async function removeHeroFromParty({ agencyId, partyId, heroId }) {
   })
 }
 
-export async function startQuest({ agencyId, questId, partyId, expectedBorrowingFeeGold }) {
+export async function startQuest({ agencyId, questId, partyId, expectedBorrowingFeeGold, operationKey }) {
   return request(`/api/v1/agencies/${agencyId}/quests/${questId}/start`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ partyId, expectedBorrowingFeeGold }),
+    body: JSON.stringify({ partyId, expectedBorrowingFeeGold, operationKey }),
   })
 }
 
@@ -137,20 +139,28 @@ export async function fetchMarketOrders() {
   return request('/api/v1/market/orders')
 }
 
-export async function createMarketOrder({ ownerType, agencyId, side, itemId, quantity, priceGoldPerItem }) {
+export async function createMarketOrder({ placementId, ownerType, agencyId, side, itemId, quantity, priceGoldPerItem }) {
   return request('/api/v1/market/orders', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ownerType, ...(ownerType === 'AGENCY' ? { agencyId } : {}), side, itemId, quantity, priceGoldPerItem }),
+    body: JSON.stringify({ placementId, ownerType, ...(ownerType === 'AGENCY' ? { agencyId } : {}), side, itemId, quantity, priceGoldPerItem }),
   })
 }
 
-export async function transferGold({ direction, agencyName, managerName, amountGold }) {
+export async function transferGold({ direction, agencyName, managerName, amountGold, operationKey }) {
   return request('/api/v1/gold-transfers', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ direction, agencyName, ...(direction === 'AGENCY_TO_MANAGER' ? { managerName } : {}), amountGold }),
+    body: JSON.stringify({ direction, agencyName, ...(direction === 'AGENCY_TO_MANAGER' ? { managerName } : {}), amountGold, operationKey }),
   })
+}
+
+export async function fetchMarketPlacement(placementId) {
+  return request(`/api/v1/market/placements/${placementId}`)
+}
+
+export async function fetchMarketOrder(orderId) {
+  return request(`/api/v1/market/orders/${orderId}`)
 }
 
 export async function cancelMarketOrder({ orderId }) {
@@ -173,9 +183,13 @@ export async function request(path, options = {}, expectJson = true) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => null)
-    throw new ApiRequestError(error?.message ?? `Unable to complete the request (${response.status}).`, response.status)
+    throw new ApiRequestError(error?.message ?? `Unable to complete the request (${response.status}).`, response.status, error)
   }
 
   if (!expectJson) return undefined
   return response.status === 204 ? null : response.json()
+}
+
+export function fetchAssetOperation(operationKey) {
+  return request(`/api/v1/asset-operations/${operationKey}`)
 }

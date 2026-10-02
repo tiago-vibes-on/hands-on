@@ -82,9 +82,12 @@ public class Hero extends UuidEntity {
     @JoinColumn(name = "party_id")
     private Party party;
 
-    @OneToMany(mappedBy = "hero", fetch = FetchType.LAZY)
-    @OrderBy("slotIndex")
+    @jakarta.persistence.Transient
     private List<HeroRune> runeSlots = new ArrayList<>();
+
+    @Column(name = "pending_asset_operation")
+    private java.util.UUID pendingAssetOperation;
+
 
     protected Hero() {
     }
@@ -225,6 +228,7 @@ public class Hero extends UuidEntity {
     }
 
     public void changeActivity(HeroActivity newActivity, int restLevel) {
+        requireNoPendingAssets();
         Instant changedAt = Instant.now();
         recoverAgencyResourcesAt(changedAt, restLevel);
         activity = newActivity;
@@ -237,8 +241,7 @@ public class Hero extends UuidEntity {
         lastResourceSynchronizedAt = synchronizedAt;
     }
 
-    public void applyExpeditionFinal(long finalExperience, Map<HeroSkill, BigDecimal> finalPoints,
-                                     int health, int mana, long stamina, Instant synchronizedAt) {
+    public void validateExpeditionFinal(long finalExperience, Map<HeroSkill, BigDecimal> finalPoints, int health, int mana, long stamina) {
         if (activity != HeroActivity.ON_EXPEDITION || finalExperience < 0 || stamina < 0
                 || stamina > HeroProgression.MAX_STAMINA_MILLISECONDS) {
             throw new IllegalStateException("Hero is not reserved for a valid Expedition settlement.");
@@ -257,6 +260,11 @@ public class Hero extends UuidEntity {
                 throw new IllegalArgumentException("Invalid Expedition Hero skill total.");
             }
         }
+    }
+
+    public void applyExpeditionFinal(long finalExperience, Map<HeroSkill, BigDecimal> finalPoints,
+                                     int health, int mana, long stamina, Instant synchronizedAt) {
+        validateExpeditionFinal(finalExperience, finalPoints, health, mana, stamina);
         experience = finalExperience;
         meleePoints = finalPoints.get(HeroSkill.MELEE).setScale(6);
         distancePoints = finalPoints.get(HeroSkill.DISTANCE).setScale(6);
@@ -273,7 +281,7 @@ public class Hero extends UuidEntity {
         if (restLevel < 1) {
             throw new IllegalArgumentException("Rest level must be positive.");
         }
-        if (activity == HeroActivity.ON_QUEST || activity == HeroActivity.ON_EXPEDITION
+        if (pendingAssetOperation != null || activity == HeroActivity.ON_QUEST || activity == HeroActivity.ON_EXPEDITION
                 || !synchronizedAt.isAfter(lastResourceSynchronizedAt)) {
             return;
         }
@@ -343,6 +351,7 @@ public class Hero extends UuidEntity {
     }
 
     public void setBorrowingFeeGold(long borrowingFeeGold) {
+        requireNoPendingAssets();
         if (borrowingFeeGold < 0) {
             throw new IllegalArgumentException("Borrowing fee cannot be negative.");
         }
@@ -381,12 +390,26 @@ public class Hero extends UuidEntity {
     }
 
     public void assignToParty(Party newParty) {
+        requireNoPendingAssets();
         party = newParty;
     }
 
     public void removeFromParty() {
+        requireNoPendingAssets();
         party = null;
     }
+
+    public java.util.UUID getPendingAssetOperation() { return pendingAssetOperation; }
+    public void requireNoPendingAssets() {
+        if (pendingAssetOperation != null) throw new jakarta.ws.rs.WebApplicationException(
+                jakarta.ws.rs.core.Response.status(409).entity(java.util.Map.of("message", "Hero has a pending asset operation.", "operationKey", pendingAssetOperation)).build());
+    }
+    public void fenceAssets(java.util.UUID key) { requireNoPendingAssets(); pendingAssetOperation = java.util.Objects.requireNonNull(key); }
+    public void finishAssets(java.util.UUID key) {
+        if (!key.equals(pendingAssetOperation)) throw new IllegalStateException("Hero asset fence differs from workflow.");
+        pendingAssetOperation = null;
+    }
+    public void replaceRuneSnapshot(List<HeroRune> snapshot) { runeSlots = List.copyOf(snapshot); }
 
     public List<HeroRune> getRuneSlots() {
         return runeSlots;

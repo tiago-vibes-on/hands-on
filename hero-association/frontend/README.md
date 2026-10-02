@@ -10,6 +10,13 @@ reserves gold or items from the selected owner. The open book identifies
 owners, and personal account and agency balances refresh after mutations and
 while the tab is visible.
 
+Market placement IDs survive uncertain responses and same-tab reloads. A
+pending response stays visible while the browser polls the initiating player's
+placement status. Cancelling freezes the order and remains pending until
+allocated trades settle and unfilled resources are returned. Gold transfers
+also retain their operation keys until the result and balance refresh are
+confirmed, preventing another debit on an exact retry.
+
 ## Requirements
 
 - Node.js 24 LTS or later
@@ -113,7 +120,7 @@ for cluster setup, local CA trust, and image-restart instructions.
   and rune inventory, hero rune slots, agency feed posts, and market order
   book; the state refreshes every five seconds while the tab is visible
 - Live market order book with buy and sell order creation and cancellation for
-  the current agency
+  the current Manager or, for a leader, their agency
 - The Heroes screen loads the global recruitment board. An onboarded Manager
   can claim a free Level 1 NPC once for their personal roster by default, or
   explicitly for the agency if they are its leader. The claim API also works

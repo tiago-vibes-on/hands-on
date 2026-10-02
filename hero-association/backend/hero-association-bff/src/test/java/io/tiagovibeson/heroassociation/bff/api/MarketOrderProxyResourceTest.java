@@ -34,7 +34,9 @@ class MarketOrderProxyResourceTest {
                     .body("{\"agencyId\":\"agency-a\",\"side\":\"BUY\"}")
                     .when().post(path)
                     .then().statusCode(200)
-                    .body("method", equalTo("POST"));
+                    .body("method", equalTo("POST"))
+                    .body("path", equalTo("/market/api/v1/market/orders"))
+                    .body("authorization", equalTo("Bearer test-access-token"));
         }
 
         given()
@@ -44,7 +46,9 @@ class MarketOrderProxyResourceTest {
                 .body("{\"agencyId\":\"agency-b\",\"side\":\"SELL\"}")
                 .when().post(path)
                 .then().statusCode(200)
-                .body("method", equalTo("POST"));
+                .body("method", equalTo("POST"))
+                    .body("path", equalTo("/market/api/v1/market/orders"))
+                    .body("authorization", equalTo("Bearer test-access-token"));
 
         given().when().get(path).then().statusCode(200);
         given()

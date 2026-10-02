@@ -23,13 +23,25 @@ resulting state.
   including retired Traefik milestones.
 - Follow [`SERVICE_EXTRACTION.md`](SERVICE_EXTRACTION.md) for the phased
   domain/service boundary work and its progress.
-- Current bounded work: the player-facing Map/Expedition cutover is complete
+- Completed bounded work: Assets extraction, ownership audit, permission/recovery
+  contracts and local cutover are complete. The exact six-image
+  `assets-extraction-20261002-v1` archive passed isolated recovery and daily
+  browser, Expedition, Map and k6 gates after a coupled Core/Assets/Market reset.
+  Frontend hot reload is restored. See
+  [the mutation audit and verified result](ASSETS_ARCHITECTURE.md).
+- Previous completed work: the player-facing Map/Expedition cutover is complete
   in k3d. Combat load tests remain deferred at the user's request. The
   [local environment consolidation](LOCAL_ENVIRONMENT_PLAN.md) is complete:
   full k3d and WSL hot-reload modes share Envoy Gateway, and Jenkins builds
   and deployments are separate manual actions. The private Assets
-  reservation and settlement contract is staged inside Core; next, add
-  authenticated private commands and recovery before extracting Market.
+  reservation/settlement API, authorization, transfer receipts, and recovery
+  primitives were initially implemented in Core and now belong to Assets. The durable Market recovery protocol
+  and its worker are implemented in the extracted Market service. Backend
+  component suites and frontend tests, lint, and build pass. The five-image
+  `market-extraction-20261002-v3` archive passed the isolated k3d gate on
+  2026-10-02, including 16 browser/API cases, recovery checks, and market k6.
+  The same archive passed daily promotion after a coordinated Core/Market
+  reset, including browser, Expedition, Map settlement, and k6 checks.
   Core Quest combat remains live until a later Quest redesign. See the
   [Combat and Expedition plan](COMBAT_EXPEDITION_PLAN.md),
   [service extraction plan](SERVICE_EXTRACTION.md), and
@@ -231,9 +243,17 @@ Ordered implementation:
   [ADR 0003](adr/0003-market-service-boundary.md).
 - [x] Stage the private Assets reservation/release/settlement contract in
   Core with UUIDv7 keys, operation receipts, and concurrency tests. Public
-  Market orders and gold transfers do not use it yet; see
+  Market orders use the private Assets contract from the extracted service; see
   [Assets contract](ASSETS_CONTRACT.md).
-- [ ] After the Combat cutover and Assets contract in Core, extract Market as
+- [x] Add dedicated service authentication to the private Assets API, validate
+  player ownership/leadership for reservations, and record the requester.
+- [x] Give gold transfers idempotent receipts and retain frontend operation
+  keys across uncertain retries and same-tab reloads. Assets owns item/rune
+  definitions in Core during initial extraction.
+- [x] Define [durable recovery](ASSETS_RECOVERY.md) before extraction and add
+  Core receipt/status reads plus permanent closure for abandoned reservation
+  keys. Market implements the pending-operation worker.
+- [x] After the Combat cutover and Assets contract in Core, extract Market as
   an independently buildable and deployable service with its own order data
   store. Keep Core authoritative for agency membership, gold, and inventory;
   define idempotent reservation/settlement and failure recovery before moving

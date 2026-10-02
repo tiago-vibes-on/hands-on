@@ -33,9 +33,11 @@ public class FeedPost extends UuidEntity {
     @Column(nullable = false, length = 500)
     private String content;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "item_id")
-    private Item item;
+    @Column(name = "item_id") private UUID itemId;
+    @Column(name = "item_code", length = 50) private String itemCode;
+    @Column(name = "item_name", length = 100) private String itemName;
+    @Column(name = "item_symbol", length = 10) private String itemSymbol;
+    @Column(name = "item_description", length = 255) private String itemDescription;
 
     @Column(name = "item_quantity")
     private Integer itemQuantity;
@@ -59,7 +61,10 @@ public class FeedPost extends UuidEntity {
         this.authorId = authorId;
         this.authorName = authorName;
         this.content = content;
-        this.item = item;
+        if (item != null) {
+            itemId = item.getId(); itemCode = item.getCode(); itemName = item.getName();
+            itemSymbol = item.getSymbol(); itemDescription = item.getDescription();
+        }
         this.itemQuantity = itemQuantity;
         publishedAt = Instant.now();
     }
@@ -81,7 +86,7 @@ public class FeedPost extends UuidEntity {
     }
 
     public Item getItem() {
-        return item;
+        return itemId == null ? null : new Item(itemId, itemCode, itemName, itemSymbol, itemDescription);
     }
 
     public Integer getItemQuantity() {

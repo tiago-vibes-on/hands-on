@@ -49,11 +49,12 @@ KUBECONFIG="$PWD/.kubeconfig" kubectl -n hero-association get deploy,svc,httprou
 ./hybrid.sh status core
 ./hybrid.sh status bff
 ./hybrid.sh status expedition
+./hybrid.sh status market
 ./hybrid.sh status frontend
 ```
 
 Starting an existing cluster does not rebuild images or reset data. After
-first setup, all four application Deployments should be ready. To pause the
+first setup, all six application Deployments should be ready. To pause the
 whole environment, restore any hybrid services first, then run
 `k3d cluster stop hero-association`; this keeps the cluster data. The `status`
 command reads only the isolated k3d context; it does not change another
@@ -68,6 +69,7 @@ Run one command per selected service in its own terminal, from
 ./hybrid.sh run core
 ./hybrid.sh run bff
 ./hybrid.sh run expedition
+./hybrid.sh run market
 ./hybrid.sh run frontend
 ```
 
@@ -77,7 +79,8 @@ service's k3d Pods and HPA if present, then starts Quarkus dev mode or Vite on
 the private WSL address. A small in-cluster bridge keeps the original Service
 name and Envoy route; BFF and Core traffic still reaches Istio on the bridge
 leg. The WSL leg is plain HTTP and development-only. Core, BFF, Expedition,
-and Vite use host ports `17081`, `17080`, `17083`, and `15172` respectively.
+Market, Assets and Vite use host ports `17081`, `17080`, `17083`, `17084`, `17085`, and
+`15172` respectively.
 The script reserves additional loopback ports for k3d PostgreSQL, Redis,
 Keycloak, RabbitMQ, OTLP, and service-to-service forwards; it stops with a
 clear error if one of those ports is already in use. It reads k3d Secrets at
@@ -101,17 +104,18 @@ files or scale the old workload manually while a hybrid switch is active;
 the restore command refuses to create a second writer if an unrelated host
 process still listens on the service port.
 
-Core dev mode uses schema `validate`, disables seed loading and bootstrap,
-and connects to k3d PostgreSQL on a distinct loopback port. Ordinary reloads
-must not drop or reseed shared data. To intentionally replace disposable Core
-data after a schema change, first restore full k3d mode and use
-`./deploy-backend.sh --reset-core-db` after importing the matching Core image,
-or the archive-based `pipeline/deploy-k3d.mjs --reset-core-db` workflow. These
-commands are destructive for Core game data; neither is part of hot reload.
+Core, Assets and Market dev modes use schema `validate`, disable seed loading and
+bootstrap, and connect to their own k3d PostgreSQL over distinct loopback ports.
+Ordinary reloads preserve shared data. After a schema change, restore full
+k3d mode and use the archive-based `pipeline/deploy-k3d.mjs --reset-game-db`
+workflow. It checks for unfinished Expeditions, stops the application services and checks unfinished workflows, and resets
+Core, Assets and Market together from the verified images. The legacy
+`--reset-core-db` flag is an alias. This reset discards disposable game data;
+it is separate from hot reload.
 
 ## Verify
 
-Fast pure unit tests run locally. Core, BFF, and Expedition component tests
+Fast pure unit tests run locally. Core, BFF, Expedition, Market and Assets component tests
 use disposable k3d PostgreSQL, Redis, and RabbitMQ without changing daily data:
 
 ```bash
@@ -119,7 +123,7 @@ use disposable k3d PostgreSQL, Redis, and RabbitMQ without changing daily data:
 ./deploy/k3d/test-isolated-components.sh bff
 ```
 
-The optional argument selects `core`, `bff`, `expedition`, or `all` (default).
+The optional argument selects `core`, `bff`, `expedition`, `market`, `assets`, or `all` (default).
 Backend candidate builds invoke the matching lane before Maven packages with
 `-DskipTests`; direct `./mvnw package` still runs its own local test workflow.
 The k3d lane replaces the two direct RabbitMQ Testcontainers transport checks
@@ -135,9 +139,9 @@ npm run test:market:k6
 ```
 
 The Expedition and Map tests change the seeded test Managers' game progress.
-The market k6 test sends intentionally incomplete orders; HTTP 400 from Core
+The market k6 test sends intentionally incomplete orders; HTTP 400 from Market
 only means Envoy allowed the request, while HTTP 429 means the per-user limit
-was enforced. The full candidate gate now runs an exact four-image archive
+was enforced. The full candidate gate now runs an exact six-image archive
 in a disposable k3d namespace, including browser, session, Redis, and k6
 checks. See [K3D_ISOLATION.md](e2e/K3D_ISOLATION.md); the seeded-user smoke
 commands above are not a substitute for that isolated gate.

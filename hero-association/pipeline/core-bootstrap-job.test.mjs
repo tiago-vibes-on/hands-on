@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { assertCoreDatabaseIdentity, prepareCoreBootstrapJob } from './core-bootstrap-job.mjs'
+import { assertCoreDatabaseIdentity, prepareCoreBootstrapJob, assertNoActiveExpeditions } from './core-bootstrap-job.mjs'
 
 function template() {
   return {
@@ -57,4 +57,10 @@ test('accepts only the isolated Core PostgreSQL database identity', () => {
   assert.doesNotThrow(() => assertCoreDatabaseIdentity('hero_association|hero_association'))
   assert.throws(() => assertCoreDatabaseIdentity('keycloak|keycloak'))
   assert.throws(() => assertCoreDatabaseIdentity('postgres|postgres'))
+})
+
+test('refuses coupled reset while an Expedition admission or active run remains', () => {
+  assert.doesNotThrow(() => assertNoActiveExpeditions('0', ''))
+  assert.throws(() => assertNoActiveExpeditions('1', ''), /Return all active Expeditions/)
+  assert.throws(() => assertNoActiveExpeditions('0', 'ha:expedition:v1:owner:active'), /Return all active Expeditions/)
 })

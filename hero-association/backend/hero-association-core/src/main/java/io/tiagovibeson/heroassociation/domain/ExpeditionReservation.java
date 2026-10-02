@@ -38,12 +38,27 @@ public class ExpeditionReservation {
 
     private Instant releasedAt;
 
+    @Column(nullable = false, updatable = false)
+    private UUID assetsAdmissionKey;
+    @Column(nullable = false, updatable = false)
+    private UUID assetsSettlementKey;
+    @Column(nullable = false)
+    private boolean assetsSnapshotConfirmed;
+    public UUID getAssetsAdmissionKey() { return assetsAdmissionKey; }
+    public UUID getAssetsSettlementKey() { return assetsSettlementKey; }
+    public boolean isAssetsSnapshotConfirmed() { return assetsSnapshotConfirmed; }
+    public void confirmAssetsSnapshot(String baseline) {
+        if (appliedAt != null || releasedAt != null) throw new IllegalStateException("Reservation is no longer active.");
+        baselineJson = baseline; assetsSnapshotConfirmed = true;
+    }
+
     protected ExpeditionReservation() {
     }
 
     public ExpeditionReservation(UUID expeditionId, UUID ownerManagerId, UUID agencyId,
                                  UUID partyId, String baselineJson, Instant reservedAt) {
         this.expeditionId = expeditionId;
+        assetsAdmissionKey = UuidV7.next(); assetsSettlementKey = UuidV7.next();
         this.ownerManagerId = ownerManagerId;
         this.agencyId = agencyId;
         this.partyId = partyId;

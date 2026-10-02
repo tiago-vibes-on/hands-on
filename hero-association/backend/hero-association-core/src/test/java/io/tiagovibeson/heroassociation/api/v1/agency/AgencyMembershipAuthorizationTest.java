@@ -16,32 +16,17 @@ import org.junit.jupiter.api.Test;
 class AgencyMembershipAuthorizationTest {
 
     private static final String DAWNWATCH_AGENCY_ID = "019c4c00-0001-7000-8000-000000000001";
-    private static final String MAGIC_CRYSTAL_ID = "019c4c00-0070-7000-8000-000000000001";
 
     @Test
-    void shouldAllowAManagerToReadTheirAgencyButNotPlaceMarketOrders() {
+    void shouldReadAgencyStateAndRetireTheCoreMarketWriter() {
         given()
                 .when().get("/api/v1/agencies/%s/state".formatted(DAWNWATCH_AGENCY_ID))
                 .then()
                 .statusCode(200)
                 .body("agency.name", is("Dawnwatch Agency"));
 
-        given()
-                .contentType(ContentType.JSON)
-                .body("""
-                        {
-                          "agencyId": "%s",
-                          "ownerType": "AGENCY",
-                          "side": "SELL",
-                          "itemId": "%s",
-                          "quantity": 1,
-                          "priceGoldPerItem": 100
-                        }
-                        """.formatted(DAWNWATCH_AGENCY_ID, MAGIC_CRYSTAL_ID))
-                .when().post("/api/v1/market/orders")
-                .then()
-                .statusCode(403)
-                .body("message", is("Only an agency leader can perform this action."));
+        given().contentType(ContentType.JSON).body("{}")
+                .when().post("/api/v1/market/orders").then().statusCode(404);
     }
 
     @Test

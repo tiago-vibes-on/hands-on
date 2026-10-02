@@ -5,5 +5,5 @@ import java.util.UUID;
 import io.tiagovibeson.heroassociation.domain.RuneInventoryOwnerType;
 import jakarta.validation.constraints.NotNull;
 
-public record EquipRuneRequest(@NotNull UUID runeId, @NotNull RuneInventoryOwnerType sourceOwnerType) {
+public record EquipRuneRequest(@NotNull UUID operationKey, @NotNull UUID runeId, @NotNull RuneInventoryOwnerType sourceOwnerType) {
 }

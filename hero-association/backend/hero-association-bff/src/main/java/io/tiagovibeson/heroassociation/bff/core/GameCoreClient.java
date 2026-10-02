@@ -45,7 +45,8 @@ public class GameCoreClient {
             String accept,
             String contentType,
             String accessToken,
-            byte[] requestBody) {
+            byte[] requestBody,
+            String operationKey) {
         HttpRequest.Builder request = HttpRequest.newBuilder(coreUri(path, rawQuery))
                 .timeout(REQUEST_TIMEOUT)
                 .header(HttpHeaders.ACCEPT, accept == null ? MediaType.APPLICATION_JSON : accept)
@@ -54,6 +55,8 @@ public class GameCoreClient {
         if (contentType != null) {
             request.header(HttpHeaders.CONTENT_TYPE, contentType);
         }
+
+        if (operationKey != null) request.header("X-Operation-Key", operationKey);
 
         request.method(
                 method,

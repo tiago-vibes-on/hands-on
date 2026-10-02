@@ -20,6 +20,8 @@ import jakarta.transaction.Transactional;
 @ApplicationScoped
 public class HeroRecruitmentService {
 
+    @Inject io.tiagovibeson.heroassociation.application.assets.AssetsClient assets;
+
     @Inject
     AgencyRepository agencyRepository;
 
@@ -64,6 +66,8 @@ public class HeroRecruitmentService {
         Hero hero = heroRepository.find("id = ?1 and agency.id = ?2", heroId, agencyId)
                 .firstResultOptional()
                 .orElseThrow(() -> new HeroNotFoundException(heroId));
+        var snapshot = assets.snapshot(java.util.List.of(), java.util.List.of(hero.getId()));
+        assets.decorate(java.util.List.of(hero), snapshot.heroes());
         return AgencyStateResponse.HeroResponse.from(hero);
     }
 

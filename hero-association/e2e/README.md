@@ -1,7 +1,7 @@
 # Hero Association E2E tests
 
 The active browser and archive gate runs through the shared k3d Envoy Gateway.
-Backend candidate builds first test Core, BFF, or Expedition against private,
+Backend candidate builds first test Core, BFF, Expedition, or Market against private,
 disposable k3d dependencies. The archive gate then creates an independent
 full-stack namespace with its own databases, Keycloak, Redis, and RabbitMQ.
 See [K3D_ISOLATION.md](K3D_ISOLATION.md). The old Compose/Traefik runner has
@@ -21,10 +21,10 @@ run from `hero-association/`:
 Or from `e2e/`, run `npm run test:isolated -- ../pipeline/artifacts/<build-id>/all`.
 The candidate can be built while daily development runs in hybrid mode;
 tests and identity data stay in disposable namespaces. Manual promotion
-still requires restoring all four daily application Deployments to full k3d
+still requires restoring all six daily application Deployments to full k3d
 mode.
-The runner checks the archive checksum and all five running application Pod
-image IDs before and after BFF replacement. It runs thirteen browser/API cases,
+The runner checks the archive checksum and all six services’ running application Pod
+image IDs before and after BFF replacement. It runs sixteen browser/API cases, three Assets outage/restart recovery phases,
 Core-cache-off Map replay, BFF session/outage and expiry checks, RabbitMQ
 cross-role denial, and market k6 thresholds. It marks
 `k3d-e2e-verification.json` passed only after the namespace is deleted.

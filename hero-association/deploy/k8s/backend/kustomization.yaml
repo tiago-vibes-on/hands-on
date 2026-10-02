@@ -9,6 +9,10 @@ resources:
   - redis-core.yaml
   - keycloak.yaml
   - core.yaml
+  - assets.yaml
+  - postgres-assets.yaml
+  - market.yaml
+  - postgres-market.yaml
   - bff.yaml
   - hpa.yaml
   - routes.yaml

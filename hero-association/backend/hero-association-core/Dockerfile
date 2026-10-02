@@ -5,6 +5,8 @@ WORKDIR /workspace
 COPY pom.xml ./
 COPY hero-association-bff/pom.xml ./hero-association-bff/pom.xml
 COPY hero-association-expedition/pom.xml ./hero-association-expedition/pom.xml
+COPY hero-association-assets/pom.xml ./hero-association-assets/pom.xml
+COPY hero-association-market/pom.xml ./hero-association-market/pom.xml
 COPY hero-association-lib ./hero-association-lib
 COPY hero-association-core/pom.xml ./hero-association-core/pom.xml
 COPY hero-association-core/src ./hero-association-core/src

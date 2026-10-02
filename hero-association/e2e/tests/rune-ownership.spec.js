@@ -1,5 +1,15 @@
 import { expect, test } from '@playwright/test'
 
+function uuidV7() {
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  for (let index = 0; index < 6; index++) bytes[index] = Math.floor(Date.now() / 2 ** (8 * (5 - index))) & 0xff
+  bytes[6] = (bytes[6] & 0x0f) | 0x70
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 const agencyId = '019c4c00-0001-7000-8000-000000000001'
 const user1WarriorId = '019c4c00-0030-7001-8000-000000000001'
 
@@ -22,12 +32,22 @@ function quantity(inventory, code) {
   return inventory.find((entry) => entry.rune.code === code)?.quantity ?? 0
 }
 
-test('moves an agency rune to a Hero, then to the Manager and a personal Hero', async ({ page }) => {
+test('recovers a lost equipment response after reload, then moves the rune between owners', async ({ page }) => {
   await signIn(page, 'user1@mail.com', 'user1')
   const initial = await agencyState(page)
   const personalWarrior = initial.personalHeroes.find((hero) => hero.id === user1WarriorId)
   expect(personalWarrior?.runeSlots[0].rune).toBeNull()
   expect(quantity(initial.runeInventory, 'attack-rune')).toBe(1)
+
+  let lostRequest
+  await page.route('**/api/v1/agencies/*/heroes/*/rune-slots/*', async (route) => {
+    if (route.request().method() !== 'PUT' || lostRequest) return route.continue()
+    const response = await route.fetch()
+    expect(response.status()).toBe(200)
+    lostRequest = { url: route.request().url(), data: route.request().postDataJSON() }
+    await route.fulfill({ status: 503, contentType: 'application/json',
+      body: JSON.stringify({ message: 'Equipment response lost after commit.' }) })
+  })
 
   await page.getByRole('button', { name: 'Heroes', exact: true }).click()
   const agencySlot = page.getByRole('group', { name: 'Emberveil rune slots' })
@@ -35,7 +55,26 @@ test('moves an agency rune to a Hero, then to the Manager and a personal Hero', 
   await agencySlot.click()
   await page.getByRole('dialog').getByRole('region', { name: 'Agency inventory' })
     .getByRole('button', { name: /Attack Rune/ }).click()
-  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.getByText('Equipment response lost after commit.')).toBeVisible()
+  expect(lostRequest.data.operationKey).toBeTruthy()
+  await page.reload()
+  await page.getByRole('button', { name: 'Heroes', exact: true }).click()
+  await expect(agencySlot).toHaveAttribute('aria-label', /Attack Rune/)
+  await expect.poll(async () => {
+    const result = await page.request.get(`/api/v1/asset-operations/${lostRequest.data.operationKey}`)
+    return (await result.json()).status
+  }).toBe('APPLIED')
+  await expect.poll(() => page.evaluate(() => Object.keys(sessionStorage)
+    .filter((key) => key.startsWith('hero-association.assets:'))
+    .flatMap((key) => JSON.parse(sessionStorage.getItem(key))).length)).toBe(0)
+  const sessionAfterReload = await (await page.request.get('/api/v1/session')).json()
+  const replay = await page.request.put(lostRequest.url, {
+    headers: { 'X-CSRF-TOKEN': sessionAfterReload.csrfToken }, data: lostRequest.data,
+  })
+  expect(replay.status()).toBe(200)
+  // A direct session request rotates the CSRF cookie; reload to refresh the UI's cached token.
+  await page.reload()
+  await page.getByRole('button', { name: 'Heroes', exact: true }).click()
   await expect(agencySlot).toHaveAttribute('aria-label', /Attack Rune/)
   const equipped = await agencyState(page)
   expect(equipped.heroes.find((hero) => hero.alias === 'Emberveil').runeSlots[4].rune.code).toBe('attack-rune')
@@ -119,23 +158,41 @@ test('allows a member to use agency runes but blocks another Manager’s Hero an
   }
   const quest = transferred.quests.find((candidate) => candidate.title === 'Lost Courier')
   expect(quest?.status).toBe('AVAILABLE')
-  const started = await page.request.put(`/api/v1/agencies/${agencyId}/quests/${quest.id}/start`, {
-    headers,
-    data: { partyId: party.id, expectedBorrowingFeeGold: 0 },
+  let lostQuest
+  await page.route('**/api/v1/agencies/*/quests/*/start', async (route) => {
+    if (lostQuest) return route.continue()
+    const response = await route.fetch()
+    expect(response.status()).toBe(200)
+    lostQuest = { url: route.request().url(), data: route.request().postDataJSON() }
+    await route.fulfill({ status: 503, contentType: 'application/json',
+      body: JSON.stringify({ message: 'Quest response lost after commit.' }) })
   })
-  expect(started.status()).toBe(200)
-  expect((await started.json()).personalHeroes.find((hero) => hero.id === memberWarrior.id).activity)
-    .toBe('ON_QUEST')
+  await page.reload()
+  await page.getByRole('button', { name: 'Quests', exact: true }).click()
+  const questCard = page.locator('.quest-card').filter({
+    has: page.getByRole('heading', { name: 'Lost Courier', exact: true }),
+  })
+  await questCard.getByRole('combobox').selectOption(party.id)
+  await questCard.getByRole('button', { name: 'Start quest' }).click()
+  await expect(page.getByText('Quest response lost after commit.')).toBeVisible()
+  expect(lostQuest.data.operationKey).toBeTruthy()
   await page.reload()
   await page.getByRole('button', { name: 'Heroes', exact: true }).click()
   const refreshedSession = await (await page.request.get('/api/v1/session')).json()
   headers = { 'X-CSRF-TOKEN': refreshedSession.csrfToken }
+  const replayedQuest = await page.request.put(lostQuest.url, { headers, data: lostQuest.data })
+  expect(replayedQuest.status()).toBe(200)
+  expect((await replayedQuest.json()).personalHeroes.find((hero) => hero.id === memberWarrior.id).activity)
+    .toBe('ON_QUEST')
+  await expect.poll(() => page.evaluate(() => Object.keys(sessionStorage)
+    .filter((key) => key.startsWith('hero-association.assets:'))
+    .flatMap((key) => JSON.parse(sessionStorage.getItem(key))).length)).toBe(0)
   const awaySlot = page.getByRole('group', { name: `${memberWarrior.alias} rune slots` })
     .getByRole('button', { name: new RegExp(`${memberWarrior.alias} rune slot 5`) })
   await expect(awaySlot).toBeDisabled()
   const equip = (heroId) => page.request.put(`/api/v1/agencies/${agencyId}/heroes/${heroId}/rune-slots/4`, {
     headers,
-    data: { runeId: vitalityRune.id, sourceOwnerType: 'MANAGER' },
+    data: { operationKey: uuidV7(), runeId: vitalityRune.id, sourceOwnerType: 'MANAGER' },
     maxRedirects: 0,
   })
   expect((await equip(user1WarriorId)).status()).toBe(404)

@@ -20,7 +20,8 @@ public class GameCoreStubResource implements QuarkusTestResourceLifecycleManager
             server.createContext("/api/v1/echo", this::respondToEcho);
             server.createContext("/api/v1/agencies/", this::respondToEcho);
             server.createContext("/api/v1/recruits/", this::respondToEcho);
-            server.createContext("/api/v1/market/", this::respondToEcho);
+            server.createContext("/assets/api/v1/gold-transfers", this::respondToEcho);
+            server.createContext("/market/api/v1/market/", this::respondToEcho);
             server.createContext("/expedition/api/v1/expeditions", this::respondToEcho);
             server.createContext("/expedition/api/v1/expeditions/" + ExpeditionSocketFixture.OWNED_ID, ExpeditionSocketFixture::opening);
             server.createContext("/expedition/api/v1/expeditions/" + ExpeditionSocketFixture.FOREIGN_ID, ExpeditionSocketFixture::opening);
@@ -30,7 +31,11 @@ public class GameCoreStubResource implements QuarkusTestResourceLifecycleManager
                     "hero-association.core.base-url",
                     "http://localhost:" + server.getAddress().getPort(),
                     "hero-association.expedition.base-url",
-                    "http://localhost:" + server.getAddress().getPort() + "/expedition");
+                    "http://localhost:" + server.getAddress().getPort() + "/expedition",
+                    "hero-association.assets.base-url",
+                    "http://localhost:" + server.getAddress().getPort() + "/assets",
+                    "hero-association.market.base-url",
+                    "http://localhost:" + server.getAddress().getPort() + "/market");
         } catch (IOException exception) {
             throw new IllegalStateException("Unable to start the Game Core test server.", exception);
         }
@@ -50,6 +55,7 @@ public class GameCoreStubResource implements QuarkusTestResourceLifecycleManager
                 + "\",\"query\":\"" + escape(exchange.getRequestURI().getRawQuery())
                 + "\",\"contentType\":\"" + escape(exchange.getRequestHeaders().getFirst("Content-Type"))
                 + "\",\"authorization\":\"" + escape(exchange.getRequestHeaders().getFirst("Authorization"))
+                + "\",\"operationKey\":\"" + escape(exchange.getRequestHeaders().getFirst("X-Operation-Key"))
                 + "\",\"traceparent\":\"" + escape(exchange.getRequestHeaders().getFirst("traceparent"))
                 + "\",\"body\":\"" + escape(body) + "\"}";
         byte[] responseBytes = response.getBytes(StandardCharsets.UTF_8);

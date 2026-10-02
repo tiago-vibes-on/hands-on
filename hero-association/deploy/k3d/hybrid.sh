@@ -10,7 +10,7 @@ export KUBECONFIG="$script_dir/.kubeconfig"
 state_dir="$script_dir/.hybrid-state"
 
 usage() {
-  printf 'Usage: %s <run|restore|status> <core|bff|expedition|frontend>\n' "$0" >&2
+  printf 'Usage: %s <run|restore|status> <core|bff|expedition|market|assets|frontend>\n' "$0" >&2
   exit 2
 }
 
@@ -22,6 +22,8 @@ case "$service" in
   core) host_port=17081; service_port=8081; ready_path=/q/health/ready; service_account=hero-association-core; istio=true ;;
   bff) host_port=17080; service_port=8080; ready_path=/q/health/ready; service_account=hero-association-bff; istio=true ;;
   expedition) host_port=17083; service_port=8083; ready_path=/q/health/ready; service_account=hero-association-expedition; istio=true ;;
+  market) host_port=17084; service_port=8084; ready_path=/q/health/ready; service_account=hero-association-market; istio=true ;;
+  assets) host_port=17085; service_port=8085; ready_path=/q/health/ready; service_account=hero-association-assets; istio=true ;;
   frontend) host_port=15172; service_port=80; ready_path=/; service_account=default; istio=false ;;
   *) usage ;;
 esac
@@ -191,7 +193,7 @@ if port_listening "$host_port"; then
   exit 1
 fi
 
-if [[ "$service" == core || "$service" == expedition ]]; then
+if [[ "$service" == core || "$service" == expedition || "$service" == market || "$service" == assets ]]; then
   (cd "$backend_dir" && ./mvnw --batch-mode -pl hero-association-lib/combat-engine -am install)
 fi
 if [[ "$service" == frontend && ! -d "$project_dir/frontend/node_modules" ]]; then
@@ -233,6 +235,8 @@ if [[ "$service" != frontend ]]; then
   export QUARKUS_DEVSERVICES_ENABLED=false
   case "$service" in
     core) keycloak_port=17181; otlp_port=14317 ;;
+    market) keycloak_port=17184; otlp_port=14347 ;;
+    assets) keycloak_port=17185; otlp_port=14348 ;;
     bff) keycloak_port=17180; otlp_port=14327 ;;
     expedition) keycloak_port=17182; otlp_port=14337 ;;
   esac
@@ -254,6 +258,9 @@ case "$service" in
     export QUARKUS_DATASOURCE_PASSWORD="$(secret_value hero-association-k3d-credentials CORE_DATABASE_PASSWORD)"
     export QUARKUS_HIBERNATE_ORM_SCHEMA_MANAGEMENT_STRATEGY=validate
     export QUARKUS_HIBERNATE_ORM_SQL_LOAD_SCRIPT=no-file
+    start_forward "$namespace" service/assets 18087 8085
+    export HERO_ASSOCIATION_ASSETS_BASE_URL=http://127.0.0.1:18087
+    export HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY="$(secret_value hero-association-assets-credentials HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY)"
     export HERO_ASSOCIATION_CORE_BOOTSTRAP_MODE=false
     export HERO_ASSOCIATION_CORE_EXPEDITION_ENABLED=true
     export HERO_ASSOCIATION_EXPEDITION_RABBITMQ_HOST=127.0.0.1
@@ -265,6 +272,10 @@ case "$service" in
     start_forward "$namespace" service/redis-bff 16379 6379
     start_forward "$namespace" service/core 18081 8081
     start_forward "$namespace" service/expedition 18083 8083
+    start_forward "$namespace" service/market 18085 8084
+    start_forward "$namespace" service/assets 18086 8085
+    export HERO_ASSOCIATION_ASSETS_BASE_URL=http://127.0.0.1:18086
+    export HERO_ASSOCIATION_MARKET_BASE_URL=http://127.0.0.1:18085
     export HERO_ASSOCIATION_CORE_BASE_URL=http://127.0.0.1:18081
     export HERO_ASSOCIATION_EXPEDITION_BASE_URL=http://127.0.0.1:18083
     export HERO_ASSOCIATION_EXPEDITION_WEBSOCKET_ENABLED=true
@@ -274,6 +285,29 @@ case "$service" in
     export HERO_ASSOCIATION_BFF_OIDC_STATE_SECRET="$(secret_value hero-association-k3d-credentials HERO_ASSOCIATION_BFF_OIDC_STATE_SECRET)"
     export HERO_ASSOCIATION_BFF_CSRF_TOKEN_SIGNATURE_KEY="$(secret_value hero-association-k3d-credentials HERO_ASSOCIATION_BFF_CSRF_TOKEN_SIGNATURE_KEY)"
     export HERO_ASSOCIATION_EXPEDITION_BFF_SERVICE_KEY="$(secret_value hero-association-expedition-credentials HERO_ASSOCIATION_EXPEDITION_BFF_SERVICE_KEY)"
+    ;;
+  assets)
+    start_forward "$namespace" service/postgres-assets 15435 5432
+    start_forward "$namespace" service/core 18088 8081
+    export QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://127.0.0.1:15435/hero_association_assets
+    export QUARKUS_DATASOURCE_USERNAME=hero_association_assets
+    export QUARKUS_DATASOURCE_PASSWORD="$(secret_value hero-association-assets-credentials ASSETS_DATABASE_PASSWORD)"
+    export QUARKUS_HIBERNATE_ORM_SCHEMA_MANAGEMENT_STRATEGY=validate
+    export QUARKUS_HIBERNATE_ORM_SQL_LOAD_SCRIPT=no-file
+    export HERO_ASSOCIATION_CORE_BASE_URL=http://127.0.0.1:18088
+    export HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY="$(secret_value hero-association-assets-credentials HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY)"
+    export HERO_ASSOCIATION_ASSETS_MARKET_SERVICE_KEY="$(secret_value hero-association-market-credentials HERO_ASSOCIATION_ASSETS_MARKET_SERVICE_KEY)"
+    ;;
+  market)
+    start_forward "$namespace" service/postgres-market 15434 5432
+    start_forward "$namespace" service/assets 18084 8085
+    export QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://127.0.0.1:15434/hero_association_market
+    export QUARKUS_DATASOURCE_USERNAME=hero_association_market
+    export QUARKUS_DATASOURCE_PASSWORD="$(secret_value hero-association-market-credentials MARKET_DATABASE_PASSWORD)"
+    export QUARKUS_HIBERNATE_ORM_SCHEMA_MANAGEMENT_STRATEGY=validate
+    export QUARKUS_HIBERNATE_ORM_SQL_LOAD_SCRIPT=no-file
+    export HERO_ASSOCIATION_ASSETS_BASE_URL=http://127.0.0.1:18084
+    export HERO_ASSOCIATION_ASSETS_MARKET_SERVICE_KEY="$(secret_value hero-association-market-credentials HERO_ASSOCIATION_ASSETS_MARKET_SERVICE_KEY)"
     ;;
   expedition)
     start_forward "$namespace" service/redis-expedition 16381 6379
@@ -324,8 +358,8 @@ run_app() {
       cd "$backend_dir/hero-association-bff"
       exec ./mvnw quarkus:dev -Dquarkus.http.host="$wsl_ip" -Dquarkus.http.port="$host_port"
       ;;
-    expedition)
-      cd "$backend_dir/hero-association-expedition"
+    expedition|market|assets)
+      cd "$backend_dir/hero-association-$service"
       exec ../mvnw quarkus:dev -Dquarkus.http.host="$wsl_ip" -Dquarkus.http.port="$host_port"
       ;;
     frontend)

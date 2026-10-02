@@ -208,11 +208,10 @@ class QuestCombatProgressionServiceTest {
         Party party = new Party(agency, agency.getLeader(), "Progression " + UuidV7.next());
         entityManager.persist(party);
         Hero warrior = createHero(agency, party, HeroClass.WARRIOR);
-        Rune attackRune = entityManager.find(Rune.class,
-                UUID.fromString("019c4c00-0020-7000-8000-000000000001"));
+        Rune attackRune = new Rune(UUID.fromString("019c4c00-0020-7000-8000-000000000001"), "attack-rune", "Attack Rune", "✦", "+8 attack", "Attack", io.tiagovibeson.heroassociation.domain.RuneEffect.ATTACK, 8);
         HeroRune equippedRune = new HeroRune(warrior, attackRune, 0);
-        entityManager.persist(equippedRune);
-        warrior.getRuneSlots().add(equippedRune);
+
+        warrior.replaceRuneSnapshot(java.util.List.of(equippedRune));
         Hero mage = createHero(agency, party, HeroClass.MAGE);
         Hero archer = createHero(agency, party, HeroClass.ARCHER);
         mage.addSkillPoints(HeroSkill.MAGIC, new BigDecimal("4058"));

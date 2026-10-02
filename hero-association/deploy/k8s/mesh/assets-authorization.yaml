@@ -1,0 +1,63 @@
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: assets-strict-mtls
+  namespace: hero-association
+spec:
+  selector:
+    matchLabels:
+      app: assets
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: core-from-assets
+  namespace: hero-association
+spec:
+  selector:
+    matchLabels:
+      app: core
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: [cluster.local/ns/hero-association/sa/hero-association-assets]
+      to:
+        - operation:
+            methods: [POST]
+            paths: [/internal/v1/asset-authority/*]
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: assets-from-services
+  namespace: hero-association
+spec:
+  selector:
+    matchLabels:
+      app: assets
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals: [cluster.local/ns/hero-association/sa/hero-association-core]
+      to:
+        - operation:
+            methods: [GET, POST]
+            paths: [/internal/v1/assets/core/*]
+    - from:
+        - source:
+            principals: [cluster.local/ns/hero-association/sa/hero-association-market]
+      to:
+        - operation:
+            methods: [GET, POST]
+            paths: [/internal/v1/assets/context, /internal/v1/assets/reservations, /internal/v1/assets/reservations/*, /internal/v1/assets/operations/*, /internal/v1/assets/releases, /internal/v1/assets/settlements]
+    - from:
+        - source:
+            principals: [cluster.local/ns/hero-association/sa/hero-association-bff]
+      to:
+        - operation:
+            methods: [POST]
+            paths: [/api/v1/gold-transfers]

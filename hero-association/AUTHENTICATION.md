@@ -18,6 +18,7 @@ CSRF protection; Game Core owns Account provisioning and Manager onboarding.
 | Frontend integration | Complete | React bootstraps the BFF session, offers sign-in and sign-out, and sends CSRF headers for writes. |
 | Game Core token validation | Complete | The BFF forwards its server-held Keycloak access token and Game Core rejects anonymous, invalid, or incorrectly addressed tokens. |
 | Expedition token validation | Complete locally | Expedition validates its own Keycloak audience; BFF forwards the server-held token. Map and WebSocket reconnect pass in full k3d and individually switched hybrid mode. |
+| Private Assets commands | Independent Assets service | Dedicated Market service credential for all private calls; new reservations also validate the player's Assets-audience token; Core resolves identity/leadership with the original token and a separate Core credential. Background settlement/refund recovery uses recorded reservation authorization. See [Assets contract](ASSETS_CONTRACT.md). |
 | Account and manager onboarding | Complete | The first authenticated account request provisions an `Account`; React then requires a unique Manager display name before opening the game. |
 | Agency authorization | Complete | `AgencyMember` binds Managers to agencies; every agency read and command requires membership, financial market commands require `LEADER`, and a Manager without a membership can create its first agency. |
 | Google sign-in | Deferred (post-MVP) | Keep native email/password sign-in for the MVP; configure Google as a Keycloak identity provider later. |
@@ -321,3 +322,15 @@ as the Keycloak client secret.
   enabled.
 - MFA requirements and which privileged actions require step-up
   authentication.
+
+Market validates the `hero-association-market` audience. BFF tokens include it
+and Core; Market forwards the original player token only for current owner
+context and new reservations. Durable workers store no JWTs and use the
+dedicated private Assets credential for status, settlement and closure.
+
+Assets has a dedicated bearer client and BFF access-token audience. BFF routes
+gold transfers there without either private credential. Core and Assets share
+`HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY` for staged commands, snapshots and
+player permission RPCs; Market and Assets share the distinct Market credential.
+Both credentials are at least 32 characters and are restricted by service identity
+and path in the k3d mesh. Background recovery stores no bearer tokens.

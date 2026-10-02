@@ -4,11 +4,11 @@ This local pipeline builds once, verifies the archived images, and can deploy
 them to k3d or store them in Floci S3 for a later AWS-lab deployment. The
 daily Vite/Quarkus hot-reload workflow shares this cluster. Build-only
 candidates can run while a daily service is in hybrid mode because component
-tests use disposable dependencies; promotion still requires all four original
+tests use disposable dependencies; promotion still requires all six original
 k3d application Pods restored.
 
 The [local Jenkins setup](../ci/jenkins/README.md) has independent Core, BFF,
-Expedition, and frontend worktree builds and trusted-`main` builds, plus a deploy-local job
+Expedition, Market, Assets and frontend worktree builds and trusted-`main` builds, plus a deploy-local job
 for each service. The older complete-stack command below remains available
 manually. Both worktree and trusted-`main` builds require a separate manual
 deployment of their verified artifact. A Jenkins lock serializes trusted-`main`
@@ -25,19 +25,19 @@ already running, run from `hero-association/pipeline`:
 
 Optionally pass a unique build ID. The command checks the isolated cluster
 and runs rollback and Core-reset target tests before building and testing Core,
-BFF, Expedition, and frontend once. It archives those images, runs the
+BFF, Expedition, Market, Assets and frontend once. It archives those images, runs the
 disposable k3d archive E2E gate, then deploys them to k3d and runs the
 normal-namespace browser, Expedition, Map, and market k6 suites. If any stage
 fails, later stages do not run.
 The archive remains in ignored `artifacts/<build-id>/all/` for inspection or
 a later deployment target. The candidate gate uses disposable k3d data and
 does not reset the daily databases. For an intentional schema/seed change in
-the daily k3d Core database, run `./run-k3d-pipeline.sh --reset-core-db`
-instead. That flag is destructive **only to k3d Core game data**: after the
-archive-backed k3d gate, the pipeline uses the exact verified Core image
-to recreate Core's schema and deterministic seed. Keycloak and Redis are
-not reset. A reset promotion cannot
-safely roll back to an older Core image if a later gate fails; inspect and
+the daily k3d game databases, run `./run-k3d-pipeline.sh --reset-game-db`
+instead. After the archive-backed k3d gate, this command refuses unfinished
+Expeditions, stops all application services and audits unfinished workflows, and uses the exact verified Core, Assets and Market
+images to recreate their schemas and matching deterministic seeds. Keycloak
+and Redis are retained. `--reset-core-db` remains an alias. A reset promotion
+cannot safely roll back to older images if a later gate fails; inspect and
 repair the cluster before retrying. Backend candidate tests use disposable k3d PostgreSQL, Redis, and RabbitMQ; no
 Testcontainers host override is needed for this pipeline.
 
@@ -45,17 +45,17 @@ Testcontainers host override is needed for this pipeline.
 
 From `hero-association/pipeline`, with Docker, Java 25, Node.js 24, npm,
 `kubectl`, and the k3d cluster available for disposable component tests,
-build the three JVM services and the frontend image in one run:
+build the five JVM services and the frontend image in one run:
 
 ```bash
 ./build-local.sh all
 ```
 
-The command first runs Core, BFF, and Expedition component tests against
+The command first runs Core, BFF, Expedition, Market and Assets component tests against
 private, disposable k3d PostgreSQL, Redis, and RabbitMQ. After that namespace
 is removed, Maven packages the JVM services with `-DskipTests` to avoid a
 second container-backed test run. Frontend lint and build remain local, then
-the command builds four Docker images. It writes a single `images.tar`, SHA-256 checksum,
+the command builds six Docker images. It writes a single `images.tar`, SHA-256 checksum,
 and manifest under ignored `artifacts/<build-id>/all/`. The manifest records
 the Git revision, whether the source worktree was dirty, and each local image
 ID. The archive is the candidate to promote to multiple deployment targets;
@@ -102,9 +102,9 @@ printed by `build-local.sh`:
 ./deploy/k3d/test-isolated-stack.sh pipeline/artifacts/<build-id>/all
 ```
 
-The runner checks the archive checksum and all four running Pod image IDs,
-including the candidate built from uncommitted worktree changes. It runs ten
-browser cases, a Core-cache-off Map rerun with PostgreSQL fallback, BFF
+The runner checks the archive checksum and all six services’ running Pod image IDs,
+including the candidate built from uncommitted worktree changes. It runs sixteen
+browser/API cases, three Assets outage/restart phases, a Core-cache-off Map rerun with PostgreSQL fallback, BFF
 restart/session continuity, isolated BFF Redis outage and expired-token
 checks, and k6 market thresholds. Only after namespace cleanup
 does `k3d-e2e-verification.json` record `result: passed`. The retired Compose
@@ -115,17 +115,17 @@ the daily application Deployments.
 
 For a single-service promotion, Jenkins first runs `build-local.sh` for that
 component, including its disposable k3d component gate. It then uses `assemble-service-archive.mjs` to combine the candidate
-with the other three live k3d images in a checksummed, four-image archive. The manifest
+with the other five live k3d images in a checksummed, six-image archive. The manifest
 includes `promote_component`. The archive browser gate tests exactly this
-combination, not an unrelated four-service rebuild. Build and deploy jobs
+combination, not an unrelated six-service rebuild. Build and deploy jobs
 share the retained artifact under the WSL agent work directory at
 `artifacts/<build-id>/all`; the Jenkins build record stores its ID and small
 evidence. A build does not change k3d.
 
-`deploy-k3d.mjs --verify-baseline` checks the three baseline Deployment
+`deploy-k3d.mjs --verify-baseline` checks the five baseline Deployment
 references and running Pod image digests before the browser gate. The deploy
 job repeats this drift check and requires the exact archive's passing k3d E2E record.
-It imports and rolls only the promoted component. It verifies all four
+It imports and rolls only the promoted component. It verifies all six
 application Deployments and runs browser, Expedition, Map, and market k6 gates. The final Pod
 check briefly retries while autoscaling settles, but a persistent digest or
 readiness mismatch fails promotion. A failure after rollout
@@ -134,12 +134,12 @@ since the build, rebuild against the current cluster. The latest successful
 per-service deployment wins.
 
 This local mechanism needs full k3d mode even for a build, because the other
-three image baselines are read from running application Pods. The preflight
+five image baselines are read from running application Pods. The preflight
 refuses a hybrid Service route or stopped application Deployment before the
 expensive build starts. It does not create a reproducible
 release artifact for other environments. Floci publish, fetch, and frontend
 preview reject these k3d-specific composite archives; use a full
-four-image build for the separate Floci lab. Main builds use a clean GitHub
+six-image build for the separate Floci lab. Main builds use a clean GitHub
 checkout; worktree builds snapshot staged, unstaged, and non-ignored new
 files. Do not delete retained archives while a deploy job may still use them.
 
@@ -149,14 +149,14 @@ From `hero-association/pipeline`, with the isolated k3d lab running:
 
 ```bash
 node deploy-k3d.mjs artifacts/<build-id>/all
-# Only when deliberately replacing disposable k3d Core data:
-node deploy-k3d.mjs --reset-core-db artifacts/<build-id>/all
+# Only when deliberately replacing disposable k3d Core, Assets and Market data:
+node deploy-k3d.mjs --reset-game-db artifacts/<build-id>/all
 ```
 
 This command checks the archive and its passing E2E record before loading
 any of its images into local Docker. It checks the isolated Kubernetes context
-and healthy deployments, imports the same four image tags to k3d, and rolls
-out Core, BFF, Expedition, and frontend.
+and healthy deployments, imports the same six image tags to k3d, and rolls
+out Core, BFF, Expedition, Market, Assets, and frontend.
 For a clean automation checkout, set `HERO_ASSOCIATION_K3D_KUBECONFIG` to the
 absolute path of the original ignored `deploy/k3d/.kubeconfig`, `K3D_BIN`
 to the local k3d binary, and `HERO_ASSOCIATION_LOCAL_CA_CERTIFICATE` to the
@@ -171,15 +171,16 @@ references, verifies them, and reports concurrent changes without overwriting
 them. Run `node --test rollback-k3d.test.mjs` to test this failure path without
 changing the cluster. Promotion does not build images, apply bootstrap
 manifests or reset Core data. The
-`--reset-core-db` variant requires a complete four-service archive. After
-checking the k3d context, exact Core database identity, archive, and passing
-k3d E2E record, it imports those images, stops Core and its HPA, and
-creates a one-shot bootstrap Job with **the archived Core image**, not the
-fixed `:k3d` tag. It then starts Core, restores the HPA, promotes BFF,
-Expedition, and frontend, and runs the same Pod-image, browser, and k6 gates. If bootstrap
-fails, Core remains stopped for inspection. If a later gate fails, the
-reset-aware command leaves deployment images in place instead of attempting
-an unsafe rollback against a newly recreated schema.
+`--reset-game-db` variant requires a complete six-service archive (`--reset-core-db`
+remains an alias). It validates all three database identities and exact archived
+bootstrap Jobs, stops application traffic and writers, then checks Core admissions,
+the Expedition active index and unresolved Core/Market workflows. A failed audit
+restores the previous replicas and HPAs without resetting data. After the audit,
+it recreates the validated public schemas (removing retired ORM tables),
+bootstraps Core, Assets and Market with their archived images, sets all six
+application images while stopped, restores replicas and HPAs, and runs the same
+Pod-image, browser and k6 gates. A reset or later gate failure leaves the images
+in place; rollback against the recreated schema requires manual investigation.
 The rollback path was also exercised in the disposable k3d lab on 2026-09-28:
 an older verified archive reached the browser gate, an intentionally missing
 Playwright config failed that gate, and all three previous images were restored.
@@ -273,3 +274,12 @@ pinned emulator reports the group as available but its data plane is down,
 run `node provision-floci-bff-cache.mjs --recreate-empty` to explicitly
 recreate it and invalidate any sessions; see
 [`FLOCI.md`](../FLOCI.md#bff-session-cache-opt-in).
+
+Market and Assets each use separate PostgreSQL accounts and databases. Market's
+initial extraction is complete. To introduce Assets into that existing lab,
+verify a full six-image archive, run `deploy/k3d/stage-assets.sh ARCHIVE`, then
+promote the same archive with `node pipeline/deploy-k3d.mjs --reset-game-db ARCHIVE`.
+Staging adds Assets dependencies, its Keycloak audience and service identity;
+the coupled promotion switches callers and all three matching seeds. Existing
+users and Keycloak data are retained. Return active Expeditions and resolve
+pending Core/Market workflows before promotion.

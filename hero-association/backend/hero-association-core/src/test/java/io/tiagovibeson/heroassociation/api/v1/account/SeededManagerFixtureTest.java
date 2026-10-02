@@ -16,8 +16,6 @@ import io.tiagovibeson.heroassociation.domain.HeroSkill;
 import io.tiagovibeson.heroassociation.repository.AccountRepository;
 import io.tiagovibeson.heroassociation.repository.AgencyMemberRepository;
 import io.tiagovibeson.heroassociation.repository.HeroRepository;
-import io.tiagovibeson.heroassociation.repository.ManagerItemRepository;
-import io.tiagovibeson.heroassociation.repository.ManagerRuneRepository;
 import io.tiagovibeson.heroassociation.repository.ManagerRepository;
 import io.tiagovibeson.heroassociation.repository.PartyRepository;
 import jakarta.inject.Inject;
@@ -26,6 +24,7 @@ import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 class SeededManagerFixtureTest {
+    @Inject io.tiagovibeson.heroassociation.application.assets.AssetsClient assets;
 
     private static final String DAWNWATCH_ID = "019c4c00-0001-7000-8000-000000000001";
     private static final String IRONRIDGE_ID = "019c4c00-0001-7000-8000-000000000002";
@@ -46,11 +45,7 @@ class SeededManagerFixtureTest {
     @Inject
     HeroRepository heroRepository;
 
-    @Inject
-    ManagerItemRepository managerItemRepository;
 
-    @Inject
-    ManagerRuneRepository managerRuneRepository;
 
     @Test
     @Transactional
@@ -65,12 +60,13 @@ class SeededManagerFixtureTest {
             assertEquals("Manager %d".formatted(number), manager.getDisplayName());
             assertEquals(7, manager.getId().version());
             assertEquals(1, partyRepository.count("ownerManager.id", manager.getId()));
+            var holdings = assets.snapshot(java.util.List.of(new io.tiagovibeson.heroassociation.application.assets.AssetsClient.OwnerRequest("MANAGER", manager.getId())), java.util.List.of()).owner(manager.getId());
             assertEquals(switch (number) {
                 case 2 -> 25;
                 case 3 -> 20;
                 case 4 -> 200;
                 default -> 0;
-            }, manager.getGold());
+            }, holdings.gold());
             var personalHeroes = heroRepository.listByManagerId(manager.getId());
             assertEquals(3, personalHeroes.size());
             assertEquals(
@@ -85,16 +81,16 @@ class SeededManagerFixtureTest {
                 assertEquals(1, hero.getSkillLevel(HeroSkill.SHIELD));
                 assertEquals(false, hero.isRecruitable());
             }
-            var personalItems = managerItemRepository.listByManagerId(manager.getId());
+            var personalItems = holdings.items();
             assertEquals(number == 3 || number == 4 ? 1 : 0, personalItems.size());
             if (number == 3) {
-                assertEquals("magic-crystal", personalItems.getFirst().getItem().getCode());
-                assertEquals(2, personalItems.getFirst().getQuantity());
+                assertEquals("magic-crystal", personalItems.getFirst().item().code());
+                assertEquals(2, personalItems.getFirst().quantity());
             } else if (number == 4) {
-                assertEquals("iron-ingot", personalItems.getFirst().getItem().getCode());
-                assertEquals(5, personalItems.getFirst().getQuantity());
+                assertEquals("iron-ingot", personalItems.getFirst().item().code());
+                assertEquals(5, personalItems.getFirst().quantity());
             }
-            assertEquals(0, managerRuneRepository.listByManagerId(manager.getId()).size());
+            assertEquals(0, holdings.runes().size());
 
             AgencyMember membership = agencyMemberRepository.listByManagerId(manager.getId()).getFirst();
             assertEquals(number <= 4 ? UUID.fromString(DAWNWATCH_ID)
@@ -115,6 +111,7 @@ class SeededManagerFixtureTest {
     void shouldSeedUser2MapPartyWithVisibleSpellsAndRunes() {
         UUID user2 = UUID.fromString("019c4c00-0000-7000-8000-000000000002");
         var heroes = heroRepository.listByManagerId(user2);
+        assets.decorate(heroes, assets.snapshot(java.util.List.of(), heroes.stream().map(hero -> hero.getId()).toList()).heroes());
         assertEquals(3, heroes.size());
         assertEquals(15, heroes.stream()
                 .filter(hero -> hero.getHeroClass().name().equals("MAGE"))

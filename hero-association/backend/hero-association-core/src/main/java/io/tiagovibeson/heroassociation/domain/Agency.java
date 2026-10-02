@@ -21,7 +21,7 @@ public class Agency extends UuidEntity {
     @JoinColumn(name = "leader_id", nullable = false)
     private Manager leader;
 
-    @Column(nullable = false)
+    @jakarta.persistence.Transient
     private long gold;
 
     @Column(nullable = false)
@@ -78,22 +78,7 @@ public class Agency extends UuidEntity {
         return gold;
     }
 
-    public void decreaseGold(long amount) {
-        if (amount < 0 || amount > gold) {
-            throw new IllegalArgumentException("Agency gold balance cannot become negative.");
-        }
-
-        gold -= amount;
-    }
-
-    public void increaseGold(long amount) {
-        if (amount < 0) {
-            throw new IllegalArgumentException("Agency gold increase cannot be negative.");
-        }
-
-        gold = Math.addExact(gold, amount);
-    }
-
+    public void projectGold(long value) { gold = value; }
     public int getReputation() {
         return reputation;
     }

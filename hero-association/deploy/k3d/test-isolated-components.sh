@@ -7,12 +7,12 @@ project_dir="$(cd -- "$script_dir/../.." && pwd)"
 kubeconfig="${HERO_ASSOCIATION_K3D_KUBECONFIG:-$script_dir/.kubeconfig}"
 namespace=hero-association-components
 if [[ $# -gt 1 ]]; then
-  printf 'Usage: %s [core|bff|expedition|all]\n' "$0" >&2
+  printf 'Usage: %s [core|bff|expedition|market|assets|all]\n' "$0" >&2
   exit 2
 fi
 component="${1:-all}"
 case "$component" in
-  core|bff|expedition|all) ;;
+  core|bff|expedition|market|assets|all) ;;
   *) printf 'Unknown component: %s\n' "$component" >&2; exit 2 ;;
 esac
 selected() {
@@ -52,7 +52,7 @@ if kc get namespace "$namespace" >/dev/null 2>&1; then
   exit 1
 fi
 
-for key in CORE_DATABASE_PASSWORD \
+for key in CORE_DATABASE_PASSWORD MARKET_DATABASE_PASSWORD ASSETS_DATABASE_PASSWORD HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY HERO_ASSOCIATION_ASSETS_MARKET_SERVICE_KEY \
   HERO_ASSOCIATION_EXPEDITION_RABBITMQ_PASSWORD \
   HERO_ASSOCIATION_EXPEDITION_WORKER_RABBITMQ_PASSWORD \
   HERO_ASSOCIATION_CORE_SETTLEMENT_RABBITMQ_PASSWORD; do
@@ -63,6 +63,12 @@ kc create namespace "$namespace"
 created=true
 kc -n "$namespace" create secret generic hero-association-k3d-credentials \
   --from-file="$temporary_directory/CORE_DATABASE_PASSWORD"
+kc -n "$namespace" create secret generic hero-association-market-credentials \
+  --from-file="$temporary_directory/MARKET_DATABASE_PASSWORD" \
+  --from-file="$temporary_directory/HERO_ASSOCIATION_ASSETS_MARKET_SERVICE_KEY"
+kc -n "$namespace" create secret generic hero-association-assets-credentials \
+  --from-file="$temporary_directory/ASSETS_DATABASE_PASSWORD" \
+  --from-file="$temporary_directory/HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY"
 kc -n "$namespace" create secret generic hero-association-expedition-credentials \
   --from-file="$temporary_directory/HERO_ASSOCIATION_EXPEDITION_RABBITMQ_PASSWORD" \
   --from-file="$temporary_directory/HERO_ASSOCIATION_EXPEDITION_WORKER_RABBITMQ_PASSWORD" \
@@ -71,7 +77,7 @@ kc -n "$namespace" create configmap hero-association-expedition-rabbitmq-setup \
   --from-file=prepare-expedition.mjs="$project_dir/backend/rabbitmq/prepare-expedition.mjs"
 kubectl kustomize --load-restrictor=LoadRestrictionsNone \
   "$project_dir/deploy/k8s/component-tests" | kc apply -f -
-for workload in deployment/postgres-core deployment/redis-core deployment/redis-bff \
+for workload in deployment/postgres-core deployment/postgres-market deployment/postgres-assets deployment/redis-core deployment/redis-bff \
   statefulset/rabbitmq-expedition statefulset/redis-expedition; do
   kc -n "$namespace" rollout status "$workload" --timeout=5m
 done
@@ -111,6 +117,10 @@ forward() {
   forwarded_port="$local_port"
 }
 
+forward assets-postgres postgres-assets 5432
+assets_postgres_port="$forwarded_port"
+forward market-postgres postgres-market 5432
+market_postgres_port="$forwarded_port"
 forward postgres postgres-core 5432
 postgres_port="$forwarded_port"
 forward core-redis redis-core 6379
@@ -130,7 +140,8 @@ rabbit_port="$forwarded_port"
   if selected core; then
   "$project_dir/backend/mvnw" -f "$project_dir/backend/pom.xml" \
     -pl hero-association-core -am \
-    -Dtest=K3dExpeditionAppliedPublisherIT -Dsurefire.failIfNoSpecifiedTests=false test
+    -Dtest=K3dExpeditionAppliedPublisherIT '-Dhero-association.core.outage-test-filter=!*' \
+    -Dsurefire.failIfNoSpecifiedTests=false test
   fi
   if selected expedition; then
   "$project_dir/backend/mvnw" -f "$project_dir/backend/pom.xml" \
@@ -148,7 +159,7 @@ QUARKUS_DATASOURCE_JDBC_URL="jdbc:postgresql://127.0.0.1:$postgres_port/hero_ass
   QUARKUS_REDIS_DEVSERVICES_ENABLED=false \
   "$project_dir/backend/mvnw" -f "$project_dir/backend/pom.xml" \
     -pl hero-association-core -am \
-    '-Dtest=*Test,!ExpeditionAppliedPublisherTest' \
+    '-Dtest=*Test,!ExpeditionAppliedPublisherTest,!CreatureCacheOutageTest' \
     -Dsurefire.failIfNoSpecifiedTests=false test
 fi
 
@@ -166,6 +177,24 @@ QUARKUS_REDIS_HOSTS="redis://127.0.0.1:$expedition_redis_port" \
     -pl hero-association-expedition -am \
     '-Dtest=*Test,!RabbitSettlementTransportTest' \
     -Dsurefire.failIfNoSpecifiedTests=false test
+fi
+
+if selected market; then
+QUARKUS_DATASOURCE_JDBC_URL="jdbc:postgresql://127.0.0.1:$market_postgres_port/hero_association_market" \
+  QUARKUS_DATASOURCE_USERNAME=hero_association_market \
+  QUARKUS_DATASOURCE_PASSWORD="$(< "$temporary_directory/MARKET_DATABASE_PASSWORD")" \
+  QUARKUS_DATASOURCE_DEVSERVICES_ENABLED=false \
+  "$project_dir/backend/mvnw" -f "$project_dir/backend/pom.xml" \
+    -pl hero-association-market -am test
+fi
+
+if selected assets; then
+QUARKUS_DATASOURCE_JDBC_URL="jdbc:postgresql://127.0.0.1:$assets_postgres_port/hero_association_assets" \
+  QUARKUS_DATASOURCE_USERNAME=hero_association_assets \
+  QUARKUS_DATASOURCE_PASSWORD="$(< "$temporary_directory/ASSETS_DATABASE_PASSWORD")" \
+  QUARKUS_DATASOURCE_DEVSERVICES_ENABLED=false \
+  "$project_dir/backend/mvnw" -f "$project_dir/backend/pom.xml" \
+    -pl hero-association-assets -am test
 fi
 
 printf '%s component tests passed against disposable k3d resources.\n' "$component"

@@ -32,7 +32,9 @@ a hero in combat.
   Manager gold earnings, but the treatment of market-sale proceeds, refunds,
   and the effective rate for work already in progress still needs an explicit
   rule before implementation. Moving existing gold between wallets is not
-  new earnings, so gold transfers do not trigger the agency share.
+  new earnings, so gold transfers do not trigger the agency share. Gold
+  transfer commands use UUIDv7 operation keys and atomic receipts: retrying
+  an uncertain response with the same key cannot debit a wallet twice.
 - An agency hero's per-quest borrowing fee starts at 0 gold. The agency leader
   can set a nonnegative fee for each hero. Party assignment is free; on a
   successful quest start, the total quoted fee moves atomically from the
@@ -45,7 +47,8 @@ a hero in combat.
 
 Managers own their personal hero rosters, gold wallets, item and rune
 inventories, parties, and market orders. Agencies keep separate assets.
-Market ownership is implemented in Core; reward accounting and agency-change
+Market order ownership is implemented in the extracted Market service; Core
+Assets authorizes and moves resources. Reward accounting and agency-change
 workflows remain planned:
 
 - Each Manager owns a personal hero roster, gold wallet, and item and rune
@@ -441,6 +444,12 @@ Heroes begin at Level 1. The initial health and mana values are:
 - The planned ownership model allows personal and agency market accounts,
   each reserving gold or items from its own inventory. Agency trades require
   leadership or a future explicit permission.
+- Assets owns item and rune definitions, wallets, inventories, and equipped
+  rune ownership. These remain in Core during the first Market extraction.
+  Core's private reservation API verifies personal ownership or agency
+  leadership and records the authorizing Manager. Settlement/refund recovery
+  follows [Assets recovery](ASSETS_RECOVERY.md); Market's separate service and
+  durable worker remain future work.
 
 ## Social feed
 

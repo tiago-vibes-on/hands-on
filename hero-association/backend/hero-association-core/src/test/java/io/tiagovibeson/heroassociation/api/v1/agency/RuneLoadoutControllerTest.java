@@ -9,7 +9,7 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.security.TestSecurity;
 import io.restassured.http.ContentType;
 import io.tiagovibeson.heroassociation.domain.RuneInventoryOwnerType;
-import io.tiagovibeson.heroassociation.repository.AgencyRuneRepository;
+import io.tiagovibeson.heroassociation.testsupport.AssetsStubResource;
 import jakarta.inject.Inject;
 import org.junit.jupiter.api.Test;
 
@@ -27,8 +27,7 @@ class RuneLoadoutControllerTest {
     private static final String CRITICAL_CHANCE_RUNE_ID = "019c4c00-0020-7000-8000-000000000006";
     private static final String GUARD_RUNE_ID = "019c4c00-0020-7000-8000-000000000002";
 
-    @Inject
-    AgencyRuneRepository agencyRuneRepository;
+    @org.junit.jupiter.api.BeforeEach void resetAssets() { AssetsStubResource.reset(); }
 
 
     @Test
@@ -86,10 +85,7 @@ class RuneLoadoutControllerTest {
     @Test
     @TestSecurity(user = "local-seed-soren")
     void shouldAllowAgencyMembersToManageAgencyHeroRunes() {
-        QuarkusTransaction.requiringNew().run(() ->
-                agencyRuneRepository.find("agency.id = ?1 and rune.id = ?2",
-                        java.util.UUID.fromString(AGENCY_ID), java.util.UUID.fromString(GUARD_RUNE_ID))
-                        .firstResult().increaseQuantity());
+        AssetsStubResource.runeQuantity(java.util.UUID.fromString(AGENCY_ID), java.util.UUID.fromString(GUARD_RUNE_ID), 1);
 
         equip(EMBERVEIL_ID, 4, GUARD_RUNE_ID)
                 .then()
@@ -123,8 +119,8 @@ class RuneLoadoutControllerTest {
     void shouldRejectARuneThatIsNotAvailableInTheAgencyInventory() {
         equip(EMBERVEIL_ID, 0, CRITICAL_CHANCE_RUNE_ID)
                 .then()
-                .statusCode(409)
-                .body("message", is("Rune with id %s is not available in this agency inventory.".formatted(CRITICAL_CHANCE_RUNE_ID)));
+                .statusCode(404)
+                .body("message", is("The requested rune is unavailable in that inventory."));
     }
 
     @Test
@@ -148,7 +144,7 @@ class RuneLoadoutControllerTest {
             RuneInventoryOwnerType sourceOwnerType) {
         return given()
                 .contentType(ContentType.JSON)
-                .body(new EquipRuneRequest(java.util.UUID.fromString(runeId), sourceOwnerType))
+                .body(new EquipRuneRequest(io.tiagovibeson.heroassociation.domain.UuidV7.next(), java.util.UUID.fromString(runeId), sourceOwnerType))
                 .when()
                 .put(slotPath(agencyId, heroId, slotIndex));
     }
@@ -159,6 +155,7 @@ class RuneLoadoutControllerTest {
 
     private io.restassured.response.Response unequip(String agencyId, String heroId, int slotIndex) {
         return given()
+                .header("X-Operation-Key", io.tiagovibeson.heroassociation.domain.UuidV7.next())
                 .when()
                 .delete(slotPath(agencyId, heroId, slotIndex));
     }

@@ -1,41 +1,24 @@
 package io.tiagovibeson.heroassociation.domain;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
+import java.util.UUID;
 
-@Entity
-@Table(name = "item")
-public class Item extends UuidEntity {
-
-    @Column(nullable = false, unique = true, length = 50)
-    private String code;
-
-    @Column(nullable = false, length = 100)
-    private String name;
-
-    @Column(nullable = false, length = 10)
-    private String symbol;
-
-    @Column(nullable = false, length = 255)
-    private String description;
-
-    protected Item() {
+/** Immutable projection supplied by Assets; not a Core database entity. */
+public final class Item {
+    private final UUID id;
+    private final String code;
+    private final String name;
+    private final String symbol;
+    private final String description;
+    public Item(UUID id, String code, String name, String symbol, String description) {
+        this.id = id;
+        this.code = code;
+        this.name = name;
+        this.symbol = symbol;
+        this.description = description;
     }
-
-    public String getCode() {
-        return code;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getSymbol() {
-        return symbol;
-    }
-
-    public String getDescription() {
-        return description;
-    }
+    public UUID getId() { return id; }
+    public String getCode() { return code; }
+    public String getName() { return name; }
+    public String getSymbol() { return symbol; }
+    public String getDescription() { return description; }
 }

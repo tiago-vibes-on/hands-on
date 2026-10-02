@@ -71,12 +71,10 @@ Dawnwatch agency heroes Oakshield, Emberveil, and Hawkeye have borrowing fees
 of 0, 25, and 100 gold per quest respectively. A stale fee quote or
 insufficient personal gold rejects quest start without moving gold. Manager 3
 can place a personal Magic Crystal sell order; Manager 4 can place personal
-Iron Ingot sell orders or buy orders using their own wallet. Existing Core
-databases must be reset to receive the market-owner column and seed values;
-local dev/test recreate the schema automatically. For the isolated k3d lab,
-use `./run-k3d-pipeline.sh --reset-core-db` from `pipeline/` to rebuild,
-verify, and reseed Core with the exact archived image. This discards only
-k3d Core game data; it does not reset Keycloak, Redis, or normal development.
+Iron Ingot sell orders or buy orders using their own wallet. Schema-changing local data is reset through a complete verified six-image
+archive and `pipeline/deploy-k3d.mjs --reset-game-db ARCHIVE`. It recreates Core,
+Assets and Market together; Keycloak users and Redis are retained. Ordinary
+hybrid reloads validate the current schema and preserve shared data.
 
 The fixture IDs are deterministic UUIDv7 values. The Keycloak users are in
 [`backend/keycloak/realm/hero-association-realm.json`](backend/keycloak/realm/hero-association-realm.json);
@@ -92,8 +90,15 @@ Direct local Maven test profiles can recreate the schema and load
 not reseed it. Keycloak imports its realm only when it does not already exist:
 editing the versioned JSON does **not** add users to the existing k3d realm.
 Use the disposable k3d E2E namespace to validate new fixtures without touching
-daily accounts. To change daily Core game data, use the explicit Core
+daily accounts. To change daily Core game data, use the explicit coupled Core/Assets/Market
 reset/reseed workflow in [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md); this
 does not reset Keycloak. Recreating the daily Keycloak realm requires a
 separately planned, backed-up k3d lab reset or an explicit account update.
 A normal Pod restart will not reimport the realm.
+
+Assets extraction preserves these owner IDs and balances. Core's seed now owns
+identity, memberships, Heroes, Parties, Quests and pinned combat snapshots.
+`backend/hero-association-assets/src/main/resources/import.sql` owns wallets,
+item/rune catalogs, loose inventories, equipped slots and the standing Market
+reservations. Market's seed references those reservations. Reset all three
+matching development schemas together before Flyway; Keycloak users are retained.

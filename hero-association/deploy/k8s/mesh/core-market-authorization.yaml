@@ -1,0 +1,18 @@
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: market-from-bff
+  namespace: hero-association
+spec:
+  selector:
+    matchLabels:
+      app: market
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/hero-association/sa/hero-association-bff
+      to:
+        - operation:
+            paths: [/api/v1/market/*]

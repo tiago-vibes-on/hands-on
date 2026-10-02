@@ -1,31 +1,26 @@
 # Hero Association Backend Services
 
-Core and BFF run in full k3d and hybrid mode. Expedition powers the Map in
-both modes:
+Core, BFF, Market, Assets and Expedition run independently. BFF is the public
+session and CSRF boundary: it routes Market orders to Market, gold transfers to
+Assets, and Hero/agency/Quest commands to Core. Core composes asset projections
+using a private Assets API. Each service has its own database or runtime store;
+Core has no wallet, inventory, catalog or equipped-slot tables.
 
-```text
-browser -> hero-association-bff -> hero-association-core -> Core PostgreSQL
-                     |                    |
-                     |                    +-> Core Creature cache Redis
-                     +-> Keycloak -> Keycloak PostgreSQL
-                     |
-                     +-> BFF session Redis
-                     +-> Expedition -> Expedition Redis
-                              +-> Core admission and settlement
-```
+Assets listens on `8085` (`17085` in development), owns `hero_association_assets`,
+and uses a dedicated database password. Market uses
+`HERO_ASSOCIATION_ASSETS_BASE_URL` and its existing Market credential. Core uses
+the same Assets URL and a separate `HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY`.
+Assets uses that Core credential for player permission RPCs. BFF holds neither
+private credential; its server-held access token has Core, Market and Assets
+audiences. See the [Assets module](hero-association-assets/README.md) and
+[extraction audit](../ASSETS_ARCHITECTURE.md).
 
-- `hero-association-bff` is the public Backend for Frontend. It listens on
-  port `8080`, authenticates browser sessions with Keycloak, protects game
-  routes with CSRF, and forwards its server-held Keycloak access token with the
-  existing `/api/...` contract to Core.
-- `hero-association-core` owns game rules, PostgreSQL state, and the internal
-  API. It validates the `hero-association-core` bearer-token audience for every
-  API call, listens on port `8081`, and is not published by Docker Compose.
-
-Core persists rune equipment on every equip or unequip command. The authenticated
-Manager may choose their personal or their agency's rune inventory; any agency
-member may use agency runes, but agency gold permissions are unchanged.
-Personal and agency Heroes can equip only while at the agency.
+Rune and Quest commands are durable Core workflows. Supply a UUIDv7
+`operationKey` in equip/Quest JSON and `X-Operation-Key` for unequip. `200` confirms
+updated agency state; `202` returns a saved operation reference. Poll
+`GET /api/v1/asset-operations/{operationKey}` as the initiating Manager, or retry
+the identical request. Pending or conflicting operations retain eligibility
+fences. Never replace an uncertain key to bypass recovery.
 
 `hero-association-expedition` is an opt-in Quarkus service
 with a Redis-backed encounter loop. Core admission supplies a pinned Hero
@@ -83,9 +78,9 @@ the opt-in authenticated k3d path. Normal backend deployment does not
 enable Expedition; rerun the integration command after it. The k3d frontend
 build enables Map by default.
 
-For an explicitly requested four-service build and k3d promotion, run
+For an explicitly requested six-service build and k3d promotion, run
 `../pipeline/run-k3d-pipeline.sh` as described in the
-[pipeline README](../pipeline/README.md). It archives Core, BFF, Expedition,
+[pipeline README](../pipeline/README.md). It archives Core, BFF, Expedition, Market,
 and a Map-enabled frontend, then verifies browser, Map, and market paths.
 
 The pure combat rules and snapshots live in `hero-association-lib/combat-engine`,
@@ -96,9 +91,9 @@ infrastructure dependencies. From `backend/`, a clean build runs
 (including `quarkus:dev`), first install the library with
 `./mvnw -pl hero-association-lib/combat-engine -am install`. See the
 [library README](hero-association-lib/README.md). The private Assets
-reservation and settlement tests use disposable PostgreSQL and Redis via
+reservation, transfer, equipment and settlement tests use disposable PostgreSQL via
 Testcontainers. From `backend/`, run
-`./mvnw -pl hero-association-core -am -Dtest=AssetsServiceTest -Dsurefire.failIfNoSpecifiedTests=false test`.
+`./mvnw -pl hero-association-assets -am test`.
 Core test PostgreSQL Dev Services are removed after the test JVM exits, even if
 `~/.testcontainers.properties` enables global container reuse. This does not
 affect the k3d Core or Keycloak databases.
@@ -114,15 +109,32 @@ to reject missing or expired token-state keys as unauthenticated; older
 [`../AUTHENTICATION.md`](../AUTHENTICATION.md) for the implementation status
 and remaining Account, Manager, and authorization work.
 
-Market endpoints share `/api/v1/market/orders`, but Market still runs inside
-Core. Orders can belong to the authenticated Manager or an agency led by that
-Manager; each uses its own wallet and inventory. [ADR 0003](../adr/0003-market-service-boundary.md)
-records the public owner contract and the reservation/settlement work required
-before extracting Market as a separate service. Core now has an internal
-[Assets contract](../ASSETS_CONTRACT.md) for idempotent Manager/agency gold
-and item reservations, releases, and trade settlement. It is not yet the
-public Market write path or an HTTP endpoint; ordinary orders still use the
-existing single-Core-transaction flow.
+Market endpoints use `/api/v1/market/**` through BFF and the independent
+[Market module](hero-association-market/README.md). Market calls Assets directly;
+Assets resolves current identity and agency permissions with Core. Background
+settlement and refund recovery uses earlier reservation authorization without a
+player token. Set Market's separate database password, Assets' separate database
+password, and both private credentials in `.env` for Compose.
+
+The component runner accepts `core`, `bff`, `expedition`, `market`, `assets`, or
+`all`; all dependencies are disposable k3d resources. The full gate verifies an
+exact six-image archive. Hybrid mode supports each service, including
+`../deploy/k3d/hybrid.sh run assets`, and validates existing schemas.
+
+Before Flyway, schema changes require a coupled Core/Assets/Market reset. First
+build and pass the complete candidate archive in disposable k3d. For the initial
+Assets extraction, stage `../deploy/k3d/stage-assets.sh ARCHIVE`, then promote
+with `node ../pipeline/deploy-k3d.mjs --reset-game-db ARCHIVE`. Promotion stops
+application entry points and writers, refuses unfinished Expeditions and Core or
+Market workflows, recreates the three matching deterministic seeds, and verifies
+all six images and player flows. A failed reset leaves writers stopped; automatic
+image rollback cannot restore data. Existing lab resets must use this verified
+archive path. `deploy-backend.sh` only bootstraps a new empty lab.
+
+Existing Keycloak realms add the Assets client and BFF access-token audience
+with `../deploy/k3d/sync-assets-realm.mjs`, preserving users and redirects. Fresh
+realms already include both extracted services. Isolated tests never reset daily
+data. See [the recovery runbook](../ASSETS_RECOVERY.md).
 
 Gold transfers use `POST /api/v1/gold-transfers` through the BFF. On the
 Agency page, any authenticated Manager can send personal gold to any agency
@@ -130,9 +142,18 @@ by its exact name; only that agency's leader can send treasury gold to any
 Manager by display name, including themselves. Names are case-insensitive.
 Use `direction: MANAGER_TO_AGENCY` with `agencyName` and `amountGold`, or
 `direction: AGENCY_TO_MANAGER` with those fields plus `managerName`.
+Both directions also require a caller-generated RFC UUIDv7 `operationKey`.
 These are atomic moves of existing gold, without a market fee or agency
-earnings share. The endpoint returns both new balances. It is not yet
-idempotent, so clients must not automatically retry an ambiguous response.
+earnings share. Assets stores a receipt with both wallet changes. Repeating
+that key and the same normalized inputs as the same Manager returns the
+original response, including its balance snapshot, without another debit.
+Changed inputs/requester return `409`; missing or invalid keys return `400`.
+The frontend saves uncertain keys in session storage and reuses them for
+same-transfer retries and same-tab reloads, then refreshes current balances.
+Run backend checks with `./deploy/k3d/test-isolated-components.sh all`
+from `hero-association/`, and frontend checks with `npm test`, `npm run lint`,
+and `npm run build` from `frontend/`. These cover private permissions,
+idempotent transfers, concurrent command retries, and closure races.
 
 Full k3d and hybrid development use Envoy Gateway external authorization and a
 Redis-backed global per-user limit for `POST /api/v1/market/orders`; see the
@@ -253,7 +274,7 @@ the CA or leaf private keys.
 The repository-level [`../e2e`](../e2e) Playwright project verifies
 registration, session continuity, agency actions, market limits, and
 Map/Expedition through a disposable k3d namespace and Envoy Gateway. For a
-build-once candidate, create the four-image archive in
+build-once candidate, create the six-image archive in
 [`../pipeline`](../pipeline/README.md), then from `hero-association/` run:
 
 ```bash
@@ -269,10 +290,10 @@ The old Compose/Traefik E2E runner is retired. From `e2e/`, `npm test` now
 runs the daily k3d smoke suite; use the disposable archive gate above for
 candidate verification without touching daily accounts.
 
-To run Core, BFF, and Expedition Maven tests against disposable k3d
+To run Core, BFF, Expedition, and Market Maven tests against disposable k3d
 PostgreSQL, Redis, and RabbitMQ instead of local Dev Services or broker
 Testcontainers, run `./deploy/k3d/test-isolated-components.sh all` from
-`hero-association/`. Use `core`, `bff`, or `expedition` instead of `all` for a
+`hero-association/`. Use `core`, `bff`, `expedition`, or `market` instead of `all` for a
 single service. Candidate builds now run the corresponding lane before
 packaging; direct `./mvnw package` remains independently runnable.
 
@@ -290,7 +311,7 @@ docker compose up --build
 The standalone Compose stack publishes its own development ports and does
 not include a browser-facing HTTPS gateway. Use k3d Envoy Gateway for the
 integrated browser workflow. Both packaged JVM/native Compose stacks reset
-and reseed their disposable Core database on every Core startup; do not use
+and reseed their disposable Core, Assets and Market databases on service startup; do not use
 them with data you need to keep.
 
 The JVM Compose workflow publishes the BFF at `http://localhost:17080` and
@@ -306,7 +327,7 @@ docker compose -f compose.native.yaml up --build
 Build and test each service from its own directory. Core-specific workflows,
 including native compilation, are documented in
 [`hero-association-core/README.md`](hero-association-core/README.md).
-For one reusable local archive containing the Core, BFF, and frontend images,
+For one reusable local archive containing the Core, BFF, Expedition, Market, Assets, and frontend images,
 use the separate [`pipeline`](../pipeline/README.md) build stage. It runs
 the service tests and frontend checks without deploying or changing this
 development environment.
@@ -320,27 +341,24 @@ credentials, and Gateway verification, see
 That workflow supports rebuilding and rolling only BFF when Core has not
 changed, without resetting the lab database.
 
-For build-once deployment of an E2E-verified Core/BFF/frontend archive, use
+For build-once deployment of an E2E-verified six-service archive, use
 the [pipeline promotion command](../pipeline/README.md#promote-the-verified-archive-to-k3d).
 Its default mode rolls the isolated k3d app Deployments without database
 bootstrap. For an intentional schema/seed reset, the full verified archive
-can be promoted with `--reset-core-db`; only the isolated k3d Core data is
-recreated from the archived Core image. A Core image containing new JPA tables,
-including the private Assets tables, requires this reset in the pre-Flyway
-lab before a validating Core Pod can start. Do not deploy that image over an
+can be promoted with `--reset-game-db`; the isolated k3d Core, Assets and Market
+databases are recreated from their respective archived images. Schema-changing
+images require this reset in the pre-Flyway lab before validating Pods can start. Do not deploy that image over an
 old Core schema without a reset or explicit schema update. Neither mode changes this host-run
 development workflow. The
 [complete local pipeline](../pipeline/README.md#run-the-complete-k3d-pipeline)
 also runs the build and both browser test gates in one command.
 
 The `quarkus-smallrye-health` extension exposes `/q/health/started`,
-`/q/health/ready`, and `/q/health/live` for Kubernetes probes in both services.
+`/q/health/ready`, and `/q/health/live` for Kubernetes probes in each backend service.
 The k3d Core validates its schema on startup; a separate one-shot Job seeds a
-new lab database. For an existing disposable k3d Core database after a
-schema change, use `../pipeline/run-k3d-pipeline.sh --reset-core-db` to build,
-verify, recreate Core data from the exact archived Core image, and deploy.
-The older direct-build reset in `deploy/k3d/` uses the fixed `:k3d` image
-and must not be mixed with an archive promotion. Core's scheduled jobs use
+new lab database. For an existing disposable k3d schema change, use the verified archive promotion
+with `--reset-game-db` to recreate the three matching databases. The direct-build
+bootstrap in `deploy/k3d/` is restricted to a fresh lab. Core's scheduled jobs use
 PostgreSQL advisory locks to avoid overlapping across Pods. The recovery job
 also restores stamina from elapsed time at the Training rate or current
 agency Rest Level rate, capped at 48 hours. An isolated concurrency test

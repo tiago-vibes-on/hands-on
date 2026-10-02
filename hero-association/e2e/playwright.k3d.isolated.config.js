@@ -8,6 +8,7 @@ export default defineConfig({
     'gold-transfer.spec.js',
     'rune-ownership.spec.js',
     'market-ownership.spec.js',
+    'market-settlement.spec.js',
     'k3d-isolated-market-rate-limit.spec.js',
     'expedition.spec.js',
     'k3d-expedition-api.spec.js',

@@ -26,6 +26,10 @@ spec:
           image: hero-association-bff:k3d
           imagePullPolicy: Never
           env:
+            - name: HERO_ASSOCIATION_ASSETS_BASE_URL
+              value: http://assets:8085
+            - name: HERO_ASSOCIATION_MARKET_BASE_URL
+              value: http://market:8084
             - name: HERO_ASSOCIATION_CORE_BASE_URL
               value: http://core:8081
             - name: HERO_ASSOCIATION_FRONTEND_URL

@@ -9,6 +9,8 @@ patches:
   - path: namespace-patch.yaml
   - path: bff-patch.yaml
   - path: core-patch.yaml
+  - path: market-patch.yaml
+  - path: assets-patch.yaml
   - path: keycloak-patch.yaml
   - path: expedition-patch.yaml
   - path: delete-hpa.yaml

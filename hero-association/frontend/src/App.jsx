@@ -1,7 +1,10 @@
+import { assetAttempts, pendingAssetOperation, finishAssetOperation } from './api/assets'
+import { marketAttempts, pendingPlacement, pendingCancellation, finishMarketAttempt, isMarketAttemptTerminal } from './api/market'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { addHeroToParty, ApiRequestError, beginLogin, beginRegistration, cancelMarketOrder, changeHeroActivity, createAgency, createFeedPost, createManager, createMarketOrder, createParty, equipHeroRune, fetchAccount, fetchAgencyState, fetchMarketOrders, fetchRecruits, fetchSession, logout, recruitHero, recruitHeroForAgency, removeHeroFromParty, setHeroBorrowingFee, startQuest, transferGold, unequipHeroRune } from './api/agency'
+import { addHeroToParty, ApiRequestError, fetchAssetOperation, beginLogin, beginRegistration, cancelMarketOrder, changeHeroActivity, createAgency, createFeedPost, createManager, createMarketOrder, createParty, equipHeroRune, fetchAccount, fetchAgencyState, fetchMarketOrders, fetchMarketPlacement, fetchMarketOrder, fetchRecruits, fetchSession, logout, recruitHero, recruitHeroForAgency, removeHeroFromParty, setHeroBorrowingFee, startQuest, transferGold, unequipHeroRune } from './api/agency'
 import { initialEquippedRunes, initialRunes } from './data/inventory'
 import { mageSpells } from './data/spells'
+import { pendingGoldTransfer } from './api/goldTransfer'
 import './App.css'
 
 const MapPage = lazy(() => import('./expedition/MapPage'))
@@ -700,7 +703,7 @@ function Agency({ agency, manager, canTransferAgencyGold, upgrades, runeInventor
   )
 }
 
-function Market({ agency, manager, canTradeAgency, itemInventory, marketOrders, isSubmittingOrder, marketError, onCreateOrder, onCancelOrder }) {
+function Market({ agency, manager, canTradeAgency, itemInventory, marketOrders, isSubmittingOrder, marketError, pendingAttempts, onCreateOrder, onCancelOrder }) {
   const [ownerType, setOwnerType] = useState('MANAGER')
   const [side, setSide] = useState('BUY')
   const [itemId, setItemId] = useState('')
@@ -741,7 +744,7 @@ function Market({ agency, manager, canTradeAgency, itemInventory, marketOrders, 
     return orders.map((order) => {
       const canCancel = (order.ownerType === 'MANAGER' && order.ownerId === manager?.id)
         || (order.ownerType === 'AGENCY' && canTradeAgency && order.ownerId === agency.id)
-      return <div className="offer-row" key={order.id}><span><b>{order.itemSymbol}</b>{order.itemName}<small>{order.ownerName} · {order.ownerType === 'MANAGER' ? 'Manager' : 'Agency'}</small></span><strong>{order.priceGoldPerItem} gold</strong><small>{order.quantityRemaining} available</small>{canCancel && <button className="text-button" type="button" disabled={isSubmittingOrder} onClick={() => onCancelOrder(order.id)}>Cancel</button>}</div>
+      return <div className="offer-row" key={order.id}><span><b>{order.itemSymbol}</b>{order.itemName}<small>{order.ownerName} · {order.ownerType === 'MANAGER' ? 'Manager' : 'Agency'}</small></span><strong>{order.priceGoldPerItem} gold</strong><small>{order.quantityRemaining - (order.quantityPending ?? 0)} available{order.quantityPending > 0 && ` · ${order.quantityPending} settling`}</small>{canCancel && <button className="text-button" type="button" disabled={isSubmittingOrder} onClick={() => onCancelOrder(order.id)}>Cancel</button>}</div>
     })
   }
 
@@ -757,6 +760,7 @@ function Market({ agency, manager, canTradeAgency, itemInventory, marketOrders, 
         <button className="button button--primary" type="submit" disabled={isSubmittingOrder || !selectedItemId}>{isSubmittingOrder ? 'Placing…' : 'Place order'}</button>
       </form>
       {marketError && <p className="inline-error" role="alert">{marketError}</p>}
+      {pendingAttempts.length > 0 && <div className="panel" role="status">{pendingAttempts.map((entry) => <p key={`${entry.kind}:${entry.id}`}>{entry.kind === 'placement' ? 'Order placement pending. Retry the same offer if the request was interrupted.' : 'Cancellation pending. Reserved assets will return when pending trades finish.'}</p>)}</div>}
       <section className="market-grid">
         <article className="panel offer-panel">
           <div className="panel__header"><h2>Buy offers</h2><span className="status">{buyOrders.length} open</span></div>
@@ -877,6 +881,9 @@ function App() {
   const [marketOrders, setMarketOrders] = useState(fallbackMarketOrders)
   const [isSubmittingMarketOrder, setIsSubmittingMarketOrder] = useState(false)
   const [marketError, setMarketError] = useState(null)
+  const [pendingAssets, setPendingAssets] = useState([])
+  const [assetNotice, setAssetNotice] = useState(null)
+  const [pendingMarketAttempts, setPendingMarketAttempts] = useState([])
   const [isTransferringGold, setIsTransferringGold] = useState(false)
   const [transferError, setTransferError] = useState(null)
   const [transferNotice, setTransferNotice] = useState(null)
@@ -885,6 +892,76 @@ function App() {
   const [recruitmentError, setRecruitmentError] = useState(null)
   const stateRefreshInFlight = useRef(false)
   const runeMutationInFlight = useRef(false)
+
+  const marketManagerId = account?.manager?.id
+  const assetAgencyId = gameState.agency.id
+  useEffect(() => {
+    if (!marketManagerId) return
+    let stopped = false
+    let running = false
+    async function reconcile() {
+      if (running) return
+      running = true
+      try {
+        for (const entry of assetAttempts(marketManagerId)) {
+          try {
+            const operation = await fetchAssetOperation(entry.operationKey)
+            if (['APPLIED', 'REJECTED'].includes(operation.status)) {
+              const [rawState, currentAccount] = await Promise.all([fetchAgencyState(assetAgencyId), fetchAccount()])
+              if (stopped) return
+              const state = mapAgencyState(rawState)
+              setGameState(state)
+              setRuneInventory(state.runeInventory)
+              setPersonalRuneInventory(state.personalRuneInventory)
+              setEquippedRunes(state.equippedRunes)
+              setAccount(currentAccount)
+              finishAssetOperation(marketManagerId, entry.operationKey)
+              setAssetNotice(operation.status === 'REJECTED' ? operation.message : null)
+            } else if (operation.status === 'CONFLICT' && !stopped) {
+              setAssetNotice(`This operation needs recovery: ${entry.operationKey}. ${operation.message ?? ''}`)
+            }
+          } catch {
+            // Keep the original key through response loss, an unavailable status, or sign-in changes.
+          }
+        }
+        if (!stopped) setPendingAssets(assetAttempts(marketManagerId))
+      } finally { running = false }
+    }
+    reconcile()
+    const interval = window.setInterval(reconcile, 5_000)
+    return () => { stopped = true; window.clearInterval(interval) }
+  }, [marketManagerId, assetAgencyId])
+
+  useEffect(() => {
+    if (!marketManagerId) return
+    let stopped = false
+    let running = false
+    async function reconcile() {
+      if (running) return
+      running = true
+      try {
+        const entries = marketAttempts(marketManagerId)
+        for (const entry of entries) {
+          try {
+            const result = entry.kind === 'placement'
+              ? await fetchMarketPlacement(entry.id) : await fetchMarketOrder(entry.id)
+            if (isMarketAttemptTerminal(entry, result.status)) {
+              finishMarketAttempt(marketManagerId, entry.kind, entry.id)
+              if (!stopped && ['REJECTED', 'ABANDONED', 'CONFLICT'].includes(result.status)) {
+                setMarketError(result.message ?? 'The order could not be completed. Refresh your balances before placing another offer.')
+              }
+            }
+          } catch {
+            // An absent or unavailable status keeps the original ID available for an exact retry.
+          }
+        }
+        if (!stopped) setPendingMarketAttempts(marketAttempts(marketManagerId))
+      } finally { running = false }
+    }
+    reconcile()
+    const interval = window.setInterval(reconcile, 5_000)
+    return () => { stopped = true; window.clearInterval(interval) }
+  }, [marketManagerId])
 
   useEffect(() => {
     let cancelled = false
@@ -1048,37 +1125,15 @@ function App() {
       return
     }
     if (apiStatus !== 'ready') {
+      if (account?.manager) {
+        setLoadoutError('Equipment changes require a working backend connection.')
+        return
+      }
       equipRuneLocally(rune, sourceOwnerType)
       return
     }
-    const before = { agencyRunes: runeInventory, personalRunes: personalRuneInventory, equipped: equippedRunes }
-    runeMutationInFlight.current = true
-    setIsUpdatingLoadout(true)
-    setLoadoutError(null)
-    equipRuneLocally(rune, sourceOwnerType, false)
-    try {
-      const state = await equipHeroRune({
-        agencyId: gameState.agency.id,
-        heroId: hero.id,
-        slotIndex,
-        runeId: rune.id,
-        sourceOwnerType,
-      })
-      applyRemoteAgencyState(state)
-      setSelectedSlot(null)
-    } catch (error) {
-      try {
-        applyRemoteAgencyState(await fetchAgencyState(gameState.agency.id))
-      } catch {
-        setRuneInventory(before.agencyRunes)
-        setPersonalRuneInventory(before.personalRunes)
-        setEquippedRunes(before.equipped)
-      }
-      setLoadoutError(error.message)
-    } finally {
-      runeMutationInFlight.current = false
-      setIsUpdatingLoadout(false)
-    }
+    const payload = { agencyId: gameState.agency.id, heroId: hero.id, slotIndex, runeId: rune.id, sourceOwnerType }
+    await submitAssetOperation('RUNE_EQUIP', payload, equipHeroRune, setLoadoutError, setIsUpdatingLoadout)
   }
 
   function unequipRuneLocally(closeDrawer = true) {
@@ -1104,35 +1159,45 @@ function App() {
       return
     }
     if (apiStatus !== 'ready') {
+      if (account?.manager) {
+        setLoadoutError('Equipment changes require a working backend connection.')
+        return
+      }
       unequipRuneLocally()
       return
     }
     const { hero, slotIndex } = selectedSlot
-    const before = { agencyRunes: runeInventory, personalRunes: personalRuneInventory, equipped: equippedRunes }
-    runeMutationInFlight.current = true
-    setIsUpdatingLoadout(true)
-    setLoadoutError(null)
-    unequipRuneLocally(false)
+    const payload = { agencyId: gameState.agency.id, heroId: hero.id, slotIndex }
+    await submitAssetOperation('RUNE_UNEQUIP', payload, unequipHeroRune, setLoadoutError, setIsUpdatingLoadout)
+  }
+
+  async function submitAssetOperation(kind, payload, submit, setError, setBusy) {
+    const managerId = account.manager.id
+    const attempt = pendingAssetOperation(managerId, kind, payload)
+    setPendingAssets(assetAttempts(managerId))
+    setError(null)
+    setBusy(true)
+    runeMutationInFlight.current = kind !== 'QUEST_START'
     try {
-      const state = await unequipHeroRune({
-        agencyId: gameState.agency.id,
-        heroId: hero.id,
-        slotIndex,
-      })
-      applyRemoteAgencyState(state)
-      setSelectedSlot(null)
-    } catch (error) {
-      try {
-        applyRemoteAgencyState(await fetchAgencyState(gameState.agency.id))
-      } catch {
-        setRuneInventory(before.agencyRunes)
-        setPersonalRuneInventory(before.personalRunes)
-        setEquippedRunes(before.equipped)
+      const result = await submit({ ...payload, operationKey: attempt.operationKey })
+      if (result.status === 'PENDING') {
+        setAssetNotice('Your request is pending confirmation. You can reload; its progress is saved.')
+        return
       }
-      setLoadoutError(error.message)
+      applyRemoteAgencyState(result)
+      setAccount(await fetchAccount())
+      finishAssetOperation(managerId, attempt.operationKey)
+      setAssetNotice(null)
+      if (kind !== 'QUEST_START') setSelectedSlot(null)
+    } catch (error) {
+      if (error.operation?.status === 'REJECTED' || [400, 403, 404].includes(error.status) && !error.operation?.operationKey) {
+        finishAssetOperation(managerId, attempt.operationKey)
+      }
+      setError(error.message)
     } finally {
+      setPendingAssets(assetAttempts(managerId))
       runeMutationInFlight.current = false
-      setIsUpdatingLoadout(false)
+      setBusy(false)
     }
   }
 
@@ -1307,35 +1372,8 @@ function App() {
       return
     }
 
-    setIsStartingQuest(true)
-    setQuestError(null)
-    try {
-      const state = await startQuest({
-        agencyId: gameState.agency.id,
-        questId,
-        partyId,
-        expectedBorrowingFeeGold,
-      })
-      applyRemoteAgencyState(state)
-      try {
-        setAccount(await fetchAccount())
-      } catch {
-        setQuestError('Quest started, but your wallet could not be refreshed. Reload to see its current balance.')
-      }
-    } catch (error) {
-      if (error.status === 409) {
-        try {
-          const [state, updatedAccount] = await Promise.all([fetchAgencyState(gameState.agency.id), fetchAccount()])
-          applyRemoteAgencyState(state)
-          setAccount(updatedAccount)
-        } catch {
-          // Keep the original rejection visible even if refreshing fails.
-        }
-      }
-      setQuestError(error.message)
-    } finally {
-      setIsStartingQuest(false)
-    }
+    await submitAssetOperation('QUEST_START', { agencyId: gameState.agency.id, questId, partyId, expectedBorrowingFeeGold },
+      startQuest, setQuestError, setIsStartingQuest)
   }
 
   async function handleCreateFeedPost(post) {
@@ -1384,16 +1422,22 @@ function App() {
     setIsTransferringGold(true)
     setTransferError(null)
     setTransferNotice(null)
+    let attempt
+    let confirmed = false
     try {
-      const result = await transferGold(transfer)
+      attempt = pendingGoldTransfer(account.manager.id, transfer)
+      const result = await transferGold({ ...transfer, operationKey: attempt.operationKey })
+      confirmed = true
       const [state, updatedAccount] = await Promise.all([fetchAgencyState(gameState.agency.id), fetchAccount()])
       applyRemoteAgencyState(state)
       setAccount(updatedAccount)
+      attempt.complete()
       setTransferNotice(result.direction === 'MANAGER_TO_AGENCY'
         ? `Moved ${result.amountGold} gold to ${result.agencyName}.`
         : `Moved ${result.amountGold} gold from ${result.agencyName} to ${result.managerName}.`)
       return true
     } catch (error) {
+      if (!confirmed && [400, 403, 404, 409].includes(error.status)) attempt?.complete()
       setTransferError(error.message)
       return false
     } finally {
@@ -1409,16 +1453,29 @@ function App() {
 
     setIsSubmittingMarketOrder(true)
     setMarketError(null)
+    const payload = { ...order, agencyId: order.ownerType === 'AGENCY' ? gameState.agency.id : null }
+    const attempt = pendingPlacement(account.manager.id, payload)
+    setPendingMarketAttempts(marketAttempts(account.manager.id))
+    let accepted = false
     try {
-      await createMarketOrder({ ...order, agencyId: order.ownerType === 'AGENCY' ? gameState.agency.id : null })
+      const result = await createMarketOrder({ ...payload, placementId: attempt.id })
+      accepted = true
+      if (result.status !== 'PENDING_RESERVATION' && result.status !== 'PENDING_ABORT') {
+        finishMarketAttempt(account.manager.id, 'placement', attempt.id)
+        setPendingMarketAttempts(marketAttempts(account.manager.id))
+      }
       const [state, updatedAccount] = await Promise.all([fetchAgencyState(gameState.agency.id), fetchAccount()])
       applyRemoteAgencyState(state)
       setAccount(updatedAccount)
       await refreshMarketOrders()
       return true
     } catch (error) {
-      setMarketError(error.message)
-      return false
+      if (error instanceof ApiRequestError && error.status >= 400 && error.status < 500 && ![401, 409, 499].includes(error.status)) {
+        finishMarketAttempt(account.manager.id, 'placement', attempt.id)
+        setPendingMarketAttempts(marketAttempts(account.manager.id))
+      }
+      setMarketError(accepted ? `Order accepted. Balances could not be refreshed: ${error.message}` : error.message)
+      return accepted
     } finally {
       setIsSubmittingMarketOrder(false)
     }
@@ -1431,8 +1488,14 @@ function App() {
 
     setIsSubmittingMarketOrder(true)
     setMarketError(null)
+    pendingCancellation(account.manager.id, orderId)
+    setPendingMarketAttempts(marketAttempts(account.manager.id))
     try {
-      await cancelMarketOrder({ orderId })
+      const result = await cancelMarketOrder({ orderId })
+      if (isMarketAttemptTerminal({ kind: 'cancellation' }, result.status)) {
+        finishMarketAttempt(account.manager.id, 'cancellation', orderId)
+        setPendingMarketAttempts(marketAttempts(account.manager.id))
+      }
       const [state, updatedAccount] = await Promise.all([fetchAgencyState(gameState.agency.id), fetchAccount()])
       applyRemoteAgencyState(state)
       setAccount(updatedAccount)
@@ -1533,7 +1596,7 @@ function App() {
     quests: <Quests activeParty={gameState.activeParty} activeParties={gameState.activeParties} availableQuests={gameState.availableQuests} resolvedQuests={gameState.resolvedQuests} preparedParties={gameState.preparedParties.filter((party) => party.ownerManagerId === account?.manager?.id)} heroes={gameState.heroes} managerGold={account?.manager?.gold ?? 0} isStartingQuest={isStartingQuest} questError={questError} onStartQuest={handleStartQuest} />,
     ...(expeditionEnabled ? { map: <Suspense fallback={<p role="status">Loading Map…</p>}><MapPage key={gameState.agency.id} agencyId={gameState.agency.id} managerId={account?.manager?.id} heroes={gameState.heroes} preparedParties={gameState.preparedParties} itemInventory={gameState.itemInventory} runeInventory={runeInventory} /></Suspense> } : {}),
     agency: <Agency agency={gameState.agency} manager={account?.manager} canTransferAgencyGold={account?.agencyMemberships?.some((membership) => membership.agencyId === gameState.agency.id && membership.role === 'LEADER')} upgrades={gameState.upgrades} runeInventory={runeInventory} itemInventory={gameState.itemInventory} isTransferringGold={isTransferringGold} transferError={transferError} transferNotice={transferNotice} onTransferGold={handleTransferGold} />,
-    market: <Market agency={gameState.agency} manager={account?.manager} canTradeAgency={account?.agencyMemberships?.some((membership) => membership.agencyId === gameState.agency.id && membership.role === 'LEADER')} itemInventory={gameState.itemInventory} marketOrders={marketOrders} isSubmittingOrder={isSubmittingMarketOrder} marketError={marketError} onCreateOrder={handleCreateMarketOrder} onCancelOrder={handleCancelMarketOrder} />,
+    market: <Market agency={gameState.agency} manager={account?.manager} canTradeAgency={account?.agencyMemberships?.some((membership) => membership.agencyId === gameState.agency.id && membership.role === 'LEADER')} itemInventory={gameState.itemInventory} marketOrders={marketOrders} isSubmittingOrder={isSubmittingMarketOrder} marketError={marketError} pendingAttempts={pendingMarketAttempts} onCreateOrder={handleCreateMarketOrder} onCancelOrder={handleCancelMarketOrder} />,
     feed: <Feed agency={gameState.agency} heroes={gameState.heroes.filter((hero) => !hero.ownerManagerId)} feedPosts={gameState.feedPosts} itemInventory={gameState.itemInventory} isPostingFeed={isPostingFeed} feedError={feedError} onCreatePost={handleCreateFeedPost} />,
   }
 
@@ -1551,6 +1614,7 @@ function App() {
         <div className="sidebar__bottom"><div className="player-card"><span className="player-card__avatar">{account?.manager?.displayName?.slice(0, 1).toUpperCase() ?? session?.identity?.username?.slice(0, 1).toUpperCase() ?? 'U'}</span><span><strong>{account?.manager?.displayName ?? session?.identity?.username ?? gameState.agency.leaderName}</strong><small>{account?.manager ? 'Manager' : 'Signed in'}</small></span><button className="text-button player-card__logout" type="button" onClick={handleLogout}>Sign out</button></div></div>
       </aside>
       <main className="main-content"><div className="main-content__inner">{apiStatus !== 'ready' && <p className={`api-status api-status--${apiStatus}`} role="status">{apiStatus === 'loading' ? 'Loading agency state…' : 'Backend unavailable. Showing the local fixture.'}</p>}{pages[activePage]}</div></main>
+      {(pendingAssets.length > 0 || assetNotice) && <p role="status" className="form-message">{assetNotice ?? `${pendingAssets.length} request(s) await confirmation. An exact retry uses the saved request.`}</p>}
       <RuneDrawer selectedSlot={selectedSlot} runes={equippedRunes} agencyRunes={runeInventory} personalRunes={personalRuneInventory} isUpdating={isUpdatingLoadout} error={loadoutError} onClose={() => { setLoadoutError(null); setSelectedSlot(null) }} onEquipRune={equipRune} onUnequipRune={unequipRune} />
     </div>
   )

@@ -1,0 +1,11 @@
+[
+  { "name": "io.tiagovibeson.heroassociation.application.assets.AssetsClient$OwnerRequest", "allDeclaredConstructors": true, "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "io.tiagovibeson.heroassociation.application.assets.AssetsClient$SnapshotRequest", "allDeclaredConstructors": true, "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "io.tiagovibeson.heroassociation.application.assets.AssetsClient$Snapshot", "allDeclaredConstructors": true, "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "io.tiagovibeson.heroassociation.application.assets.AssetsClient$OwnerSnapshot", "allDeclaredConstructors": true, "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "io.tiagovibeson.heroassociation.application.assets.AssetsClient$ItemQuantity", "allDeclaredConstructors": true, "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "io.tiagovibeson.heroassociation.application.assets.AssetsClient$RuneQuantity", "allDeclaredConstructors": true, "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "io.tiagovibeson.heroassociation.application.assets.AssetsClient$RuneSlot", "allDeclaredConstructors": true, "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "io.tiagovibeson.heroassociation.application.assets.AssetsClient$ItemDefinition", "allDeclaredConstructors": true, "allDeclaredMethods": true, "allDeclaredFields": true },
+  { "name": "io.tiagovibeson.heroassociation.application.assets.AssetsClient$RuneDefinition", "allDeclaredConstructors": true, "allDeclaredMethods": true, "allDeclaredFields": true }
+]

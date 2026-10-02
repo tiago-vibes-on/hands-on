@@ -8,23 +8,25 @@ the current migration gap rather than calling it complete.
 | Kind | Current entry points | Dependencies and state | Target |
 | --- | --- | --- | --- |
 | Pure unit | Combat-engine JUnit, Core `HeroProgressionTest` and `UuidV7Test`, frontend `npm test`, pipeline `node --test` | Process-local objects and fixtures; no browser, live Service, or database | Keep local and fast. |
-| Service/component | Direct `./mvnw test` or `package` in Core, BFF, and Expedition | Quarkus tests can start local Dev Services; the two older Rabbit transport tests use Testcontainers | Keep independent direct Maven workflows, but do not use local containers as the candidate gate. |
-| Disposable k3d component | `deploy/k3d/test-isolated-components.sh [core|bff|expedition|all]` | Own PostgreSQL, Core/BFF/Expedition Redis, and RabbitMQ; Maven connects over loopback port-forwards with Dev Services disabled | Backend candidate builds run the selected lane before packaging. K3d AMQP tests cover both transport payloads; the E2E lane covers cross-role queue denial. |
+| Service/component | Direct `./mvnw test` or `package` in Core, BFF, Expedition, and Market | Quarkus tests can start local Dev Services; the two older Rabbit transport tests use Testcontainers | Keep independent direct Maven workflows, but do not use local containers as the candidate gate. |
+| Disposable k3d component | `deploy/k3d/test-isolated-components.sh [core|bff|expedition|market|all]` | Own PostgreSQL, Core/BFF/Expedition Redis, and RabbitMQ; Maven connects over loopback port-forwards with Dev Services disabled | Backend candidate builds run the selected lane before packaging. K3d AMQP tests cover both transport payloads; the E2E lane covers cross-role queue denial. |
 | Historical Compose browser source | `tests/authentication.spec.js` and `tests/market-proxy.spec.js` | The retired runner used a second BFF route and a separate eight-second Keycloak realm | Not an active command. The isolated k3d suite covers the current MVP flows; Quest borrowing remains deferred. |
 | Current k3d browser | `npm run test:k3d`, `test:k3d:expedition`, `test:k3d:map` | Existing development namespace and seeded accounts; Map tests change test Managers' Hero progress | Keep for smoke checks; use disposable data for the full integration gate. |
-| Disposable k3d browser | `deploy/k3d/test-isolated-stack.sh` | Own namespace, databases, Keycloak, Redis, RabbitMQ, and Envoy E2E listeners; daily image references by default or exact four-image archive | Thirteen browser/API cases, including two rune-ownership journeys, plus a second Map journey under Core Redis outage; BFF restart, BFF Redis outage/recovery, strict token expiry, and k6 thresholds pass with the BFF candidate. |
+| Disposable k3d browser | `deploy/k3d/test-isolated-stack.sh` | Own namespace, databases, Keycloak, Redis, RabbitMQ, and Envoy E2E listeners; daily image references by default or exact six-image archive | Sixteen browser/API cases, including rune ownership, lost-placement recovery, pending placement UI, and real Market settlement, plus a second Map journey under Core Redis outage; BFF restart, BFF Redis outage/recovery, strict token expiry, and k6 thresholds. |
 | Gateway and load | `npm run test:market:k6`, `load:k3d`, `load:mixed:k3d`, outage/scaling scripts under `deploy/k3d` | Envoy, rate-limit Redis, live Pods; some scripts stage temporary Core databases | Market k6 thresholds now also run inside the disposable namespace; keep disruptive scaling tests opt-in. |
-| Candidate archive | `deploy/k3d/test-isolated-stack.sh <archive>` and `pipeline/run-k3d-pipeline.sh` | Exact four archived image IDs are checked against running disposable k3d Pods before and after BFF restart | Promotion requires matching `k3d-e2e-verification.json` after test cleanup, including uncommitted worktree candidates. The Compose archive runner is retired. |
+| Candidate archive | `deploy/k3d/test-isolated-stack.sh <archive>` and `pipeline/run-k3d-pipeline.sh` | Exact six archived service image IDs are checked against running disposable k3d Pods before and after BFF restart; BFF, Market and Assets each have two replicas | Promotion requires matching `k3d-e2e-verification.json` after test cleanup, including uncommitted worktree candidates. The Compose archive runner is retired. |
 
-The backend candidate path now runs Core, BFF, and Expedition component tests
+The backend candidate path runs Core, BFF, Expedition, and Market component tests
 against disposable k3d dependencies, including both AMQP transport payloads,
 then packages with `-DskipTests`. Direct Maven builds still run their local
 Dev Services and Testcontainers tests. The disposable Map journey verifies
 Rabbit settlement and PostgreSQL creature fallback while Core Redis is down;
 both broker roles receive AMQP 403 on the other role queue.
 
-The isolated browser configuration already reuses the gold-transfer,
-personal-market, and Expedition journeys. The old unrestricted market-proxy
+The isolated browser configuration reuses the gold-transfer, personal-market,
+and Expedition journeys. Its Market settlement case checks buyer price
+improvement, the 10% seller fee, item conservation, and an exact placement retry
+without another debit. The old unrestricted market-proxy
 case is superseded by the Envoy five-per-second policy test. The old
 borrowing-quest fee journey belongs to the deferred Quest feature and is not
 an active MVP gate; retain its test as historical coverage until Quest work
@@ -43,12 +45,21 @@ The temporary namespace, Keycloak realm, database, Redis, RabbitMQ, and
 Routes must be deleted after both success and failure. The candidate image
 digest check must use running Pod `imageID`s, not only manifest tags.
 
-The disposable runner can import a copied four-image archive and check all
+The disposable runner can import a copied six-image archive and check all
 running application Pod image IDs before its browser tests. It also verifies
 session survival after replacement of both BFF Pods, fail-closed behavior
 during disposable BFF Redis outage and after token-state expiry, and k6 market
 thresholds. Pipeline promotion now requires the k3d runner's
 `k3d-e2e-verification.json`; the separate Compose record is not accepted.
-The BFF-only Quarkus 3.40.1 archive `localenv-bff-3401-20261001-a` passed
-the strict expired-token-state check and the full disposable suite; the daily
-BFF image still runs the older version until an explicit deployment.
+The six-image `market-extraction-20261002-v3` archive passed the complete
+isolated gate on 2026-10-02, including 16 browser/API cases and the cache-outage
+Map replay. Market's focused component suite contains 16 tests covering
+concurrent retries and workers, lost reservation/settlement/closure responses,
+partial fills, cancellation, permissions, and conflict quarantine.
+
+The Assets recovery phases in `k3d-assets-recovery.spec.js` preserve browser
+session state before an Assets outage. They verify a durable `202` operation,
+exact retry and Hero fencing while both Assets replicas are stopped, restart
+Core, then restore Assets and confirm one equipment transfer. The rune suite
+also loses successful equipment and Quest HTTP responses, reloads and retries
+the original operation keys.

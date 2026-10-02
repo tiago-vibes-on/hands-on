@@ -26,6 +26,13 @@ spec:
           image: hero-association-core:k3d
           imagePullPolicy: Never
           env:
+            - name: HERO_ASSOCIATION_ASSETS_BASE_URL
+              value: http://assets:8085
+            - name: HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: hero-association-assets-credentials
+                  key: HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY
             - name: QUARKUS_DATASOURCE_JDBC_URL
               value: jdbc:postgresql://postgres-core:5432/hero_association
             - name: QUARKUS_DATASOURCE_USERNAME

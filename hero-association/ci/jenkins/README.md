@@ -6,18 +6,19 @@ agent is a background process in the existing Ubuntu WSL installation, not
 another VM or WSL distribution. GitHub is the source repository; neither
 GitHub-hosted runners nor Floci/AWS execute these builds.
 
-Twelve service jobs share the WSL agent's single executor:
+Fifteen service jobs share the WSL agent's single executor:
 
 | Service | Manual uncommitted build | Trusted `main` build | Local deploy |
 | --- | --- | --- | --- |
 | Core | `hero-association-core-build-worktree` | `hero-association-core-build-main` | `hero-association-core-deploy-local` |
 | BFF | `hero-association-bff-build-worktree` | `hero-association-bff-build-main` | `hero-association-bff-deploy-local` |
 | Expedition | `hero-association-expedition-build-worktree` | `hero-association-expedition-build-main` | `hero-association-expedition-deploy-local` |
+| Market | `hero-association-market-build-worktree` | `hero-association-market-build-main` | `hero-association-market-deploy-local` |
 | Frontend | `hero-association-frontend-build-worktree` | `hero-association-frontend-build-main` | `hero-association-frontend-deploy-local` |
 
 Each build tests its backend service against disposable k3d dependencies
 (frontend builds run lint and build), then creates one candidate image and a
-checksummed four-image archive using the other three images currently running
+checksummed six-image archive using the other five images currently running
 in k3d. Disposable k3d E2E tests the exact combination without changing daily
 data. Both worktree and trusted-`main` builds are started manually and never deploy.
 Each deploy job is started separately with a verified artifact ID. A Jenkins
@@ -59,7 +60,7 @@ The root `.gitattributes` pins the extensionless Maven wrappers to LF. Keep
 that rule: CRLF checkout makes their Linux shebangs unexecutable.
 
 The Jenkins controller can start while k3d is stopped, but builds and deploys
-require all four application services restored to full k3d mode. WSL and
+require all six application services restored to full k3d mode. WSL and
 Docker must be running for builds. No job polls Git
 or reacts to a push; start a build or deploy explicitly when the cluster is
 ready. Normal hot-reload development remains independent.
@@ -97,7 +98,7 @@ the generated password is in the ignored `.env` file:
 sed -n 's/^JENKINS_ADMIN_PASSWORD=//p' .env
 ```
 
-Worktree builds are available immediately. The four trusted-`main` jobs also
+Worktree builds are available immediately. The six trusted-`main` jobs also
 run only when selected manually; each checks out GitHub `main` at build time.
 A successful build records an artifact ID but does not deploy it.
 
@@ -115,7 +116,7 @@ Open <http://localhost:15180> and select the matching
 It snapshots tracked, staged, unstaged, and non-ignored new files before
 building only that service. Jenkins runs the matching disposable k3d component
 gate for a backend service, or frontend lint and build, then builds the image,
-assembles a four-image archive with the current k3d Core/BFF/Expedition/frontend
+assembles a six-image archive with the current k3d Core/BFF/Expedition/Market/Assets/frontend
 baseline, and runs the disposable k3d archive suite. The full archive
 is retained under the WSL agent work directory; the build record includes
 `artifact-id.txt`, the manifest, and the E2E result. If you edit source while
@@ -124,7 +125,7 @@ are not copied.
 
 To deploy, open `hero-association-<service>-deploy-local`, choose **Build with
 Parameters**, and paste the successful build artifact ID into `ARTIFACT_ID`.
-The deploy job checks the three unchanged k3d service images against the
+The deploy job checks the five unchanged k3d service images against the
 archive, imports and rolls only the selected service, verifies all running
 Pod image digests, then runs the k3d browser, Map, and market k6 suites. If the
 baseline has changed, build again before deploying. If a post-rollout gate

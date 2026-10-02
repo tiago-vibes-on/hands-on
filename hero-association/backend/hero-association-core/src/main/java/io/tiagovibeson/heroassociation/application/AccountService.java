@@ -17,16 +17,16 @@ import io.tiagovibeson.heroassociation.domain.Party;
 import io.tiagovibeson.heroassociation.repository.AccountRepository;
 import io.tiagovibeson.heroassociation.repository.AgencyMemberRepository;
 import io.tiagovibeson.heroassociation.repository.HeroRepository;
-import io.tiagovibeson.heroassociation.repository.ManagerItemRepository;
 import io.tiagovibeson.heroassociation.repository.ManagerRepository;
 import io.tiagovibeson.heroassociation.repository.PartyRepository;
-import io.tiagovibeson.heroassociation.repository.ManagerRuneRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
 
 @ApplicationScoped
 public class AccountService {
+
+    @Inject io.tiagovibeson.heroassociation.application.assets.AssetsClient assets;
 
     @Inject
     AccountRepository accountRepository;
@@ -42,12 +42,6 @@ public class AccountService {
 
     @Inject
     HeroRepository heroRepository;
-
-    @Inject
-    ManagerItemRepository managerItemRepository;
-
-    @Inject
-    ManagerRuneRepository managerRuneRepository;
 
     @Transactional
     public AccountResponse currentAccount(AuthenticatedIdentity identity) {
@@ -115,12 +109,14 @@ public class AccountService {
     }
 
     private AccountResponse responseFor(Account account, Manager manager) {
-        return AccountResponse.from(
-                account,
-                manager,
-                manager == null ? java.util.List.of() : agencyMemberRepository.listByManagerId(manager.getId()),
-                manager == null ? java.util.List.of() : heroRepository.listByManagerId(manager.getId()),
-                manager == null ? java.util.List.of() : managerItemRepository.listByManagerId(manager.getId()),
-                manager == null ? java.util.List.of() : managerRuneRepository.listByManagerId(manager.getId()));
+        if (manager == null) return AccountResponse.from(account, null, java.util.List.of(), java.util.List.of(), java.util.List.of(), java.util.List.of());
+        var heroes = heroRepository.listByManagerId(manager.getId());
+        var snapshot = assets.snapshot(java.util.List.of(new io.tiagovibeson.heroassociation.application.assets.AssetsClient.OwnerRequest("MANAGER", manager.getId())),
+                heroes.stream().map(Hero::getId).toList());
+        var owner = snapshot.owner(manager.getId());
+        manager.projectGold(owner.gold()); assets.decorate(heroes, snapshot.heroes());
+        return AccountResponse.from(account, manager, agencyMemberRepository.listByManagerId(manager.getId()), heroes,
+                owner.items().stream().map(entry -> new io.tiagovibeson.heroassociation.domain.ManagerItem(manager, entry.item().value(), entry.quantity())).toList(),
+                owner.runes().stream().map(entry -> new io.tiagovibeson.heroassociation.domain.ManagerRune(manager, entry.rune().value(), entry.quantity())).toList());
     }
 }

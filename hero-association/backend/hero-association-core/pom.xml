@@ -16,6 +16,8 @@
         <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
         <quarkus.platform.version>3.33.3.2</quarkus.platform.version>
         <surefire-plugin.version>3.5.4</surefire-plugin.version>
+        <test>*Test,!CreatureCacheOutageTest</test>
+        <hero-association.core.outage-test-filter>CreatureCacheOutageTest</hero-association.core.outage-test-filter>
         <rabbitmq-client.version>5.36.0</rabbitmq-client.version>
     </properties>
 
@@ -135,12 +137,19 @@
                 </configuration>
                 <executions>
                     <execution>
+                        <id>default-test</id>
+                        <configuration>
+                            <test>${test}</test>
+                        </configuration>
+                    </execution>
+                    <execution>
                         <id>redis-outage-test</id>
                         <phase>test</phase>
                         <goals>
                             <goal>test</goal>
                         </goals>
                         <configuration>
+                            <test>${hero-association.core.outage-test-filter}</test>
                             <excludes combine.self="override"/>
                             <includes>
                                 <include>**/CreatureCacheOutageTest.java</include>

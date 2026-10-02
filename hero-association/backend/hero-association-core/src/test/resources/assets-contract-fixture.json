@@ -1,0 +1,559 @@
+{
+  "owners": [
+    {
+      "ownerId": "019c4c00-0000-7000-8000-000000000001",
+      "ownerType": "MANAGER",
+      "gold": 0,
+      "items": [],
+      "runes": []
+    },
+    {
+      "ownerId": "019c4c00-0000-7000-8000-000000000002",
+      "ownerType": "MANAGER",
+      "gold": 100000,
+      "items": [],
+      "runes": []
+    },
+    {
+      "ownerId": "019c4c00-0000-7000-8000-000000000003",
+      "ownerType": "MANAGER",
+      "gold": 25,
+      "items": [],
+      "runes": []
+    },
+    {
+      "ownerId": "019c4c00-0000-7000-8000-000000000201",
+      "ownerType": "MANAGER",
+      "gold": 0,
+      "items": [],
+      "runes": []
+    },
+    {
+      "ownerId": "019c4c00-0000-7000-8000-000000000202",
+      "ownerType": "MANAGER",
+      "gold": 25,
+      "items": [],
+      "runes": []
+    },
+    {
+      "ownerId": "019c4c00-0000-7000-8000-000000000203",
+      "ownerType": "MANAGER",
+      "gold": 20,
+      "items": [
+        {
+          "item": {
+            "id": "019c4c00-0070-7000-8000-000000000001",
+            "code": "magic-crystal",
+            "name": "Magic Crystal",
+            "symbol": "◇",
+            "description": "A concentrated shard of arcane energy used in trade and crafting."
+          },
+          "quantity": 2
+        }
+      ],
+      "runes": []
+    },
+    {
+      "ownerId": "019c4c00-0000-7000-8000-000000000204",
+      "ownerType": "MANAGER",
+      "gold": 200,
+      "items": [
+        {
+          "item": {
+            "id": "019c4c00-0070-7000-8000-000000000002",
+            "code": "iron-ingot",
+            "name": "Iron Ingot",
+            "symbol": "▰",
+            "description": "Refined iron ready for weapons, armor, or trade."
+          },
+          "quantity": 5
+        }
+      ],
+      "runes": []
+    },
+    {
+      "ownerId": "019c4c00-0000-7000-8000-000000000205",
+      "ownerType": "MANAGER",
+      "gold": 0,
+      "items": [],
+      "runes": []
+    },
+    {
+      "ownerId": "019c4c00-0000-7000-8000-000000000206",
+      "ownerType": "MANAGER",
+      "gold": 0,
+      "items": [],
+      "runes": []
+    },
+    {
+      "ownerId": "019c4c00-0000-7000-8000-000000000207",
+      "ownerType": "MANAGER",
+      "gold": 0,
+      "items": [],
+      "runes": []
+    },
+    {
+      "ownerId": "019c4c00-0000-7000-8000-000000000208",
+      "ownerType": "MANAGER",
+      "gold": 0,
+      "items": [],
+      "runes": []
+    },
+    {
+      "ownerId": "019c4c00-0000-7000-8000-000000000209",
+      "ownerType": "MANAGER",
+      "gold": 0,
+      "items": [],
+      "runes": []
+    },
+    {
+      "ownerId": "019c4c00-0000-7000-8000-000000000210",
+      "ownerType": "MANAGER",
+      "gold": 0,
+      "items": [],
+      "runes": []
+    },
+    {
+      "ownerId": "019c4c00-0001-7000-8000-000000000001",
+      "ownerType": "AGENCY",
+      "gold": 2480,
+      "items": [
+        {
+          "item": {
+            "id": "019c4c00-0070-7000-8000-000000000001",
+            "code": "magic-crystal",
+            "name": "Magic Crystal",
+            "symbol": "◇",
+            "description": "A concentrated shard of arcane energy used in trade and crafting."
+          },
+          "quantity": 3
+        },
+        {
+          "item": {
+            "id": "019c4c00-0070-7000-8000-000000000002",
+            "code": "iron-ingot",
+            "name": "Iron Ingot",
+            "symbol": "▰",
+            "description": "Refined iron ready for weapons, armor, or trade."
+          },
+          "quantity": 24
+        }
+      ],
+      "runes": [
+        {
+          "rune": {
+            "id": "019c4c00-0020-7000-8000-000000000001",
+            "code": "attack-rune",
+            "name": "Attack Rune",
+            "symbol": "✦",
+            "stats": "+8 attack",
+            "description": "A carved rune that strengthens every basic attack.",
+            "effect": "ATTACK",
+            "effectValue": 8
+          },
+          "quantity": 1
+        },
+        {
+          "rune": {
+            "id": "019c4c00-0020-7000-8000-000000000002",
+            "code": "guard-rune",
+            "name": "Guard Rune",
+            "symbol": "◈",
+            "stats": "+6 armor",
+            "description": "A protective rune etched with an unbroken circle.",
+            "effect": "ARMOR",
+            "effectValue": 6
+          },
+          "quantity": 0
+        },
+        {
+          "rune": {
+            "id": "019c4c00-0020-7000-8000-000000000003",
+            "code": "vitality-rune",
+            "name": "Vitality Rune",
+            "symbol": "✚",
+            "stats": "+20 health",
+            "description": "A living rune that reinforces a hero's endurance.",
+            "effect": "HEALTH",
+            "effectValue": 20
+          },
+          "quantity": 1
+        },
+        {
+          "rune": {
+            "id": "019c4c00-0020-7000-8000-000000000004",
+            "code": "haste-rune",
+            "name": "Haste Rune",
+            "symbol": "🪶",
+            "stats": "+4% attack speed",
+            "description": "A quicksilver rune that accelerates basic attacks.",
+            "effect": "ATTACK_SPEED",
+            "effectValue": 0.04
+          },
+          "quantity": 0
+        },
+        {
+          "rune": {
+            "id": "019c4c00-0020-7000-8000-000000000005",
+            "code": "mana-rune",
+            "name": "Mana Rune",
+            "symbol": "♦",
+            "stats": "+30 mana",
+            "description": "A blue rune that stores a reserve of magical energy.",
+            "effect": "MANA",
+            "effectValue": 30
+          },
+          "quantity": 0
+        },
+        {
+          "rune": {
+            "id": "019c4c00-0020-7000-8000-000000000006",
+            "code": "critical-chance-rune",
+            "name": "Critical Chance Rune",
+            "symbol": "✧",
+            "stats": "+1% critical chance",
+            "description": "A precise rune that gives its bearer a chance to critically strike.",
+            "effect": "CRITICAL_CHANCE",
+            "effectValue": 0.01
+          },
+          "quantity": 0
+        },
+        {
+          "rune": {
+            "id": "019c4c00-0020-7000-8000-000000000007",
+            "code": "critical-damage-rune",
+            "name": "Critical Damage Rune",
+            "symbol": "✹",
+            "stats": "+10% critical damage",
+            "description": "A forceful rune that increases the damage dealt by critical hits.",
+            "effect": "CRITICAL_DAMAGE",
+            "effectValue": 0.1
+          },
+          "quantity": 0
+        }
+      ]
+    },
+    {
+      "ownerId": "019c4c00-0001-7000-8000-000000000002",
+      "ownerType": "AGENCY",
+      "gold": 14800,
+      "items": [
+        {
+          "item": {
+            "id": "019c4c00-0070-7000-8000-000000000002",
+            "code": "iron-ingot",
+            "name": "Iron Ingot",
+            "symbol": "▰",
+            "description": "Refined iron ready for weapons, armor, or trade."
+          },
+          "quantity": 48
+        }
+      ],
+      "runes": []
+    },
+    {
+      "ownerId": "019c4c00-0001-7000-8000-000000000003",
+      "ownerType": "AGENCY",
+      "gold": 1200,
+      "items": [],
+      "runes": []
+    }
+  ],
+  "heroes": {
+    "019c4c00-0010-7000-8000-000000000001": [
+      {
+        "slotIndex": 0,
+        "rune": {
+          "id": "019c4c00-0020-7000-8000-000000000001",
+          "code": "attack-rune",
+          "name": "Attack Rune",
+          "symbol": "✦",
+          "stats": "+8 attack",
+          "description": "A carved rune that strengthens every basic attack.",
+          "effect": "ATTACK",
+          "effectValue": 8
+        }
+      },
+      {
+        "slotIndex": 1,
+        "rune": {
+          "id": "019c4c00-0020-7000-8000-000000000002",
+          "code": "guard-rune",
+          "name": "Guard Rune",
+          "symbol": "◈",
+          "stats": "+6 armor",
+          "description": "A protective rune etched with an unbroken circle.",
+          "effect": "ARMOR",
+          "effectValue": 6
+        }
+      },
+      {
+        "slotIndex": 2,
+        "rune": {
+          "id": "019c4c00-0020-7000-8000-000000000006",
+          "code": "critical-chance-rune",
+          "name": "Critical Chance Rune",
+          "symbol": "✧",
+          "stats": "+1% critical chance",
+          "description": "A precise rune that gives its bearer a chance to critically strike.",
+          "effect": "CRITICAL_CHANCE",
+          "effectValue": 0.01
+        }
+      }
+    ],
+    "019c4c00-0010-7000-8000-000000000002": [
+      {
+        "slotIndex": 0,
+        "rune": {
+          "id": "019c4c00-0020-7000-8000-000000000005",
+          "code": "mana-rune",
+          "name": "Mana Rune",
+          "symbol": "♦",
+          "stats": "+30 mana",
+          "description": "A blue rune that stores a reserve of magical energy.",
+          "effect": "MANA",
+          "effectValue": 30
+        }
+      },
+      {
+        "slotIndex": 1,
+        "rune": {
+          "id": "019c4c00-0020-7000-8000-000000000006",
+          "code": "critical-chance-rune",
+          "name": "Critical Chance Rune",
+          "symbol": "✧",
+          "stats": "+1% critical chance",
+          "description": "A precise rune that gives its bearer a chance to critically strike.",
+          "effect": "CRITICAL_CHANCE",
+          "effectValue": 0.01
+        }
+      },
+      {
+        "slotIndex": 2,
+        "rune": {
+          "id": "019c4c00-0020-7000-8000-000000000007",
+          "code": "critical-damage-rune",
+          "name": "Critical Damage Rune",
+          "symbol": "✹",
+          "stats": "+10% critical damage",
+          "description": "A forceful rune that increases the damage dealt by critical hits.",
+          "effect": "CRITICAL_DAMAGE",
+          "effectValue": 0.1
+        }
+      }
+    ],
+    "019c4c00-0010-7000-8000-000000000003": [
+      {
+        "slotIndex": 0,
+        "rune": {
+          "id": "019c4c00-0020-7000-8000-000000000003",
+          "code": "vitality-rune",
+          "name": "Vitality Rune",
+          "symbol": "✚",
+          "stats": "+20 health",
+          "description": "A living rune that reinforces a hero's endurance.",
+          "effect": "HEALTH",
+          "effectValue": 20
+        }
+      },
+      {
+        "slotIndex": 1,
+        "rune": {
+          "id": "019c4c00-0020-7000-8000-000000000004",
+          "code": "haste-rune",
+          "name": "Haste Rune",
+          "symbol": "🪶",
+          "stats": "+4% attack speed",
+          "description": "A quicksilver rune that accelerates basic attacks.",
+          "effect": "ATTACK_SPEED",
+          "effectValue": 0.04
+        }
+      },
+      {
+        "slotIndex": 2,
+        "rune": {
+          "id": "019c4c00-0020-7000-8000-000000000006",
+          "code": "critical-chance-rune",
+          "name": "Critical Chance Rune",
+          "symbol": "✧",
+          "stats": "+1% critical chance",
+          "description": "A precise rune that gives its bearer a chance to critically strike.",
+          "effect": "CRITICAL_CHANCE",
+          "effectValue": 0.01
+        }
+      }
+    ],
+    "019c4c00-0030-7001-8000-000000000002": [
+      {
+        "slotIndex": 0,
+        "rune": {
+          "id": "019c4c00-0020-7000-8000-000000000001",
+          "code": "attack-rune",
+          "name": "Attack Rune",
+          "symbol": "✦",
+          "stats": "+8 attack",
+          "description": "A carved rune that strengthens every basic attack.",
+          "effect": "ATTACK",
+          "effectValue": 8
+        }
+      },
+      {
+        "slotIndex": 1,
+        "rune": {
+          "id": "019c4c00-0020-7000-8000-000000000002",
+          "code": "guard-rune",
+          "name": "Guard Rune",
+          "symbol": "◈",
+          "stats": "+6 armor",
+          "description": "A protective rune etched with an unbroken circle.",
+          "effect": "ARMOR",
+          "effectValue": 6
+        }
+      }
+    ],
+    "019c4c00-0030-7002-8000-000000000002": [
+      {
+        "slotIndex": 0,
+        "rune": {
+          "id": "019c4c00-0020-7000-8000-000000000005",
+          "code": "mana-rune",
+          "name": "Mana Rune",
+          "symbol": "♦",
+          "stats": "+30 mana",
+          "description": "A blue rune that stores a reserve of magical energy.",
+          "effect": "MANA",
+          "effectValue": 30
+        }
+      },
+      {
+        "slotIndex": 1,
+        "rune": {
+          "id": "019c4c00-0020-7000-8000-000000000007",
+          "code": "critical-damage-rune",
+          "name": "Critical Damage Rune",
+          "symbol": "✹",
+          "stats": "+10% critical damage",
+          "description": "A forceful rune that increases the damage dealt by critical hits.",
+          "effect": "CRITICAL_DAMAGE",
+          "effectValue": 0.1
+        }
+      }
+    ],
+    "019c4c00-0030-7003-8000-000000000002": [
+      {
+        "slotIndex": 0,
+        "rune": {
+          "id": "019c4c00-0020-7000-8000-000000000004",
+          "code": "haste-rune",
+          "name": "Haste Rune",
+          "symbol": "🪶",
+          "stats": "+4% attack speed",
+          "description": "A quicksilver rune that accelerates basic attacks.",
+          "effect": "ATTACK_SPEED",
+          "effectValue": 0.04
+        }
+      },
+      {
+        "slotIndex": 1,
+        "rune": {
+          "id": "019c4c00-0020-7000-8000-000000000006",
+          "code": "critical-chance-rune",
+          "name": "Critical Chance Rune",
+          "symbol": "✧",
+          "stats": "+1% critical chance",
+          "description": "A precise rune that gives its bearer a chance to critically strike.",
+          "effect": "CRITICAL_CHANCE",
+          "effectValue": 0.01
+        }
+      }
+    ]
+  },
+  "catalogItems": {
+    "019c4c00-0070-7000-8000-000000000001": {
+      "id": "019c4c00-0070-7000-8000-000000000001",
+      "code": "magic-crystal",
+      "name": "Magic Crystal",
+      "symbol": "◇",
+      "description": "A concentrated shard of arcane energy used in trade and crafting."
+    },
+    "019c4c00-0070-7000-8000-000000000002": {
+      "id": "019c4c00-0070-7000-8000-000000000002",
+      "code": "iron-ingot",
+      "name": "Iron Ingot",
+      "symbol": "▰",
+      "description": "Refined iron ready for weapons, armor, or trade."
+    }
+  },
+  "catalogRunes": {
+    "019c4c00-0020-7000-8000-000000000001": {
+      "id": "019c4c00-0020-7000-8000-000000000001",
+      "code": "attack-rune",
+      "name": "Attack Rune",
+      "symbol": "✦",
+      "stats": "+8 attack",
+      "description": "A carved rune that strengthens every basic attack.",
+      "effect": "ATTACK",
+      "effectValue": 8
+    },
+    "019c4c00-0020-7000-8000-000000000002": {
+      "id": "019c4c00-0020-7000-8000-000000000002",
+      "code": "guard-rune",
+      "name": "Guard Rune",
+      "symbol": "◈",
+      "stats": "+6 armor",
+      "description": "A protective rune etched with an unbroken circle.",
+      "effect": "ARMOR",
+      "effectValue": 6
+    },
+    "019c4c00-0020-7000-8000-000000000003": {
+      "id": "019c4c00-0020-7000-8000-000000000003",
+      "code": "vitality-rune",
+      "name": "Vitality Rune",
+      "symbol": "✚",
+      "stats": "+20 health",
+      "description": "A living rune that reinforces a hero's endurance.",
+      "effect": "HEALTH",
+      "effectValue": 20
+    },
+    "019c4c00-0020-7000-8000-000000000004": {
+      "id": "019c4c00-0020-7000-8000-000000000004",
+      "code": "haste-rune",
+      "name": "Haste Rune",
+      "symbol": "🪶",
+      "stats": "+4% attack speed",
+      "description": "A quicksilver rune that accelerates basic attacks.",
+      "effect": "ATTACK_SPEED",
+      "effectValue": 0.04
+    },
+    "019c4c00-0020-7000-8000-000000000005": {
+      "id": "019c4c00-0020-7000-8000-000000000005",
+      "code": "mana-rune",
+      "name": "Mana Rune",
+      "symbol": "♦",
+      "stats": "+30 mana",
+      "description": "A blue rune that stores a reserve of magical energy.",
+      "effect": "MANA",
+      "effectValue": 30
+    },
+    "019c4c00-0020-7000-8000-000000000006": {
+      "id": "019c4c00-0020-7000-8000-000000000006",
+      "code": "critical-chance-rune",
+      "name": "Critical Chance Rune",
+      "symbol": "✧",
+      "stats": "+1% critical chance",
+      "description": "A precise rune that gives its bearer a chance to critically strike.",
+      "effect": "CRITICAL_CHANCE",
+      "effectValue": 0.01
+    },
+    "019c4c00-0020-7000-8000-000000000007": {
+      "id": "019c4c00-0020-7000-8000-000000000007",
+      "code": "critical-damage-rune",
+      "name": "Critical Damage Rune",
+      "symbol": "✹",
+      "stats": "+10% critical damage",
+      "description": "A forceful rune that increases the damage dealt by critical hits.",
+      "effect": "CRITICAL_DAMAGE",
+      "effectValue": 0.1
+    }
+  }
+}
