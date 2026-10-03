@@ -1,6 +1,6 @@
 # Hero Association Backend Services
 
-Core, BFF, Market, Assets and Expedition run independently. BFF is the public
+Core, BFF, Market, Assets, World, Quest and Expedition run independently. BFF is the public
 session and CSRF boundary: it routes Market orders to Market, gold transfers to
 Assets, Creature/Map catalogs to World, optional objectives to Quest, and Hero/agency commands to Core. Core composes asset projections
 using a private Assets API. Each service has its own database or runtime store;
@@ -11,7 +11,7 @@ and uses a dedicated database password. Market uses
 `HERO_ASSOCIATION_ASSETS_BASE_URL` and its existing Market credential. Core uses
 the same Assets URL and a separate `HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY`.
 Assets uses that Core credential for player permission RPCs. BFF holds neither
-private credential; its server-held access token has Core, Market and Assets
+private credential; its server-held access token has Core, Market, Assets, World and Quest
 audiences. See the [Assets module](hero-association-assets/README.md) and
 [extraction audit](../ASSETS_ARCHITECTURE.md).
 
@@ -202,6 +202,9 @@ isolated stack (five game databases), stages new owners with
 reset. Return active runs and finish pending Core/Quest/Market commands first.
 Pre-Flyway schemas and deterministic seeds are recreated directly. Restore the
 frontend hot-reload mode after full k3d promotion with `hybrid.sh run frontend`.
+If Docker Desktop cannot reach the private WSL address, set
+`HERO_ASSOCIATION_FRONTEND_BRIDGE_HOST=host.docker.internal`; Vite then listens
+on all host interfaces and the bridge uses Docker Desktop's host route.
 
 ## Local development
 

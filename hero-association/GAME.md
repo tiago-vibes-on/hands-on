@@ -310,7 +310,8 @@ See [the service contracts](WORLD_QUEST_ARCHITECTURE.md).
 - Heroes are displayed side by side using simple placeholder representations at
   first.
 - Creatures are displayed on the opposing side.
-- A combat encounter can contain one to four creatures.
+- A versioned encounter defines its Creature spawns, with up to eight of each
+  pinned Creature version.
 - Every hero and creature has its own attack timer.
 - When a combatant's timer is ready, that combatant performs its next attack.
 - Critical Chance and Critical Damage Rune effects are applied when a new combat
@@ -319,7 +320,7 @@ See [the service contracts](WORLD_QUEST_ARCHITECTURE.md).
 - Damage popups cycle through three lanes above each target and drift outward,
   so closely timed hits remain readable. Basic damage is gold and magic damage
   is purple.
-- There is no base critical-hit chance. Critical Chance Runes each add 1%
+- Heroes have no base critical-hit chance. Critical Chance Runes each add 1%
   critical chance. Critical Damage Runes each add 10 percentage points to the
   critical-damage multiplier: a normal critical hit deals 200% damage, while
   one Critical Damage Rune makes it deal 210%. A critical hit shakes the target
@@ -344,21 +345,16 @@ See [the service contracts](WORLD_QUEST_ARCHITECTURE.md).
   its timer is ready and they have enough mana. A spell without enough mana
   retries one second later. Fire Ball targets the first living creature and
   Lightning Rail targets every living creature.
-- The initial Troll encounter has a persisted server snapshot containing every
-  combatant's state and next action times. An explicit combat-sync command
-  advances it by elapsed real time, without mutating the normal state-read
-  endpoint. The encounter retains its latest 100 server-generated events so a
-  defeats. When a new snapshot is created, each hero's equipped Critical Chance
-  Runes are summed (up to 100%) and Critical Damage Rune values are added to
-  the base 2× multiplier. Armor, attack speed, attack, health, and mana rune
-  formulas still need a game-design decision.
-  represented in the engine inputs.
-- Each combat synchronization persists the current health and mana of heroes
-  in the encounter. When combat reaches a terminal result, Hero Victory changes
-  the quest to `COMPLETED` and Creature Victory changes it to `FAILED`; both
-  record `finishedAt`, release the party, and return its heroes to Training.
-  Stamina costs, rewards, and non-permanent hero-defeat penalties remain to be
-  implemented.
+- Expedition pins the combat inputs and plans each deterministic encounter
+  once. Redis stores the timeline and authoritative Hero progression; the
+  visual snapshot projects elapsed real time and retains a bounded event
+  history. Critical Chance Runes are summed up to 100%, and Critical Damage
+  Rune values are added to the base 2× multiplier at each encounter start.
+- Victory allows Continue unless the final dungeon encounter is complete.
+  Wipes and completed dungeons wait for explicit Return. A return request
+  during combat waits for that fight's terminal event. Core applies permanent
+  Hero progress after Quest and Assets confirm the frozen return aggregate;
+  only then does the Party return to the agency.
 
 ### Initial hero combat attributes
 
@@ -372,10 +368,11 @@ Heroes begin at Level 1. The initial health and mana values are:
 
 ### Current combat view
 
-- In the Quests screen, clicking an in-progress quest card expands the card to
-  show the current encounter.
+- The Map screen selects a World destination and Party, then shows the current
+  encounter and optional Quest progress. The Quests screen accepts or cancels
+  objectives independently of combat.
 - The battlefield is rendered inline with Phaser, while React continues to
-  own the surrounding application screens and quest interface.
+  own the surrounding application screens and Map controls.
 - The first encounter uses three heroes against three low-damage placeholder
   trolls. It shows the Level 1 heroes' health and mana from the server combat
   snapshot.
@@ -386,17 +383,18 @@ Heroes begin at Level 1. The initial health and mana values are:
   class recovery values. At the agency, training recovers both at the base
   rate and resting at 2× the base rate; agency stamina recovery is active.
 - Each hero shows five read-only rune slots in combat so the party's equipped
-  runes are visible. The initial quest party equips one Critical Chance Rune
-  per hero, while Elara also equips a Critical Damage Rune. Creatures do not
+  runes are visible. The seeded User 2 Party has two equipped runes per Hero,
+  including Critical Chance and Elara's Critical Damage Rune. Creatures do not
   have rune slots.
 - Each initial troll has a 10% critical-hit chance.
 - Creatures also show a mana bar. The initial placeholder trolls each start
   with 100 mana, though no creature ability consumes mana yet.
 - The Phaser view renders server state rather than simulating combat locally.
   It replays new server events as damage, spell, recovery, critical, and defeat
-  effects while the encounter is expanded. It synchronizes every two seconds.
-  A backend worker also advances all active combat snapshots every five seconds,
-  so quests continue while the player is away.
+  effects while the Map is open. BFF pushes changed visual snapshots through
+  its authenticated WebSocket and sends the current state on reconnect.
+  Expedition continues the admitted encounter while the player is away;
+  leaving the Map disables the browser's automatic Continue commands.
 
 ## Market
 

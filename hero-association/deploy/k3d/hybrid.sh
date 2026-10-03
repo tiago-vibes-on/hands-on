@@ -190,6 +190,15 @@ kubectl -n "$namespace" rollout status "deployment/$service" --timeout=2m
 wsl_ip="$(ip -4 route get 1.1.1.1 | awk '{for (i=1; i<=NF; i++) if ($i=="src") {print $(i+1); exit}}')"
 [[ "$wsl_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
   { printf 'Could not determine the private WSL IPv4 address.\n' >&2; exit 1; }
+bridge_host="$wsl_ip"
+frontend_bind_host="$wsl_ip"
+if [[ "$service" == frontend && -n "${HERO_ASSOCIATION_FRONTEND_BRIDGE_HOST:-}" ]]; then
+  bridge_host="$HERO_ASSOCIATION_FRONTEND_BRIDGE_HOST"
+  [[ "$bridge_host" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]] ||
+    { printf 'Frontend bridge host must be an IPv4 address or hostname.\n' >&2; exit 1; }
+  # Docker Desktop's host route uses WSL localhost forwarding.
+  frontend_bind_host=0.0.0.0
+fi
 if port_listening "$host_port"; then
   printf 'Host port %s is already in use.\n' "$host_port" >&2
   exit 1
@@ -401,7 +410,7 @@ run_app() {
       ;;
     frontend)
       cd "$project_dir/frontend"
-      exec npm run dev -- --host "$wsl_ip"
+      exec npm run dev -- --host "$frontend_bind_host"
       ;;
   esac
 }
@@ -425,7 +434,7 @@ done
 
 sed -e "s/__SERVICE__/$service/g" \
     -e "s/__SERVICE_PORT__/$service_port/g" \
-    -e "s/__WSL_HOST_IP__/$wsl_ip/g" \
+    -e "s/__WSL_HOST_IP__/$bridge_host/g" \
     -e "s/__WSL_PORT__/$host_port/g" \
     -e "s@__READY_PATH__@$ready_path@g" \
     -e "s/__SERVICE_ACCOUNT__/$service_account/g" \

@@ -28,7 +28,7 @@ public class QuestTransactions {
     @Transactional(REQUIRES_NEW)
     public Board board(UUID managerId, boolean atAgency) {
         QuestManager owner = owner(managerId);
-        var recent = em.createQuery("select q from QuestAssignment q where q.managerId = :manager order by q.acceptedAt desc, q.id desc", QuestAssignment.class)
+        var recent = em.createQuery("select q from QuestAssignment q where q.managerId = :manager and q.status in ('COMPLETED', 'CANCELLED') order by q.acceptedAt desc, q.id desc", QuestAssignment.class)
                 .setParameter("manager", managerId).setMaxResults(20).getResultList().stream().map(this::view).toList();
         return new Board(definitions(), owner.activeAssignment == null ? null : view(em.find(QuestAssignment.class, owner.activeAssignment)),
                 recent, atAgency && owner.activeExpedition == null);
@@ -117,7 +117,7 @@ public class QuestTransactions {
             throw new ClientErrorException("Quest return differs from admission.", 409);
         String input = encode(request);
         if (admission.requestJson != null) {
-            if (!jsonEqual(admission.requestJson, input)) throw new ClientErrorException("Expedition ID already returned a different Quest result.", 409);
+            if (!decode(admission.requestJson, ReturnRequest.class).equals(request)) throw new ClientErrorException("Expedition ID already returned a different Quest result.", 409);
             return receipt(admission);
         }
         if (!"ACTIVE".equals(admission.status) || !request.expeditionId().equals(owner.activeExpedition)) throw new ClientErrorException("Quest admission is no longer active.", 409);

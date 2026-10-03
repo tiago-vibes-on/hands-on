@@ -29,6 +29,7 @@ class QuestFlowTest {
     @Inject QuestReturns returns;
     @Inject QuestAssetsClient assets;
     @Inject EntityManager em;
+    @Inject com.fasterxml.jackson.databind.ObjectMapper mapper;
 
     @BeforeEach void reset() {
         QuestRemoteTestResource.reset();
@@ -68,6 +69,37 @@ class QuestFlowTest {
         assertEquals(1, QuestRemoteTestResource.credits.get());
         assertNotNull(QuestRemoteTestResource.receipts.get(assignment.assignmentId()));
     }
+    @Test void returnReplayIgnoresEligibleMapSetSerializationOrder() {
+        UUID definitionId = UuidV7.next();
+        var definition = new Definition(definitionId, 1, "Troll patrol", "Defeat three Trolls on either Map.",
+                Objective.KILL_COUNT, TROLL, 3, Set.of(FIELD, DUNGEON), new Reward(120, Map.of(), Map.of()));
+        QuarkusTransaction.requiringNew().run(() -> {
+            var row = new QuestDefinition(); row.id = definitionId; row.definitionId = definitionId; row.version = 1;
+            try { row.payload = mapper.writeValueAsString(definition); }
+            catch (java.io.IOException invalid) { throw new IllegalStateException(invalid); }
+            em.persist(row);
+        });
+        try {
+            transactions.accept(UuidV7.next(), MANAGER, definitionId, true);
+            Pin pin = pin(FIELD); ReturnRequest input = request(pin, new Progress(pin, 3));
+            assertEquals("APPLIED", returns.apply(input).status());
+            QuarkusTransaction.requiringNew().run(() -> {
+                var admission = em.find(QuestAdmission.class, pin.expeditionId());
+                try {
+                    var tree = mapper.readTree(admission.requestJson);
+                    var maps = (com.fasterxml.jackson.databind.node.ArrayNode) tree.path("progress").path("pin").path("assignment").path("definition").path("mapIds");
+                    // Another JVM may serialize this same unordered set in reverse order.
+                    var first = maps.remove(0); maps.add(first);
+                    admission.requestJson = mapper.writeValueAsString(tree);
+                } catch (java.io.IOException invalid) { throw new IllegalStateException(invalid); }
+            });
+            assertEquals("APPLIED", returns.apply(input).status());
+            assertEquals(1, QuestRemoteTestResource.credits.get());
+            assertThrows(ClientErrorException.class, () -> returns.apply(request(pin, new Progress(pin, 2))));
+        } finally {
+            QuarkusTransaction.requiringNew().run(() -> em.remove(em.find(QuestDefinition.class, definitionId)));
+        }
+    }
     @Test void assetsOutageRetainsTheAdmissionFenceUntilRecovery() {
         transactions.accept(UuidV7.next(), MANAGER, KILLS, true); Pin pin = pin(FIELD);
         QuestRemoteTestResource.outage.set(true);
@@ -105,11 +137,13 @@ class QuestFlowTest {
     }
     @Test void exactAcceptanceAndCancellationRetriesBindTheOriginalIntent() {
         UUID key = UuidV7.next(); Assignment accepted = transactions.accept(key, MANAGER, KILLS, true);
+        assertTrue(transactions.board(MANAGER, true).recentAssignments().isEmpty());
         assertEquals(accepted, transactions.accept(key, MANAGER, KILLS, false));
         assertThrows(ClientErrorException.class, () -> transactions.accept(key, MANAGER, BOSS, true));
         UUID cancel = UuidV7.next(); Assignment cancelled = transactions.cancel(cancel, MANAGER, accepted.assignmentId(), true);
         assertEquals(cancelled, transactions.cancel(cancel, MANAGER, accepted.assignmentId(), false));
         assertEquals("CANCELLED", cancelled.status());
+        assertEquals(List.of(cancelled), transactions.board(MANAGER, true).recentAssignments());
         assertNotEquals(accepted.assignmentId(), transactions.accept(UuidV7.next(), MANAGER, KILLS, true).assignmentId());
     }
     @Test void cancellationAndAcceptanceRequireTheAgencyAndRespectAdmission() {
@@ -134,7 +168,9 @@ class QuestFlowTest {
                 catch (ClientErrorException conflict) { return false; }
             }));
             start.countDown(); int accepted = 0; for (var result : results) if (result.get()) accepted++;
-            assertEquals(1, accepted); assertEquals(1, transactions.board(MANAGER, true).recentAssignments().size());
+            assertEquals(1, accepted);
+            assertNotNull(transactions.board(MANAGER, true).activeAssignment());
+            assertEquals(1L, QuarkusTransaction.requiringNew().call(() -> em.createQuery("select count(q) from QuestAssignment q where q.managerId = :manager", Long.class).setParameter("manager", MANAGER).getSingleResult()));
         }
     }
     @Test void acceptanceRacingAdmissionEitherPinsTheAssignmentOrRejectsAcceptance() throws Exception {

@@ -289,6 +289,47 @@ for url in \
       --cacert /tmp/local-ca.crt --output /dev/null "$url"
 done
 
+# Publish an isolated versioned fixture before any assignment is admitted.
+# Its unordered eligible-Map set exercises settlement bytes across JVM restarts.
+kc -n "$namespace" exec -i deployment/postgres-quest -c postgres -- \
+  psql -U hero_association_quest -d hero_association_quest --set ON_ERROR_STOP=1 <<'SQL'
+INSERT INTO quest_definition (id, definition_id, version, payload)
+SELECT '019c4c00-0004-7000-8000-000000000100', definition_id, 2,
+       (payload::jsonb || jsonb_build_object('version', 2, 'mapIds', jsonb_build_array(
+         '019c4c00-0006-7000-8000-000000000001',
+         '019c4c00-0006-7000-8000-000000000002')))::text
+FROM quest_definition
+WHERE definition_id = '019c4c00-0004-7000-8000-000000000003' AND version = 1;
+SQL
+
+mkdir -m 700 "$temporary_directory/world-quest-session"
+run_world_quest_phase() {
+  docker run --rm --init --network k3d-hero-association --ipc host \
+    --add-host "app.e2e.heroassociation.test:$gateway_ip" \
+    --add-host "auth.e2e.heroassociation.test:$gateway_ip" \
+    --user "$(id -u):$(id -g)" \
+    --volume "$project_dir/e2e:/work" \
+    --volume "$temporary_directory/world-quest-session:/session" --workdir /work \
+    "$playwright_image" npx playwright test --config playwright.k3d.isolated.world-quest.config.js --grep "$1"
+}
+run_world_quest_phase 'pins a dungeon'
+kc -n "$namespace" scale deployment/world --replicas=0
+kc -n "$namespace" wait --for=delete pod -l app=world --timeout=2m
+run_world_quest_phase 'World outage'
+kc -n "$namespace" scale deployment/world --replicas=2
+kc -n "$namespace" rollout status deployment/world --timeout=5m
+kc -n "$namespace" scale deployment/assets --replicas=0
+kc -n "$namespace" wait --for=delete pod -l app=assets --timeout=2m
+run_world_quest_phase 'Quest reward outage'
+kc -n "$namespace" rollout restart deployment/quest deployment/core deployment/expedition
+kc -n "$namespace" rollout status deployment/quest --timeout=5m
+kc -n "$namespace" rollout status deployment/core --timeout=5m
+kc -n "$namespace" rollout status deployment/expedition --timeout=5m
+kc -n "$namespace" scale deployment/assets --replicas=2
+kc -n "$namespace" rollout status deployment/assets --timeout=5m
+run_world_quest_phase 'Quest restart recovery'
+printf 'Pinned dungeon survived World outage; Quest, Core and Expedition restart paid the reward once after Assets recovery.\n'
+
 docker run --rm --init --network k3d-hero-association --ipc host \
   --add-host "app.e2e.heroassociation.test:$gateway_ip" \
   --add-host "auth.e2e.heroassociation.test:$gateway_ip" \
@@ -318,33 +359,6 @@ kc -n "$namespace" scale deployment/assets --replicas=2
 kc -n "$namespace" rollout status deployment/assets --timeout=5m
 run_assets_phase 'Core restart and Assets recovery'
 printf 'Assets outage retained the Core Hero fence; restart recovery completed the original command once.\n'
-
-mkdir -m 700 "$temporary_directory/world-quest-session"
-run_world_quest_phase() {
-  docker run --rm --init --network k3d-hero-association --ipc host \
-    --add-host "app.e2e.heroassociation.test:$gateway_ip" \
-    --add-host "auth.e2e.heroassociation.test:$gateway_ip" \
-    --user "$(id -u):$(id -g)" \
-    --volume "$project_dir/e2e:/work" \
-    --volume "$temporary_directory/world-quest-session:/session" --workdir /work \
-    "$playwright_image" npx playwright test --config playwright.k3d.isolated.world-quest.config.js --grep "$1"
-}
-run_world_quest_phase 'pins a dungeon'
-kc -n "$namespace" scale deployment/world --replicas=0
-kc -n "$namespace" wait --for=delete pod -l app=world --timeout=2m
-run_world_quest_phase 'World outage'
-kc -n "$namespace" scale deployment/world --replicas=2
-kc -n "$namespace" rollout status deployment/world --timeout=5m
-kc -n "$namespace" scale deployment/assets --replicas=0
-kc -n "$namespace" wait --for=delete pod -l app=assets --timeout=2m
-run_world_quest_phase 'Quest reward outage'
-kc -n "$namespace" rollout restart deployment/quest deployment/core
-kc -n "$namespace" rollout status deployment/quest --timeout=5m
-kc -n "$namespace" rollout status deployment/core --timeout=5m
-kc -n "$namespace" scale deployment/assets --replicas=2
-kc -n "$namespace" rollout status deployment/assets --timeout=5m
-run_world_quest_phase 'Quest restart recovery'
-printf 'Pinned dungeon survived World outage; Quest and Core restart paid the reward once after Assets recovery.\n'
 
 mkdir -m 700 "$temporary_directory/session"
 run_session_phase() {

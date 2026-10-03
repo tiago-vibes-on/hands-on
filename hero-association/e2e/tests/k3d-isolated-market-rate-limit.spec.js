@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { marketLimitBurst } from '../market-limit-burst.js'
 
 const appOrigin = 'https://app.e2e.heroassociation.test'
 const agencyId = '019c4c00-0001-7000-8000-000000000001'
@@ -36,10 +37,10 @@ test('isolated Envoy limits market placement per authenticated user across sessi
     expect(firstSession.identity.subject).toBe(secondSession.identity.subject)
     expect(otherSession.identity.subject).not.toBe(firstSession.identity.subject)
 
-    const responses = await Promise.all([
+    const responses = await marketLimitBurst(() => Promise.all([
       ...Array.from({ length: 3 }, () => invalidOrder(first, firstSession.csrfToken)),
       ...Array.from({ length: 3 }, () => invalidOrder(second, secondSession.csrfToken)),
-    ])
+    ]))
     expect(responses.map((response) => response.status()).sort()).toEqual([400, 400, 400, 400, 400, 429])
     const limited = responses.find((response) => response.status() === 429)
     expect(limited.headers()['x-hero-association-rate-limit-layer']).toBe('envoy')

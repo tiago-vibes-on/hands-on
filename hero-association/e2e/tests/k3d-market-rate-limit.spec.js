@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { marketLimitBurst } from '../market-limit-burst.js'
 
 const appUrl = 'https://heroassociation.test'
 const dawnwatchAgencyId = '019c4c00-0001-7000-8000-000000000001'
@@ -48,10 +49,10 @@ test('k3d gateway enforces a shared market limit while BFF has two Pods', async 
     const secondToken = await csrfToken(secondPage)
     const otherUserToken = await csrfToken(otherUserPage)
 
-    const responses = await Promise.all([
+    const responses = await marketLimitBurst(() => Promise.all([
       ...Array.from({ length: 3 }, () => placeInvalidOrder(firstPage, dawnwatchAgencyId, firstToken)),
       ...Array.from({ length: 3 }, () => placeInvalidOrder(secondPage, dawnwatchAgencyId, secondToken)),
-    ])
+    ]))
     expect(responses.map((response) => response.status()).sort()).toEqual([400, 400, 400, 400, 400, 429])
     const limitedResponse = responses.find((response) => response.status() === 429)
     expect(limitedResponse.headers()['retry-after']).toBe('1')

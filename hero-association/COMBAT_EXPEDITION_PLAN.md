@@ -10,7 +10,7 @@ Status: player-facing Map cutover complete in k3d; load tests deferred. The
 shared combat library, Expedition encounter loop, and aggregate settlement
 handoff are live. Ordinary local development still keeps Map opt-in. Follow
 [ADR 0008](adr/0008-combat-engine-in-expedition.md). Core Quest combat
-still runs in Core. The standalone Combat-service sandbox and its Core fact
+is retired. The standalone Combat-service sandbox and its Core fact
 inbox have been retired; [SPEC.md](SPEC.md) documents the remaining runtime.
 
 The current fight-timeline design is recorded in

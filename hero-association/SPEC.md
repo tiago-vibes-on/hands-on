@@ -61,7 +61,7 @@ status and response body for the browser.
 
 ## Local build validation
 
-The local pipeline tests Core, BFF, Expedition, and Market against disposable k3d
+The local pipeline tests Core, BFF, Expedition, Market, Assets, World, and Quest against disposable k3d
 PostgreSQL, Redis, and RabbitMQ before packaging their JVM images with
 `-DskipTests`; frontend lint and build stay local. The images are saved in one
 checksummed archive. Candidate builds use disposable dependencies; promotion requires all eight daily application
@@ -83,7 +83,7 @@ E2E, and market k6 pass does promotion write a local result. See
 
 Jenkins has independent Core, BFF, Expedition, Market, Assets, World, Quest, and frontend build jobs for an
 uncommitted worktree and trusted `main`, plus one deploy-local job per service.
-A service build tests its new image together with the other five currently
+A service build tests its new image together with the other seven currently
 deployed k3d images in one checksummed archive. Both build modes are manual;
 no Git polling or successful build automatically deploys. A shared Jenkins
 lock serializes trusted-`main` builds. An explicit deploy job rejects a
@@ -324,7 +324,9 @@ compiled rules rather than versioned catalog data. Shield progress awaits a
 block rule.
 
 Return settlement uses schema version 2 and includes pinned Map identity/version
-and nullable Quest progress. Core validates the entire aggregate before asking
+and nullable Quest progress. Its canonical bytes sort unordered Quest Map IDs
+and resource-map keys while preserving skill decimal precision, so a restart
+retains the same settlement digest. Core validates the entire aggregate before asking
 Quest to bank progress and confirm any payout. Assets commits a Quest reward and
 receipt atomically under the assignment UUID. Quest then marks the assignment
 completed. Core separately confirms carried Assets credit and Hero progression

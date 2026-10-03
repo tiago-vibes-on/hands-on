@@ -23,7 +23,16 @@ resulting state.
   including retired Traefik milestones.
 - Follow [`SERVICE_EXTRACTION.md`](SERVICE_EXTRACTION.md) for the phased
   domain/service boundary work and its progress.
-- Completed bounded work: Assets extraction, ownership audit, permission/recovery
+- Completed bounded work: versioned Creature and Map catalogs now belong to
+  World; optional Expedition objectives and reward recovery belong to Quest,
+  with payouts owned by Assets. Core Quest combat and Creature caching are
+  retired. The exact eight-image `world-quest-extraction-20261002-v3` archive
+  passed isolated and daily gates after a five-schema local reset. The
+  `world-quest-settlement-20261002-v4` follow-up passed both gates and preserved
+  data while hardening settlement hashes across restarts. Ownership and payout
+  audits passed, and frontend hot reload is restored. See
+  [the contracts and verified result](WORLD_QUEST_ARCHITECTURE.md).
+- Earlier completed work: Assets extraction, ownership audit, permission/recovery
   contracts and local cutover are complete. The exact six-image
   `assets-extraction-20261002-v1` archive passed isolated recovery and daily
   browser, Expedition, Map and k6 gates after a coupled Core/Assets/Market reset.

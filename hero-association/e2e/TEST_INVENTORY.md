@@ -12,7 +12,7 @@ the current migration gap rather than calling it complete.
 | Disposable k3d component | `deploy/k3d/test-isolated-components.sh [core|bff|expedition|market|assets|world|quest|all]` | Own PostgreSQL, BFF/Expedition Redis, and RabbitMQ; Maven connects over loopback port-forwards with Dev Services disabled | Backend candidate builds run the selected lane before packaging. K3d AMQP tests cover both transport payloads; the E2E lane covers cross-role queue denial. |
 | Historical Compose browser source | `tests/authentication.spec.js` and `tests/market-proxy.spec.js` | The retired runner used a second BFF route and a separate eight-second Keycloak realm | Not an active command. The isolated k3d suite covers the current MVP flows; Quest borrowing remains deferred. |
 | Current k3d browser | `npm run test:k3d`, `test:k3d:expedition`, `test:k3d:map`, `test:k3d:quest` | Existing development namespace and seeded accounts; Map tests change test Managers' Hero progress | Keep for smoke checks; use disposable data for the full integration gate. |
-| Disposable k3d browser | `deploy/k3d/test-isolated-stack.sh` | Own namespace, databases, Keycloak, Redis, RabbitMQ, and Envoy E2E listeners; daily image references by default or exact eight-image archive | Seventeen browser/API cases, including rune ownership, lost-placement recovery, pending placement UI, and real Market settlement, plus a pinned dungeon under World outage and Quest payout recovery across Assets outage and Quest restart; BFF restart, BFF Redis outage/recovery, strict token expiry, and k6 thresholds. |
+| Disposable k3d browser | `deploy/k3d/test-isolated-stack.sh` | Own namespace, databases, Keycloak, Redis, RabbitMQ, and Envoy E2E listeners; daily image references by default or exact eight-image archive | Seventeen browser/API cases, including rune ownership, lost-placement recovery, pending placement UI, and real Market settlement, plus a pinned dungeon under World outage and Quest payout recovery across Assets outage and Quest/Core/Expedition restart; BFF restart, BFF Redis outage/recovery, strict token expiry, and k6 thresholds. |
 | Gateway and load | `npm run test:market:k6`, `load:k3d`, `load:mixed:k3d`, outage/scaling scripts under `deploy/k3d` | Envoy, rate-limit Redis, live Pods; some scripts stage temporary Core databases | Market k6 thresholds now also run inside the disposable namespace; keep disruptive scaling tests opt-in. |
 | Candidate archive | `deploy/k3d/test-isolated-stack.sh <archive>` and `pipeline/run-k3d-pipeline.sh` | Exact eight archived service image IDs are checked against running disposable k3d Pods before and after BFF restart; BFF, Market, Assets, World and Quest each have two replicas | Promotion requires matching `k3d-e2e-verification.json` after test cleanup, including uncommitted worktree candidates. The Compose archive runner is retired. |
 
@@ -65,3 +65,9 @@ the original operation keys. The Quest board journey loses an acceptance
 response, reloads and retries the same command without another assignment.
 The daily dungeon journey verifies the final floor, refusal of Continue,
 explicit Return, and one Assets reward receipt.
+
+The World/Quest recovery case publishes an isolated version 2 of the cavern
+objective with two eligible Maps before accepting it. Restarting Expedition
+while the reward is pending verifies that unordered Map IDs cannot change
+settlement bytes or prevent the matching owner acknowledgment. This fixture
+never changes daily seed definitions.

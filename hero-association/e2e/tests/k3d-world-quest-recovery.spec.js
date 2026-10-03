@@ -36,7 +36,7 @@ async function resumed(browser, use) {
 async function active(page) { const result = await page.request.get(`${origin}/api/v1/expeditions/active`); expect(result.status()).toBe(200); return result.json() }
 
 test('pins a dungeon and completion Quest before dependency outages', async ({ page }) => {
-  test.setTimeout(240_000)
+  test.setTimeout(90_000)
   await signIn(page, 'user2@mail.com', 'user2')
   const account = await (await page.request.get('/api/v1/account')).json()
   const agencyId = account.agencyMemberships[0].agencyId
@@ -49,12 +49,15 @@ test('pins a dungeon and completion Quest before dependency outages', async ({ p
   const accepted = await page.request.post(`/api/v1/quests/${quest.definitionId}/accept`, { headers: await headers(page), data: { commandId: newUuidV7() } })
   expect(accepted.status()).toBe(200)
   const assignment = await accepted.json()
+  expect(assignment.definition.version).toBe(2)
+  expect(assignment.definition.mapIds).toHaveLength(2)
   await page.reload(); await page.getByRole('button', { name: 'Map', exact: true }).click()
-  await page.getByLabel('Destination', { exact: true }).selectOption(map.definitionId)
+  await page.getByRole('combobox', { name: 'Destination', exact: true }).selectOption(map.definitionId)
   await page.getByRole('button', { name: 'Enter dungeon' }).click()
   await expect(page.getByRole('region', { name: 'Current encounter' })).toContainText(map.name)
   const run = await active(page)
   expect(run.map.version).toBe(map.version); expect(run.quest.pin.assignment.assignmentId).toBe(assignment.assignmentId)
+  expect(run.quest.pin.assignment.definition.version).toBe(2)
   await writeFile(fixturePath, JSON.stringify({ agencyId, heroes: party.heroIds, runId: run.expeditionId, mapId: map.definitionId, partyId: party.id, assignmentId: assignment.assignmentId, beforeGold: account.manager.gold, beforeItems: account.manager.items.find((row) => row.code === 'iron-ingot')?.quantity ?? 0 }))
   await page.context().storageState({ path: statePath })
 })

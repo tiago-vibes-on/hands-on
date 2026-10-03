@@ -6,8 +6,8 @@ rewards. Core's earlier Quest combat, borrowing payment and Creature cache
 workflows described below are retired. Return aggregates now use schema version
 2 with pinned Map metadata and nullable Quest progress.
 
-Status: implemented in the local six-service stack. The opt-in Map entry calls
-Core admission and accepts its pinned Hero baseline. Core owns Hero eligibility
+Status: implemented in the local eight-service stack. The opt-in Map entry calls
+Core admission and accepts its pinned Hero baseline and World plan. Core owns Hero eligibility
 and progression; Assets owns loadouts and carried resource credit.
 
 ## Ownership and delivery
@@ -16,7 +16,9 @@ and progression; Assets owns loadouts and carried resource credit.
    Heroes, verifies Manager membership and availability, applies agency
    recovery, changes their activity to `ON_EXPEDITION`, and records a provisional
    reservation under the UUIDv7 Expedition ID. Outside that transaction it obtains
-   an immutable Assets loadout receipt, then confirms the pinned baseline. A repeat with the same IDs returns
+   the complete versioned World plan and an immutable Assets loadout receipt,
+   then confirms the pinned baseline. Expedition also pins the optional Quest
+   before creating the Redis run. A repeat with the same IDs returns
    the baseline; a settled ID cannot be reused. Only the opt-in Expedition entry calls it.
 2. At Return, Expedition's Redis command or terminal-fight script atomically
    changes the run to `SETTLEMENT_PENDING` and writes a no-TTL, Manager-sharded
@@ -48,9 +50,10 @@ and progression; Assets owns loadouts and carried resource credit.
 
 The source Redis run remains authoritative while any handoff is unresolved.
 No per-hit, per-fight, or fixed-interval SQL update is introduced. Carried
-gold/items/runes are provisionally supported by settlement even though the
-current fixed Troll encounter produces no loot. The agency's share of future
-Map gold still needs a defined accounting rule before enabling gold drops.
+gold/items/runes use the pinned Creature drop tables, although the current
+Creature seeds have no economic drops. Carried assets belong to the Party's
+Manager. Agency-Hero borrowing and an agency share of Map gold remain future
+rules. Quest rewards use a separate Assets receipt under the assignment ID.
 
 ## Local verification
 

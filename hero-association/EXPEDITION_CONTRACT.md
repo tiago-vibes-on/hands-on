@@ -6,13 +6,13 @@ rewards. Core's earlier Quest combat, borrowing payment and Creature cache
 workflows described below are retired. Return aggregates now use schema version
 2 with pinned Map metadata and nullable Quest progress.
 
-Status: steps 1-6 of the [implementation plan](COMBAT_EXPEDITION_PLAN.md)
-are implemented; step 7 is in progress. The isolated local browser journey
-passes, but k3d validation and player-path cutover remain pending. Core exposes authenticated internal
+Status: the player-facing Map cutover and the first seven steps of the
+[implementation plan](COMBAT_EXPEDITION_PLAN.md) are complete; combat load
+testing remains deferred. Core exposes authenticated internal
 admission and idempotent settlement. Expedition has a server-side Core client,
 entry coordinator, orphan fence, and owner-scoped HTTP commands. BFF routes
 those commands, but the Expedition player API is disabled by default. There
-is a feature-flagged frontend Map page, but no switched-over player path;
+is a feature-flagged frontend Map page, enabled in the k3d lab.
 Core Quest combat is retired. The BFF has a
 disabled-by-default socket that validates session, exact Origin, and run
 ownership before sending a reconnect snapshot. A local scheduler sends changed
@@ -20,15 +20,13 @@ visual snapshots to subscribed sockets from Expedition's private Redis-only
 API; no per-frame Core read or durable per-hit event is involved.
 [ADR 0008](adr/0008-combat-engine-in-expedition.md) governs this design.
 
-The current run snapshot is intentionally narrower than the final contract
-below: it pins a provisional Map ID/version and Troll definition, Hero
-resources, progression, and rune effects from Core admission, empty carried
-assets, an opening fight snapshot,
-RNG version/seed, and 1x XP/skill/drop rates. Map kind/floor, actual loot, and an explicit worker epoch
-are not yet wired. The settlement
+The current run snapshot pins a complete World Map/Creature plan, optional
+Quest assignment/progress, Hero resources, progression and rune effects from
+Core admission, carried loot, the opening fight snapshot, RNG version/seed,
+and 1x XP/skill/drop rates. Creature seeds currently have no economic drops;
+capacity and configurable event rates remain future work. The settlement
 payload is derived from the frozen run on every retry rather than stored as a
-second copy inside that run. Do not enable the browser entry route for normal players until local and
-k3d end-to-end admission, settlement, and reconnect checks pass. The due index is rebuildable and terminal
+second copy inside that run. The due index is rebuildable and terminal
 commits are fenced by a Redis lease and state version. See the
 [private service README](backend/hero-association-expedition/README.md).
 
@@ -46,34 +44,32 @@ The private service validates a token intended for Expedition and resolves
 `managerId` from the authenticated subject through a trusted Account mapping;
 it never trusts a browser-supplied owner ID. BFF remains the browser boundary.
 
-Before public cutover, Party writes and admission must have one authority:
-either migrate the single Party to Expedition or route all Party mutations
-through it. A read-only check against Core's present Party table is not
-enough to prevent a concurrent Quest start or roster edit. The temporary
-Core admission operation must atomically validate membership and Hero
+Core temporarily owns Party writes and admission. The shared permanent-Hero
+reservation fences roster, activity, and loadout changes while away. Its
+admission operation atomically validates membership and Hero
 availability, apply accrued agency recovery once, reserve the selected
-Heroes against Quest/training/loadout changes, and return one consistent
-baseline keyed idempotently by `expeditionId`. It must also release an
+Heroes against training/loadout changes, and returns one consistent
+baseline keyed idempotently by `expeditionId`. It also releases an
 orphaned reservation if Redis run creation is proven not to have succeeded.
-No Map entry becomes live until this exclusion is implemented and tested.
+Quest independently pins the optional assignment under the same Expedition ID.
 
 That one private admission response supplies the current Hero IDs, class,
 total XP, six-decimal skill-point totals, health, mana, stamina milliseconds,
 and equipped rune slots/effects. It supplies only expedition-relevant Assets
 inputs: owned equipment used by the Party and any items explicitly taken
 into the run. The first slice takes no consumables, so carried gold/items/
-runes start empty; the Manager wallet and stored inventory remain in Core.
+runes start empty; the Manager wallet and stored inventory remain in Assets.
 Do not copy an entire wallet into Redis or later overwrite it with a stale
 entry balance. Permanent owners receive deltas at settlement, not per-hit
 updates. Core/Assets is not queried again for Hero or Assets baselines during
-the run. Creature and Map definitions are resolved once when needed, then
-pinned by ID and version for the encounter or run respectively.
+the run. World supplies every referenced Creature version with the Map plan
+at admission; no World read is needed for later encounters in that run.
 
 ## Commands and lifecycle
 
 The following is the Expedition command contract. Owner-scoped HTTP commands
 and BFF routing exist, but the player API remains disabled by default; the
-feature-flagged browser Map page uses those commands. The dormant BFF socket sends an
+feature-flagged browser Map page uses those commands. The opt-in BFF socket sends an
 owner-checked snapshot on connection or reconnection and changed fight
 visuals while the run is subscribed.
 Every mutation has a UUIDv7 `commandId`, and an active-run mutation includes
@@ -99,8 +95,8 @@ with local subscribers, at most once per second per run, through the private
 `GET /internal/v1/expedition-visuals/{ownerManagerId}/{expeditionId}` endpoint.
 That endpoint reads Expedition Redis and requires the shared uncommitted
 `HERO_ASSOCIATION_EXPEDITION_BFF_SERVICE_KEY` in a service-only header.
-The projector deterministically replays the pinned opening fight and seed for
-visual health, mana, and recent hits, with bounded elapsed time and events.
+The projector reads the planned encounter timeline for visual health, mana,
+and recent hits, with bounded elapsed time and events.
 No per-frame Core query, Redis mutation, or durable combat event is added.
 This replay strategy is provisional until the 100/500/1,000-fight load tests.
 
@@ -113,10 +109,11 @@ are `400`; missing or foreign runs are `404`; unauthenticated callers are
 the stale-version check. No command trusts client-calculated XP, damage,
 loot, stamina, or time.
 
-The phases are `FIGHTING`, `AWAITING_CONTINUE`, `WIPED`, and
+The phases are `FIGHTING`, `AWAITING_CONTINUE`, `DUNGEON_COMPLETED`, `WIPED`, and
 `SETTLEMENT_PENDING`. The Party is at the agency when no active run exists.
-A winning fight moves to `AWAITING_CONTINUE`, except that a pending Return
-moves to `SETTLEMENT_PENDING`. A wipe moves to `WIPED`, except that a pending
+A winning fight moves to `AWAITING_CONTINUE`, or `DUNGEON_COMPLETED` after the
+last dungeon encounter; a pending Return moves to `SETTLEMENT_PENDING`.
+A wipe moves to `WIPED`, except that a pending
 Return moves to `SETTLEMENT_PENDING`. A wipe does not automatically return.
 `SETTLEMENT_PENDING` accepts no new fight commands. The private handoff and
 owner-application acknowledgment are defined in
@@ -158,14 +155,19 @@ object serialization:
 | `schemaVersion` | Integer `2`; reject unknown versions rather than silently dropping fields. |
 | `stateVersion` | Positive, monotonically increasing integer for atomic compare-and-set. |
 | `expeditionId`, `ownerManagerId`, `agencyId`, `partyId` | UUIDv7 strings; immutable for the run. |
-| `map` | Pinned Map ID, version, kind (`FIELD` or `DUNGEON`), floor and encounter position. A provisional seeded field may supply the first Troll. |
-| `phase`, `returnRequested`, `createdAt`, `updatedAt` | Lifecycle phase, Boolean return intent, and UTC instants. |
-| `entry` | Admission contract version, reservation ID (`expeditionId`), immutable ordered Hero IDs, progression ruleset version, and relevant pinned equipment/loadout inputs. |
+| `mapId`, `mapVersion`, `encounterIndex` | Exact pinned Map identity and current one-based encounter position. |
+| `world` | Complete immutable Map plan and every exact Creature version it references; kind, floor and encounter layout derive from this plan. |
+| `quest` | Nullable pinned optional assignment, eligibility, banked progress and current bounded objective progress. |
+| `phase`, `returnRequested`, `startedAt` | Lifecycle phase, Boolean return intent, and admission UTC instant. |
 | `heroes` | Ordered current per-Hero class, total XP, six-decimal Melee/Distance/Magic/Shield points, current health/mana, and stamina milliseconds. These are unbanked while the run is active. |
-| `carried` | Current unbanked gold and item/rune ID-to-quantity totals; starts empty. Party capacity applies to their combined carry, not to each Hero separately. |
-| `fight` | Present only in `FIGHTING`: UUIDv7 fight ID, pinned Creature ID/version and base XP, combat ruleset version, active XP/skill/drop multipliers, RNG algorithm version and hidden seed, UTC start time, full engine-restorable opening `CombatBattleSnapshot`, and worker fencing epoch. |
+| `creature` | Compatibility projection of the first Creature spawn; actual combat and loot use the complete World plan. |
+| `carried` | Current unbanked gold and item/rune ID-to-quantity totals; starts empty. Capacity rules remain future work. |
+| `fight` | Present only in `FIGHTING`: UUIDv7 fight ID, combat ruleset version, active XP/skill/drop multipliers, RNG algorithm version and hidden seed, UTC start time, and full engine-restorable opening `CombatBattleSnapshot`. |
 | `lastOutcome` | At most one compact result for the most recent encounter, cleared on Continue; not a fight history or replay log. |
-| `settlement` | The `SETTLEMENT_PENDING` snapshot is the frozen aggregate; a same-slot pending marker is written atomically, and the wire payload is deterministically derived by `expeditionId`. Broker and owner acknowledgments are tracked separately. |
+
+The `SETTLEMENT_PENDING` snapshot is the frozen aggregate. A separate same-slot
+pending marker is written atomically; the wire payload derives from the run
+by `expeditionId`. Broker and owner acknowledgments are tracked separately.
 
 The Hero and carry values above are the **latest current state**, not a list
 of completed fights. Do not retain per-hit rows, finished-fight snapshots,

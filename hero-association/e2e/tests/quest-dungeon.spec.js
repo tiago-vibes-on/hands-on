@@ -23,7 +23,7 @@ test('clearing the cavern returns one Quest reward and restores the Party', asyn
   const assignment = (await (await page.request.get('/api/v1/quests')).json()).activeAssignment
   await page.getByRole('button', { name: 'Map', exact: true }).click()
   const maps = await (await page.request.get('/api/v1/maps')).json()
-  await page.getByLabel('Destination', { exact: true }).selectOption(maps.find((map) => map.kind === 'DUNGEON').definitionId)
+  await page.getByRole('combobox', { name: 'Destination', exact: true }).selectOption(maps.find((map) => map.kind === 'DUNGEON').definitionId)
   await page.getByRole('button', { name: 'Enter dungeon' }).click()
   await expect(page.getByRole('heading', { name: 'Encounter complete' })).toBeVisible({ timeout: 120_000 })
   await page.getByRole('button', { name: 'Continue', exact: true }).click()

@@ -1,6 +1,7 @@
 # World catalogs and Expedition Quest objectives
 
-Status: implementation and verification in progress.
+Status: implementation, verified local cutover and settlement restart
+hardening complete. Frontend hot reload is restored.
 
 World owns immutable, versioned Creature definitions and Map definitions in its
 own PostgreSQL database. Map and Creature are grouped because an encounter
@@ -48,6 +49,11 @@ progress. Core's admission reservation still prevents a new run or agency-only
 Quest commands during that handoff. It acknowledges Expedition only after all
 owners confirm, so Redis retains the frozen aggregate until every owner is safe.
 
+Settlement serialization sorts unordered eligible Map IDs and resource-map
+keys while retaining exact skill decimal values. A JVM restart therefore keeps
+the same aggregate bytes and acknowledgment digest. Quest return retries compare
+typed records, so an equivalent eligible-Map set cannot create a false conflict.
+
 The new public paths are `/api/v1/maps`, `/api/v1/creatures`, and
 `/api/v1/quests/**`, routed by BFF to World or Quest with the server-held player
 token. Internal service credentials never reach the browser. Core's old
@@ -84,3 +90,42 @@ The first objective rewards are 120 gold for three Troll kills, 85 gold for
 four Forest Wolf kills in the cavern, 120 gold for the cavern Troll boss, and
 160 gold plus one Iron Ingot for clearing the cavern. These are initial seed
 amounts, not balanced loot rules. Rune rewards are supported by the contract.
+
+## Verified local cutover
+
+The eight-image `world-quest-extraction-20261002-v3` JVM archive passed the
+isolated gate and local promotion on 2026-10-02 (local time). Isolated checks
+included 17 browser/API cases, four World/Quest outage and recovery phases,
+Assets equipment recovery, BFF session recovery/expiry and market k6. Daily
+promotion passed ten browser cases, Expedition API, the full Map journey,
+the dungeon Quest payout and market k6. All 14 application Pod image IDs
+matched the archive.
+
+Promotion recreated the Core, Assets, Market, World and Quest schemas using
+their matching archived seeds after refusing unfinished work. The ownership
+audit found zero retired Quest/Creature/Market/Assets tables in Core, zero
+active Hero reservations or unfinished Core/Quest operations, two Creature
+definitions, two Map definitions and four Quest definitions. The completed
+cavern assignment has exactly one APPLIED Assets receipt for 160 gold and one
+Iron Ingot. The retired Core Redis Deployment and Service are absent.
+
+The current component suites pass 182 cases across the seven backend services
+(Core 71, BFF 19, Expedition 20, Market 16, Assets 36, World 6, Quest 14),
+alongside combat-engine and AMQP checks. Six frontend test files, lint/build,
+and eight delivery test files passed. Native wiring is updated; native
+compilation was outside this JVM verification.
+
+The follow-up eight-image `world-quest-settlement-20261002-v4` archive changes
+only Expedition and passed the complete isolated and daily gates. Its isolated
+fixture accepts a version 2 objective eligible on two Maps, then restarts Quest,
+Core and Expedition while Assets is unavailable; recovery pays once and closes
+the run with the matching acknowledgment. Promotion preserved all game data
+and verified the other seven images against the unchanged baseline. Both
+archives retain passing E2E and promotion records in the ignored artifact folder.
+
+The final daily audit found two completed assignments and two distinct APPLIED
+reward receipts, each for 160 gold and one Iron Ingot, with no unfinished Core,
+Quest, Market or Redis run state. Both disposable namespaces were removed.
+Frontend hot reload uses the optional Docker Desktop host route. Gateway HTML,
+the Vite client, its HMR WebSocket, sign-in/out, the two-Map selector and the
+four-objective board all passed the final browser smoke check.

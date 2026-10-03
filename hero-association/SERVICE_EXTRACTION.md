@@ -155,8 +155,10 @@ idempotent receipts. See
 - [x] Implement the independently built Assets service and separate database;
   move wallets, inventories, catalogs, equipment, reservations and receipts.
 - [x] Complete exact six-image isolated verification and local cutover of Core,
-  Assets and Market. Quest economic rewards remain separate future work.
-- [ ] Move Quest, Hero, Agency, Account, Creature, and Social out of
+  Assets and Market.
+- [x] Move Creature and Map definitions to World and optional objectives to
+  Quest, with reward credits owned by Assets.
+- [ ] Move Hero, Agency, Account, and Social out of
   Core in an order based on their dependencies. Decide whether each needs its
   own service or belongs with a related domain; none remains in Core
   permanently.

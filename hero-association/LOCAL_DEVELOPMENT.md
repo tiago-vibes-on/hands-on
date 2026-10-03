@@ -70,8 +70,16 @@ Run one command per selected service in its own terminal, from
 ./hybrid.sh run bff
 ./hybrid.sh run expedition
 ./hybrid.sh run market
+./hybrid.sh run assets
+./hybrid.sh run world
+./hybrid.sh run quest
 ./hybrid.sh run frontend
 ```
+
+If Docker Desktop cannot reach the private WSL address, use
+`HERO_ASSOCIATION_FRONTEND_BRIDGE_HOST=host.docker.internal ./hybrid.sh run frontend`.
+This binds Vite to all host interfaces and sends the cluster bridge through
+Docker Desktop's host route. The normal restore command still applies.
 
 Use only the services you are editing. Each command first checks the k3d
 context and existing Deployment, starts private port-forwards, stops that
@@ -79,8 +87,8 @@ service's k3d Pods and HPA if present, then starts Quarkus dev mode or Vite on
 the private WSL address. A small in-cluster bridge keeps the original Service
 name and Envoy route; BFF and Core traffic still reaches Istio on the bridge
 leg. The WSL leg is plain HTTP and development-only. Core, BFF, Expedition,
-Market, Assets and Vite use host ports `17081`, `17080`, `17083`, `17084`, `17085`, and
-`15172` respectively.
+Market, Assets, World, Quest and Vite use host ports `17081`, `17080`, `17083`,
+`17084`, `17085`, `17086`, `17087`, and `15172` respectively.
 The script reserves additional loopback ports for k3d PostgreSQL, Redis,
 Keycloak, RabbitMQ, OTLP, and service-to-service forwards; it stops with a
 clear error if one of those ports is already in use. It reads k3d Secrets at
