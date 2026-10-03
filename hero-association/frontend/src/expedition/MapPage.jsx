@@ -88,7 +88,7 @@ function ProgressView({ run, itemInventory, runeInventory }) {
   const carriedRunes = Object.entries(run.carried?.runes ?? {})
   return <section className="panel map-progress" aria-label="Expedition progress">
     <div className="map-progress__heading"><h2>Expedition progress</h2>
-      <p>Hero totals update after each fight. Expedition changes are saved when the party returns.</p></div>
+      <p>Hero totals and loot update after each fight and are saved when the party returns.</p></div>
     <div className="map-progress__carried">
       <div><span>Carried gold</span><strong>{run.carried?.gold ?? 0}</strong></div>
       <div><span>Items</span><strong>{carriedItems.reduce((sum, [, count]) => sum + count, 0)}</strong></div>
@@ -244,7 +244,7 @@ export default function MapPage({ agencyId, managerId, heroes, preparedParties, 
     {error && !unavailable && <p className="inline-error" role="alert">{error}</p>}
     {!loading && !unavailable && !run && <section className="panel map-entry">
       <p className="eyebrow">Destination</p><h2>{destination?.name ?? 'Choose a destination'}</h2>
-      <p>Fields repeat encounters. Dungeons finish after their final floor. The first battle starts when you enter.</p>
+      <p>Fields repeat encounters. Auto-continue can run a completed dungeon again from its first floor. The first battle starts when you enter.</p>
       {mapError && <p className="inline-error" role="alert">{mapError}</p>}
       {pendingEntry && <p role="status">Retry entry to confirm your previous destination and party.</p>}
       {eligibleParties.length > 0 ? <div className="map-entry__actions">
@@ -260,14 +260,17 @@ export default function MapPage({ agencyId, managerId, heroes, preparedParties, 
         <span className="map-controls__connection" role="status">{socketStatus === 'connected' ? 'Live' : 'Reconnecting to battle…'}</span>
         <label className="map-controls__auto">
           <input type="checkbox" checked={autoContinue}
-            disabled={run.returnRequested || ['SETTLEMENT_PENDING', 'DUNGEON_COMPLETED'].includes(run.phase)}
+            disabled={run.returnRequested || ['SETTLEMENT_PENDING', 'WIPED'].includes(run.phase)
+              || run.phase === 'DUNGEON_COMPLETED' && !run.canContinue}
             onChange={(event) => {
               autoContinueAttemptRef.current = null
               setAutoContinue(event.target.checked)
             }} />
           <span>Auto-continue</span>
         </label>
-        {run.phase === 'DUNGEON_COMPLETED' && <span>All floors cleared. Return to save your results.</span>}
+        {run.phase === 'DUNGEON_COMPLETED' && <span>{run.canContinue
+          ? 'All floors cleared. Auto-continue starts the dungeon again; Return saves your results.'
+          : 'All floors cleared. Return to save your results.'}</span>}
         {run.phase === 'AWAITING_CONTINUE' && <button className="button button--primary" type="button" disabled={Boolean(pendingAction)} onClick={() => submit('continue')}>{pendingAction === 'continue' ? 'Continuing…' : 'Continue'}</button>}
         {run.phase !== 'SETTLEMENT_PENDING' && !run.returnRequested && <button className="button button--secondary" type="button" disabled={Boolean(pendingAction)} onClick={() => submit('return')}>{run.phase === 'FIGHTING' ? 'Return after this fight' : 'Return to agency'}</button>}
         {run.returnRequested && <span>Return requested; this fight will finish first.</span>}

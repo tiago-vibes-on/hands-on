@@ -26,6 +26,13 @@ seed data. Configure `QUARKUS_DATASOURCE_JDBC_URL`, username/password and
 schema. The isolated component runner supplies disposable PostgreSQL; hybrid
 mode preserves daily data and obtains credentials from the local k3d Secrets.
 
+Creature `goldDrop` and each `drops` entry carry `minimumQuantity`,
+`maximumQuantity` and `chance`; ranges are uniform and inclusive. Expedition
+rolls every entry independently per defeated Creature using the admitted
+version. The seeds contain the gold, rune and material rates in
+[the game specification](../../SPEC.md). Deploy the new drop contract and matching
+seed data together, after returning active runs, as described in the backend workflows.
+
 See [the backend workflows](../README.md) and
 [World/Quest contracts](../../WORLD_QUEST_ARCHITECTURE.md) for API, credentials,
 version pinning, admission, payout and recovery rules. Public APIs validate

@@ -74,8 +74,8 @@ resulting state.
 ## Milestone 2 — Inventory and rune loadouts
 
 - [x] Model agency storage for gold, runes, and stackable item materials.
-  Market reservations, transfers and fulfilled Quest rewards are implemented;
-  balanced Creature loot remains to be added.
+  Market reservations, transfers, fulfilled Quest rewards and initial Creature
+  gold, rune and material loot are implemented.
 - [x] Equip and unequip runes atomically among Manager inventory, agency
   inventory, and a Hero's five equipped slots. Unequip returns to the acting
   Manager by default; Heroes have no loose rune inventory.
@@ -92,7 +92,8 @@ resulting state.
 - [x] Replace hardcoded Map encounters with versioned FIELD/DUNGEON definitions,
   encounters, layouts and ordered floors. Seed Troll Field and Broken Pass Cavern.
 - [x] Pin Map and Creature versions in durable Core admission and Redis runs;
-  continue admitted runs without catalog access. Complete dungeons without looping.
+  continue admitted runs without catalog access. Pause at dungeon completion
+  unless auto-continue is enabled to start another pass through the pinned floors.
 - [x] Extract optional Quest definitions, Manager assignments and return receipts
   to their own service/database. Support one active Quest and agency cancellation.
 - [x] Track kill-count, boss-defeat and dungeon-completion objectives with eligible
@@ -104,9 +105,12 @@ resulting state.
   board and destination selector. Keep stable entry/Quest IDs through retries.
 - [x] Retire Core Quest tables, combat-sync API, combat worker and Creature cache.
 - [x] Support explicit return from a Map; a request during battle applies at its
-  terminal event. Wipes and completed dungeons wait for explicit return.
-- [ ] Expand Creature economic content: balanced drops, capacity, amount ranges,
-  event rates, and the mixed-stamina party loot rule.
+  terminal event. Wipes wait for explicit return; completed dungeons can repeat
+  through auto-continue while retaining carried loot and Hero/Quest progress.
+- [x] Add initial independent Creature gold, rune and material drops with inclusive
+  quantity ranges and deterministic replay.
+- [ ] Expand Creature economic content: Capacity, event rates and the mixed-stamina
+  party loot rule.
 - [ ] Support agency-Hero borrowing in Expedition with an explicit pricing rule.
 
 ## Milestone 4 — Server-side automatic combat
@@ -213,7 +217,7 @@ Ordered implementation:
 5. [ ] API and frontend: expose stamina as time, hero XP/level, all skill
    levels/progress, and agency Rest/Training levels. Replace the current
    80%/30% color bands with >40h and <15h. Optional Quest payouts are
-   implemented in Milestone 3; balanced Creature loot remains separate.
+   implemented in Milestone 3; initial Creature loot is also implemented.
 6. [ ] Verify: unit-test boundaries (exactly 40h and 15h), `1x`/`2x`
    stacking, fractional points, class/agency rates, level-up and defeat.
    Integration-test no-kill battles, multi-kill and terminal mid-sync cases,
@@ -477,8 +481,10 @@ are established. See [ADR 0004](adr/0004-core-as-temporary-modular-monolith.md).
 - [x] Separate reward ownership: World defines Creature drops, Quest defines
   objective rewards, Expedition evaluates kills/drops, and Assets credits returns.
 - [x] Pay a fulfilled Quest once per assignment through an atomic Assets receipt.
-- [ ] Define balanced Creature gold/item/rune drops and amount ranges. Current
-  Creature seeds retain empty economic drops; deterministic evaluation is implemented.
+- [x] Seed both Creatures with independent 50% gold (1–25), seven 1% rune
+  rolls (one each), 5% Iron Ingots (1–5), and 5% Magic Crystals (1–5).
+  Uniform inclusive ranges, chance caps, deterministic replay and Return
+  settlement are covered by tests.
 - [ ] Define loot rate, Capacity and the mixed-stamina party factor before enabling
   the previously proposed low-stamina penalty or dynamic event rate.
 - [ ] Define Manager/agency sharing and which inflows it covers; current Quest and
@@ -496,8 +502,8 @@ These do not all block the current combat-progression slice.
 - [ ] Decide the hero's health, mana, and stamina on return after PvE defeat.
 - [ ] Balance creature XP, participation, training cadence, and skill costs
   after gameplay tests.
-- [ ] Define creature loot tables, gold/item amounts, and party Capacity
-  behavior; test chance caps and precision for ultra-rare drops.
+- [ ] Define party Capacity and balance further Creature loot content; test
+  precision for ultra-rare drops below the current 1% minimum.
 - [x] Define optional Quest completion, partial progress and agency cancellation rules.
 - [ ] Define timed objectives and additional difficulty/failure rules.
 - [x] Persist versioned initial Creature health, mana, attack, recovery, critical

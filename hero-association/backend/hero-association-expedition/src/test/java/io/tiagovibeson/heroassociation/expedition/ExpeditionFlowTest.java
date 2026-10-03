@@ -9,7 +9,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -20,6 +22,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
+import io.tiagovibeson.heroassociation.contract.QuestContract;
+import io.tiagovibeson.heroassociation.contract.WorldContract;
 import io.tiagovibeson.heroassociation.domain.HeroClass;
 import io.tiagovibeson.heroassociation.domain.HeroSkill;
 import io.tiagovibeson.heroassociation.domain.UuidV7;
@@ -118,6 +122,61 @@ class ExpeditionFlowTest {
         assertTrue(released.get());
         assertThrows(RunConflictException.class, () -> service.startPrepared(blocked, UuidV7.next()));
         assertEquals(live.expeditionId(), service.get(live.ownerManagerId(), live.expeditionId()).expeditionId());
+    }
+
+    @Test
+    void completedDungeonContinueIsIdempotentAndKeepsLootAndCappedQuestProgressUntilReturn() {
+        var creature = new WorldContract.Creature(UuidV7.next(), 1, "Fixture boss",
+                100, 1, 0, 0, 1600, 0, 0, 0, 2,
+                new WorldContract.GoldDrop(5, 5, 1),
+                List.of(new WorldContract.Drop("ITEM", UuidV7.next(), 1, 1, 1),
+                        new WorldContract.Drop("RUNE", UuidV7.next(), 1, 1, 1)));
+        var encounter = new WorldContract.Encounter(UuidV7.next(), "Boss", true,
+                List.of(new WorldContract.Spawn(creature.definitionId(), 1, 1)));
+        var map = new WorldContract.MapDefinition(UuidV7.next(), 1, "Repeat dungeon",
+                WorldContract.MapKind.DUNGEON,
+                List.of(new WorldContract.Floor(1, "Boss floor", "BOSS_CHAMBER", List.of(encounter))));
+        var plan = new WorldContract.Plan(map, List.of(creature));
+        var entry = new PreparedEntry(UuidV7.next(), UuidV7.next(), UuidV7.next(), UuidV7.next(), map.definitionId(), 1,
+                List.of(hero(HeroClass.WARRIOR, 300)), WorldPlans.profile(creature), plan);
+        var definition = new QuestContract.Definition(UuidV7.next(), 1, "Clear twice",
+                "Complete two dungeon clears.", QuestContract.Objective.DUNGEON_COMPLETION,
+                null, 2, Set.of(map.definitionId()), new QuestContract.Reward(160, Map.of(), Map.of()));
+        var assignment = new QuestContract.Assignment(UuidV7.next(), entry.ownerManagerId(), definition, 0, "ACTIVE");
+        entry = entry.withQuest(new QuestContract.Pin(entry.expeditionId(), entry.ownerManagerId(),
+                entry.agencyId(), entry.mapId(), entry.mapVersion(), assignment, true));
+        RunState started = service.startPrepared(entry, UuidV7.next());
+        assertEquals(1, worker.tick(started.fight().startedAt().plusSeconds(60)));
+        RunState completed = service.get(entry.ownerManagerId(), entry.expeditionId());
+        assertEquals(Phase.DUNGEON_COMPLETED, completed.phase());
+        assertTrue(ExpeditionView.from(completed).canContinue());
+        assertEquals(1, completed.quest().progress()); assertEquals(5, completed.carried().gold());
+
+        UUID repeatCommand = UuidV7.next();
+        RunState repeated = service.continueRun(entry.ownerManagerId(), entry.expeditionId(), repeatCommand, completed.stateVersion());
+        assertEquals(Phase.FIGHTING, repeated.phase()); assertEquals(1, repeated.encounterIndex());
+        assertEquals(completed.world(), repeated.world()); assertEquals(completed.heroes(), repeated.heroes());
+        assertEquals(completed.quest(), repeated.quest()); assertEquals(completed.carried(), repeated.carried());
+        assertNotEquals(started.fight().fightId(), repeated.fight().fightId());
+        assertEquals(repeated, service.continueRun(entry.ownerManagerId(), entry.expeditionId(), repeatCommand, completed.stateVersion()));
+        UUID managerId = entry.ownerManagerId(), expeditionId = entry.expeditionId();
+        assertThrows(RunConflictException.class, () -> service.continueRun(managerId, expeditionId, UuidV7.next(), completed.stateVersion()));
+        assertEquals(1, worker.tick(repeated.fight().startedAt().plusSeconds(60)));
+        RunState twice = service.get(managerId, expeditionId);
+        assertEquals(Phase.DUNGEON_COMPLETED, twice.phase()); assertEquals(2, twice.quest().progress());
+        assertEquals(10, twice.carried().gold());
+        assertEquals(twice, service.continueRun(managerId, expeditionId, repeatCommand, completed.stateVersion()));
+
+        RunState third = service.continueRun(managerId, expeditionId, UuidV7.next(), twice.stateVersion());
+        RunState returning = service.returnRun(managerId, expeditionId, UuidV7.next(), third.stateVersion());
+        assertFalse(returning.canContinue());
+        assertEquals(1, worker.tick(third.fight().startedAt().plusSeconds(60)));
+        RunState pending = service.get(managerId, expeditionId);
+        assertEquals(Phase.SETTLEMENT_PENDING, pending.phase()); assertFalse(pending.canContinue());
+        assertEquals(2, pending.quest().progress()); assertEquals(15, pending.carried().gold());
+        assertEquals(3, pending.carried().items().values().stream().mapToInt(Integer::intValue).sum());
+        assertEquals(3, pending.carried().runes().values().stream().mapToInt(Integer::intValue).sum());
+        assertThrows(RunConflictException.class, () -> service.continueRun(managerId, expeditionId, UuidV7.next(), pending.stateVersion()));
     }
 
     @Test

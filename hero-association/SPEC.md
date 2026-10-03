@@ -157,8 +157,11 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
   fulfilled objectives credit gold/items/runes through Assets once per assignment.
 - Expedition admission accepts any published Map UUIDv7, pins its exact version,
   Creature definitions, Hero baseline and optional Quest assignment. Fields repeat;
-  dungeons finish after their last encounter. `DUNGEON_COMPLETED` permits Return
-  and rejects Continue. A wipe also waits for explicit Return.
+  dungeons reach `DUNGEON_COMPLETED` after their last encounter. Continue from
+  that phase restarts the pinned dungeon at its first encounter in the same
+  Expedition, retaining Hero resources/progression, carried loot and Quest
+  progress. Each encounter gets a fresh fight ID and RNG seed; state versions
+  remain monotonic. Return banks the accumulated results. A wipe waits for Return.
 - `POST /api/v1/agencies/{agencyId}/feed-posts` creates an agency-scoped text
   post and returns the updated agency state.
 - `GET /api/v1/market/orders` returns the global open market order book.
@@ -260,9 +263,8 @@ The Hero must be at the agency, not on an Expedition. An unavailable
 rune or away Hero returns `409 Conflict`; a slot outside 0 through 4 returns
 `400 Bad Request`.
 Agency item inventory contains stackable materials. The seed contains Magic
-Crystals and Iron Ingots; item equipment remains planned. Creature drop evaluation is implemented, but
-initial Creature definitions intentionally have empty economic drops. Quest rewards
-introduce explicit gold and item payouts.
+Crystals and Iron Ingots; item equipment remains planned. Both seeded Creature
+types award independent gold, item and rune drops; Quest rewards add objective payouts.
 Agency levels are Agency, Training, Rest, Size, Reputation, and Intelligence.
 Rest represents the agency's recovery facilities; there is no Medical Level.
 Its concrete upgrade effect is still to be defined. Away heroes cannot change
@@ -289,9 +291,18 @@ before reserving Heroes; an exact retry reuses the original plan. Expedition
 copies it to Redis and performs no World lookup during combat or Continue.
 Troll Field repeats three Trolls (2,000 HP, 4 attack, 100 base XP). Broken Pass
 Cavern has three Forest Wolves on floor one and a Troll boss on floor two.
-Creature gold and probabilistic item/rune drops use a separate deterministic RNG
-stream, so adding drops cannot change combat rolls. Results, kill counts, Hero
-progression and Quest progress commit in the same Redis fight transition.
+Each defeated Troll or Forest Wolf rolls independently for 50% gold (1–25),
+1% for each of the seven rune types (one rune), 5% Iron Ingots (1–5), and 5%
+Magic Crystals (1–5). Every entry is rolled even when another succeeds or fails,
+so multiple rune types, both materials and gold can drop together. Successful
+quantities are uniformly selected from inclusive ranges. The pinned loot rate
+scales chances, capped at 100%, without changing quantities or the number of rolls;
+the current rate is 1x with no stamina modifier. Loot from kills before a wipe
+is retained. Creature drops use a separate deterministic RNG stream, so adding
+drops cannot change combat rolls. Replay retains the same kills and quantities.
+Carried loot is credited to the Party owner once on Return, independently of
+Quest rewards. Results, kill counts, Hero progression and Quest progress commit
+in the same Redis fight transition.
 
 Quest owns immutable definitions, assignments, admission pins, return receipts
 and payout recovery. A Manager may accept one optional Quest at the agency,
@@ -301,10 +312,15 @@ objectives can restrict eligible Maps. Progress cannot exceed the requirement.
 The admitted assignment version and reward remain fixed throughout the run.
 Completion and cancellation permit later acceptance with a new assignment ID.
 
-A win waits for Continue; a wipe or completed dungeon waits for Return.
+A win waits for Continue or Return; a completed dungeon can Continue from its
+first encounter. Each clear advances eligible dungeon-completion objectives,
+capped at the requirement, without creating another reward for the assignment.
+A wipe waits for Return. The public snapshot's `canContinue` reflects the phase,
+living Heroes and absence of a return request.
 Return requested during a fight takes effect when that fight finishes. The
 frontend's optional auto-continue acts only while the Map page is open and the
-run is waiting after a victory. Core's old SQL Quest battle API, tables, Creature
+run is waiting after a victory, including dungeon completion. With auto-continue
+off, completion stays paused. Core's old SQL Quest battle API, tables, Creature
 cache, combat-sync command and five-second combat worker are retired.
 
 Rune commands remain durable Core asset workflows. Supply UUIDv7 `operationKey`
@@ -354,7 +370,8 @@ per later level. Training skill progress will start at 2x and gain 5% of that
 baseline per later Training Level. Above 40 hours adds 50 percentage points
 to hero XP only; below 15 hours halves hero XP and skill progress. A battle
 with no kill can still drain stamina and advance skills. Quest gold and item rewards are credited by Assets on fulfilled return;
-Creature seed drop amounts remain an economic-content decision.
+Creature gold, rune and material drops follow the pinned table above; shared
+Capacity, event-rate configuration and mixed-stamina loot modifiers remain deferred.
 
 Core's five-second agency recovery job uses a transaction-scoped PostgreSQL
 advisory lock, so competing replicas skip a tick. Expedition fight transitions
@@ -613,8 +630,9 @@ IDs must not be added for entities or exposed through the API.
   scrolls horizontally rather than overlapping the combatants. The Map also
   shows current Hero XP, skill points, stamina, and carried assets from the
   authoritative run; Hero totals include progress from before entry, and
-  changes are permanently saved only on return. The first Troll Field does
-  not yet award carried loot. User 2's seeded personal party has equipped runes
+  changes and carried loot are permanently saved only on return. Troll Field
+  and Broken Pass Cavern award the independent drops described above. User 2's
+  seeded personal party has equipped runes
   and a Magic Level 15 Mage for this battle demonstration. Expedition
   calculates the current non-interactive fight once and stores its
   event windows in Redis; visual reads do not rerun the engine. The BFF
@@ -624,7 +642,9 @@ IDs must not be added for entities or exposed through the API.
   paints the current server frame immediately; only subsequent live events are
   animated. Continue and Return remain server commands; the optional Map
   auto-continue control sends Continue 1.5 seconds after a victory while the
-  page is open. Simultaneous Continue and Return submissions are guarded in
+  page is open, including restarting a completed dungeon from its first floor.
+  It defaults to off and stops on leaving the Map, a wipe, or a Return request.
+  Simultaneous Continue and Return submissions are guarded in
   the browser, while the server enforces idempotency and state versions. The
   browser never decides attacks or outcomes. See
   [the fight timeline](COMBAT_TIMELINE.md).
@@ -634,7 +654,8 @@ IDs must not be added for entities or exposed through the API.
 - The Map selector reads World. A catalog outage prevents new entry while an
   admitted run continues from pinned data. The view names its destination, floor,
   fight result, carried assets and optional Quest progress. Clearing a dungeon
-  disables auto-continue and requires Return. Entry retries reuse their IDs.
+  permits another pass through auto-continue or an explicit Return. Entry retries
+  reuse their IDs.
 - The Heroes screen shows personal and agency Heroes, prepared Parties and away
   Parties. Rune and activity controls are locked while Heroes are on Expedition;
   the server also blocks adding Heroes to an away Party. Agency borrowing price

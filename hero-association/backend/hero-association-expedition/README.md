@@ -4,7 +4,10 @@ Expedition owns the Redis Map run and fight loop. The player and visual APIs
 remain opt-in in ordinary development and are enabled in the k3d lab.
 Core Quest combat is retired. Admission pins World Map/Creature versions and
 an optional Quest assignment, alongside Core Hero baselines. Dungeons have
-finite floors and wait for Return after completion; fields repeat encounters.
+finite floors and pause after completion; Continue restarts the pinned first
+floor in the same Expedition while retaining Hero resources/progression,
+carried loot and Quest progress. The Map's optional auto-continue sends that
+command after completion. Fields repeat encounters.
 
 Never construct a `PreparedEntry` from browser input: Core reserves the
 Party and supplies the trusted Hero baseline.
@@ -18,6 +21,13 @@ atomically with the run transition. RabbitMQ broker confirmation and Core
 owner application are separate states; Redis is cleaned only after the
 matching Core-applied acknowledgment. A private Core admission API and
 Expedition-side entry coordinator now exist.
+Each defeated Creature independently rolls its pinned gold, rune and item
+entries with a separate deterministic RNG stream. Troll and Forest Wolf roll
+50% for 1–25 gold, 1% for one of each of seven rune types, and 5% each for
+1–5 Iron Ingots and 1–5 Magic Crystals. Drops can coexist and quantities are
+uniform and inclusive. Carried loot updates with the terminal fight state and
+is credited once on Return; repeated clears cap Quest progress and pay one
+reward per assignment. The public view's `canContinue` governs dungeon repeats.
 Core returns the authenticated Manager's pinned Hero baseline over a
 service-key-protected internal call; Redis atomically fences abandoned IDs
 before Core releases them. The disabled-by-default HTTP API validates an
@@ -61,7 +71,7 @@ install the shared library first, then start the service with its worker
 enabled:
 
 ```bash
-./mvnw -pl hero-association-lib/combat-engine -am install
+./mvnw -pl hero-association-lib/combat-engine,hero-association-lib/game-contracts -am install
 cd hero-association-expedition
 HERO_ASSOCIATION_EXPEDITION_WORKER_ENABLED=true ../mvnw quarkus:dev
 ```

@@ -101,7 +101,7 @@ and separate personal starter heroes, wallets, and inventories.
   the initial prototype, any available agency rune can be equipped in any hero
   rune slot; compatibility rules will be added later.
 - Agency and personal inventories store stackable materials. Magic Crystals
-  and Iron Ingots can be traded, but cannot yet be equipped, spent, or looted.
+  and Iron Ingots can be looted and traded; equipment and crafting are planned.
 - The initial hero classes are:
   - Warrior
   - Mage
@@ -282,10 +282,22 @@ restart or outage. Cancellation pays nothing and resets no other game owner.
 
 Initial rewards are 120 gold for three Troll kills, 85 gold for four Forest
 Wolf kills in the cavern, 120 gold for its Troll boss, and 160 gold plus one
-Iron Ingot for clearing the cavern. Creature seeds retain empty economic drop
-tables. Drop evaluation uses a pinned table and deterministic random stream;
-balanced amounts, shared Capacity and the mixed-stamina loot rule remain future
-work. Carried loot belongs to the Party's Manager.
+Iron Ingot for clearing the cavern. Each defeated Troll and Forest Wolf rolls:
+
+| Drop | Chance per Creature | Quantity on success |
+| --- | --- | --- |
+| Gold | 50% | 1–25 |
+| Each of the seven rune types | 1% each | 1 of that rune |
+| Iron Ingot | 5% | 1–5 |
+| Magic Crystal | 5% | 1–5 |
+
+Every roll is independent, so several runes, both materials and gold can drop
+together. Quantities are uniform across the inclusive range. Drops are carried
+until Return and belong to the Party's Manager; kills before a wipe retain their
+loot. The pinned loot rate changes chances only, capped at 100%; the current
+rate is 1x without stamina modifiers. A separate deterministic loot RNG preserves
+replay and combat rolls. Shared Capacity, configurable event rates and the
+mixed-stamina loot rule remain future work.
 
 The seeded Troll has 2,000 health, 4 damage, a 1.6-second attack interval,
 100 mana and 10% critical chance. Forest Wolf has 120 health, 10 damage and no
@@ -350,8 +362,13 @@ See [the service contracts](WORLD_QUEST_ARCHITECTURE.md).
   visual snapshot projects elapsed real time and retains a bounded event
   history. Critical Chance Runes are summed up to 100%, and Critical Damage
   Rune values are added to the base 2× multiplier at each encounter start.
-- Victory allows Continue unless the final dungeon encounter is complete.
-  Wipes and completed dungeons wait for explicit Return. A return request
+- Victory allows Continue. After the final dungeon encounter, Continue starts
+  again from the first floor using the same pinned definitions and retaining
+  Hero resources/progression, carried loot and Quest progress. The Map's
+  auto-continue toggle includes completed dungeons and defaults to off; leaving
+  the page stops automatic commands. Repeated clears count toward objectives up
+  to their requirement, with one reward per assignment on Return.
+  Wipes wait for explicit Return. A return request
   during combat waits for that fight's terminal event. Core applies permanent
   Hero progress after Quest and Assets confirm the frozen return aggregate;
   only then does the Party return to the agency.

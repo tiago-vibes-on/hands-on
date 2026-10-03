@@ -79,5 +79,18 @@ test('Auto-continue only commands a living victory while enabled and idle', () =
   assert.equal(shouldAutoContinue(ready, true, 'return'), false)
   assert.equal(shouldAutoContinue({ ...ready, returnRequested: true }, true, null), false)
   assert.equal(shouldAutoContinue({ ...ready, phase: 'WIPED' }, true, null), false)
+  assert.equal(shouldAutoContinue({ ...ready, phase: 'FIGHTING' }, true, null), false)
+  assert.equal(shouldAutoContinue({ ...ready, canContinue: false }, true, null), false)
   assert.equal(shouldAutoContinue({ ...ready, heroes: [{ health: 0 }] }, true, null), false)
+})
+
+test('Auto-continue repeats a completed dungeon only when the server permits Continue', () => {
+  const completed = { phase: 'DUNGEON_COMPLETED', canContinue: true, returnRequested: false, heroes: [{ health: 1 }] }
+  assert.equal(shouldAutoContinue(completed, true, null), true)
+  assert.equal(shouldAutoContinue(completed, false, null), false)
+  assert.equal(shouldAutoContinue({ ...completed, canContinue: undefined }, true, null), false)
+  assert.equal(shouldAutoContinue(completed, true, 'continue'), false)
+  assert.equal(shouldAutoContinue({ ...completed, returnRequested: true }, true, null), false)
+  assert.equal(shouldAutoContinue({ ...completed, heroes: [{ health: 0 }] }, true, null), false)
+  assert.equal(shouldAutoContinue({ ...completed, phase: 'SETTLEMENT_PENDING' }, true, null), false)
 })

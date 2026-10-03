@@ -9,6 +9,7 @@ test('a Manager trades from a personal wallet without agency trading permission'
   await page.locator('#password').fill('manager4')
   await page.locator('#kc-login').click()
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  const before = (await (await page.request.get('/api/v1/account')).json()).manager.gold
 
   await page.getByRole('button', { name: 'Market' }).click()
   await expect(page.getByRole('heading', { name: 'Market' })).toBeVisible()
@@ -21,11 +22,11 @@ test('a Manager trades from a personal wallet without agency trading permission'
 
   const personalOffer = page.locator('.offer-row').filter({ hasText: 'Manager 4 · Manager' })
   await expect(personalOffer).toBeVisible()
-  expect((await (await page.request.get('/api/v1/account')).json()).manager.gold).toBe(199)
+  expect((await (await page.request.get('/api/v1/account')).json()).manager.gold).toBe(before - 1)
 
   await personalOffer.getByRole('button', { name: 'Cancel' }).click()
   await expect(personalOffer).toHaveCount(0)
-  expect((await (await page.request.get('/api/v1/account')).json()).manager.gold).toBe(200)
+  expect((await (await page.request.get('/api/v1/account')).json()).manager.gold).toBe(before)
 })
 
 async function personalMarket(page) {

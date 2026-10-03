@@ -92,10 +92,21 @@ public record RunState(
                 creature, carried, fight, lastOutcome, world, quest);
     }
 
+    public boolean canContinue() {
+        return (phase == Phase.AWAITING_CONTINUE || phase == Phase.DUNGEON_COMPLETED)
+                && !returnRequested && heroes.stream().anyMatch(hero -> hero.health() > 0);
+    }
+
+    public int nextEncounterIndex() {
+        if (!canContinue()) throw new IllegalStateException("Expedition cannot continue from this phase.");
+        return phase == Phase.DUNGEON_COMPLETED ? 1 : Math.addExact(encounterIndex, 1);
+    }
+
     public RunState beginNext(FightState nextFight) {
+        int nextIndex = nextEncounterIndex();
         return new RunState(schemaVersion, stateVersion + 1, expeditionId, ownerManagerId, agencyId,
-                partyId, mapId, mapVersion, encounterIndex + 1, Phase.FIGHTING, false, startedAt,
-                heroes, WorldPlans.profile(world.creature(world.map().encounter(encounterIndex + 1).spawns().getFirst())), carried, nextFight, null, world, quest);
+                partyId, mapId, mapVersion, nextIndex, Phase.FIGHTING, false, startedAt,
+                heroes, WorldPlans.profile(world.creature(world.map().encounter(nextIndex).spawns().getFirst())), carried, nextFight, null, world, quest);
     }
 
     public RunState finish(List<HeroState> updatedHeroes, Outcome outcome) {

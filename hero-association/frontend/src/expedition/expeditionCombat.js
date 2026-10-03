@@ -4,7 +4,9 @@ const heroColors = { WARRIOR: 0xa67434, MAGE: 0x835d9a, ARCHER: 0x357c79 }
 const creatureColors = [0x7c6047, 0x8d6c4d, 0x74583e, 0x876747]
 
 export function shouldAutoContinue(run, enabled, pendingAction) {
-  return Boolean(enabled && !pendingAction && run?.phase === 'AWAITING_CONTINUE'
+  const ready = run?.phase === 'AWAITING_CONTINUE' && run.canContinue !== false
+    || run?.phase === 'DUNGEON_COMPLETED' && run.canContinue === true
+  return Boolean(enabled && !pendingAction && ready
     && !run.returnRequested && run.heroes?.some((hero) => hero.health > 0))
 }
 

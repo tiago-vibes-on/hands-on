@@ -24,6 +24,7 @@ public record ExpeditionView(
         io.tiagovibeson.heroassociation.contract.WorldContract.MapDefinition map,
         int floor,
         boolean dungeonCompleted,
+        boolean canContinue,
         io.tiagovibeson.heroassociation.contract.QuestContract.Progress quest) {
 
     public static ExpeditionView from(RunState run) {
@@ -43,7 +44,8 @@ public record ExpeditionView(
                 run.phase(), run.returnRequested(), run.heroes(), run.creature(),
                 run.carried(), fight, run.lastOutcome(), run.world().map(), run.world().map().floorNumber(run.encounterIndex()),
                 run.world().map().completedAfter(run.encounterIndex()) && run.lastOutcome() != null
-                        && run.lastOutcome().status() == io.tiagovibeson.heroassociation.domain.combat.CombatStatus.HERO_VICTORY, run.quest());
+                        && run.lastOutcome().status() == io.tiagovibeson.heroassociation.domain.combat.CombatStatus.HERO_VICTORY,
+                run.canContinue(), run.quest());
     }
 
     public record FightView(UUID fightId, Instant startedAt, String rulesetVersion,

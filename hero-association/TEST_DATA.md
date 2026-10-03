@@ -108,6 +108,9 @@ World seeds Troll Field plus the two-floor Broken Pass Cavern (Forest Wolves,
 then a Troll boss). Quest seeds four optional definitions: three Troll kills,
 four Forest Wolf kills in the cavern, the cavern boss, and cavern completion.
 No assignments are pre-accepted. Rewards are respectively 120, 85, 120 and
-160 gold; cavern completion also gives one Iron Ingot to the Manager. Creature
-seeds retain empty economic drops. Both catalogs and reward definitions are
-versioned; the run pins them at admission.
+160 gold; cavern completion also gives one Iron Ingot to the Manager. Each
+defeated Troll and Forest Wolf has independent rolls for 50% gold (1–25),
+1% for each of the seven rune types (one each), 5% Iron Ingots (1–5), and 5%
+Magic Crystals (1–5). Successful quantities are uniform and inclusive; multiple
+drops can coexist. Both catalogs and reward definitions are versioned; the run
+pins them at admission and credits carried loot once on Return.

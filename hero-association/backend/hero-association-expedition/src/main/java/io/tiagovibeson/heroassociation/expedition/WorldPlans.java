@@ -15,7 +15,7 @@ final class WorldPlans {
     static Plan field(UUID mapId, int version, RunState.CreatureProfile creature) {
         var definition = new Creature(creature.definitionId(), creature.definitionVersion(), creature.name(), creature.baseExperience(),
                 creature.maxHealth(), creature.maxMana(), creature.attackDamage(), creature.attackIntervalMilliseconds(),
-                creature.healthRecoveryPerSecond(), creature.manaRecoveryPerSecond(), creature.criticalChance(), creature.criticalDamageMultiplier(), 0, List.of());
+                creature.healthRecoveryPerSecond(), creature.manaRecoveryPerSecond(), creature.criticalChance(), creature.criticalDamageMultiplier(), new GoldDrop(1, 1, 0), List.of());
         var encounter = new Encounter(mapId, "Encounter", false, List.of(new Spawn(definition.definitionId(), definition.version(), 3)));
         return new Plan(new MapDefinition(mapId, version, "Troll Field", MapKind.FIELD,
                 List.of(new Floor(1, "Field", "OPEN_FIELD", List.of(encounter)))), List.of(definition));

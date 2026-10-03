@@ -41,13 +41,23 @@ and both Mage spell slots (locked until the required Magic Level). An
 accessible panel names the runes and their effects and explains spell
 requirements, mana cost, and cooldown; narrow layouts can scroll the battle
 horizontally. A separate panel shows the current authoritative Hero totals
-and carried assets. Hero changes settle only on return, and creature loot is
-not yet awarded in the first Troll Field. The
+and carried assets. Hero changes and loot settle once on Return. Each defeated
+Troll and Forest Wolf independently rolls 50% for 1–25 gold, 1% for one of each
+rune type, 5% for 1–5 Iron Ingots, and 5% for 1–5 Magic Crystals. All seven
+runes have separate rolls; multiple drops can coexist. Quantity ranges are
+uniform and inclusive. The current loot rate is 1x without stamina modifiers. The
 auto-continue toggle is off by default; when enabled, the open Map page sends
-the normal Continue command 1.5 seconds after a victory. Leaving the page,
+the normal Continue command 1.5 seconds after a victory, including dungeon
+completion. A completed dungeon restarts at its first floor in the same
+Expedition, retaining Hero resources/progression, carried loot and the pinned
+Quest. Repeated clears advance Quest progress up to its requirement; the reward
+is still credited once on Return. With the toggle off, completion stays paused.
+The API exposes `canContinue` for eligible runs. Leaving the page,
 a wipe, or a return request does not continue the run. User 2's disposable
 seeded party has a Magic Level 15 Mage and equipped runes to demonstrate these
 visuals; other starter skills still begin at Level 1.
+See the [manual dungeon and loot checks](../e2e/README.md#manually-test-dungeon-repeats-and-loot)
+for the local account, browser steps and expected results.
 For integration work,
 set `HERO_ASSOCIATION_EXPEDITION_WEBSOCKET_ENABLED=true` in BFF,
 `HERO_ASSOCIATION_EXPEDITION_VISUAL_API_ENABLED=true` in Expedition, and the
@@ -116,12 +126,14 @@ settlement and refund recovery uses earlier reservation authorization without a
 player token. Set Market's separate database password, Assets' separate database
 password, and both private credentials in `.env` for Compose.
 
-The component runner accepts `core`, `bff`, `expedition`, `market`, `assets`, or
-`all`; all dependencies are disposable k3d resources. The full gate verifies an
+The component runner accepts `core`, `bff`, `expedition`, `market`, `assets`,
+`world`, `quest`, or `all`; all dependencies are disposable k3d resources. The full gate verifies an
 exact eight-image archive. Hybrid mode supports each service, including
 `../deploy/k3d/hybrid.sh run assets`, and validates existing schemas.
 
-Before Flyway, schema changes require a coupled Core/Assets/Market reset. First
+Before Flyway, schema or deterministic seed changes use a coupled
+Core/Assets/Market/World/Quest reset. The ranged loot contract and Creature seeds
+must be deployed together with no active runs. First
 build and pass the complete candidate archive in disposable k3d. For the initial
 Assets extraction, stage `../deploy/k3d/stage-assets.sh ARCHIVE`, then promote
 with `node ../pipeline/deploy-k3d.mjs --reset-game-db ARCHIVE`. Promotion stops

@@ -73,11 +73,10 @@ public class ExpeditionService {
             return duplicate;
         }
         RunState current = requireRun(managerId, expeditionId);
-        if (current.stateVersion() != expectedVersion || current.phase() != Phase.AWAITING_CONTINUE
-                || current.returnRequested() || current.heroes().stream().noneMatch(hero -> hero.health() > 0)) {
+        if (current.stateVersion() != expectedVersion || !current.canContinue()) {
             throw new RunConflictException("Expedition cannot continue from this version or phase.");
         }
-        RunState updated = current.beginNext(fightFactory.start(current.heroes(), current.world(), current.encounterIndex() + 1, Instant.now()));
+        RunState updated = current.beginNext(fightFactory.start(current.heroes(), current.world(), current.nextEncounterIndex(), Instant.now()));
         Result result = store.command(current, updated, commandId, digest);
         if (result == Result.UPDATED) {
             store.schedule(updated, updated.fight().startedAt());

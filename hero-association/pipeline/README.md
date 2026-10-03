@@ -103,8 +103,9 @@ printed by `build-local.sh`:
 ```
 
 The runner checks the archive checksum and all eight services’ running Pod image IDs,
-including the candidate built from uncommitted worktree changes. It runs seventeen
-browser/API cases, three Assets outage/restart phases, four World/Quest outage
+including the candidate built from uncommitted worktree changes. It runs eighteen
+browser/API cases, including dungeon auto-continue and displayed carried loot,
+three Assets outage/restart phases, four World/Quest outage
 and reward-recovery phases, BFF
 restart/session continuity, isolated BFF Redis outage and expired-token
 checks, and k6 market thresholds. Only after namespace cleanup

@@ -131,9 +131,7 @@ public class FightResolver {
                     previous.criticalChance(), previous.criticalDamageMultiplier()));
         }
         Map<java.util.UUID, Integer> kills = new java.util.TreeMap<>();
-        long gold = 0;
-        Map<java.util.UUID, Integer> items = new java.util.TreeMap<>();
-        Map<java.util.UUID, Integer> runes = new java.util.TreeMap<>();
+        RunState.CarriedAssets loot = RunState.CarriedAssets.empty();
         Random dropRandom = new Random(fight.randomSeed() ^ 0x776f726c642d7631L);
         for (String id : defeated) {
             var definition = fight.creatures().get(id);
@@ -142,14 +140,10 @@ public class FightResolver {
                 continue;
             }
             kills.merge(definition.definitionId(), 1, Math::addExact);
-            gold = Math.addExact(gold, BigDecimal.valueOf(definition.goldDrop()).multiply(fight.dropRate()).setScale(0, RoundingMode.DOWN).longValueExact());
-            for (var drop : definition.drops()) {
-                double chance = Math.min(1, drop.chance() * fight.dropRate().doubleValue());
-                if (dropRandom.nextDouble() < chance) ("ITEM".equals(drop.resourceType()) ? items : runes).merge(drop.resourceId(), drop.quantity(), Math::addExact);
-            }
+            loot = loot.plus(LootResolver.roll(definition, fight.dropRate(), dropRandom));
         }
         return new FightTimeline(fight.fightId(),
-                new Outcome(fight.fightId(), battle.getStatus(), terminalAt, kills, new RunState.CarriedAssets(gold, items, runes)), List.copyOf(updated), windows);
+                new Outcome(fight.fightId(), battle.getStatus(), terminalAt, kills, loot), List.copyOf(updated), windows);
     }
 
     static long experienceAward(int baseExperience, long stamina, BigDecimal xpRate) {

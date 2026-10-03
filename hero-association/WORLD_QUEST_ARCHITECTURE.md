@@ -13,12 +13,21 @@ Continue. Publishing a version cannot change an admitted run.
 
 Fields repeat their encounter sequence indefinitely. Dungeons have consecutive
 floors and finite encounter sequences; clearing the final encounter leaves the
-Party waiting for explicit Return. A wipe also waits for Return. Neither case
-starts another encounter. The first content preserves Troll Field and adds
+Party waiting for Continue or Return. Continue restarts the pinned first floor
+within the same Expedition, keeping Hero resources/progression, carried loot
+and Quest progress with a fresh fight ID and RNG seed. State versions remain
+monotonic, so retries cannot restart an extra pass. The Map's optional
+auto-continue includes dungeon completion and stops when the page closes, the
+Party wipes, or Return is requested. A wipe waits for Return.
+The first content preserves Troll Field and adds
 Broken Pass Cavern, with Forest Wolves on its entrance floor and a Troll boss
 on its second floor. Creature loot tables are pinned and evaluated with a
-separate deterministic random stream; current Creature seeds retain empty
-economic drops, while Quest rewards introduce the first objective payouts.
+separate deterministic random stream. Each defeated Troll and Forest Wolf has
+an independent 50% roll for 1–25 gold, seven independent 1% rune rolls (one of
+each type), and separate 5% rolls for 1–5 Iron Ingots and 1–5 Magic Crystals.
+Quantity ranges are uniform and inclusive; the pinned rate changes chance only,
+capped at 100%. Multiple drops can coexist. Carried loot and Quest objective
+payouts are credited once through their respective Assets receipts on Return.
 
 Quest owns versioned objective/reward definitions, Manager assignments,
 admission pins, return receipts, and reward recovery in its own PostgreSQL
@@ -34,7 +43,9 @@ making progress. At admission Quest freezes the active assignment and its
 banked progress. Expedition accumulates bounded progress in Redis from server
 combat outcomes, including Creature kills before a wipe. It writes no per-hit
 or per-fight Quest rows. Return banks progress once; unmet objectives remain
-active for a later run. An objective met before Return earns its reward even
+active for a later run. Repeated dungeon clears advance the pinned objective
+up to its requirement and still pay only once per assignment on Return.
+An objective met before Return earns its reward even
 if a later encounter wipes the Party.
 
 Core remains the temporary permanent-Hero settlement coordinator. It validates
@@ -64,7 +75,8 @@ Expedition borrowing, which is outside this change.
 
 Verification must cover immutable versions, changed-payload retries, foreign
 Managers, acceptance/cancellation races with admission, incomplete progress
-across returns, completed Dungeon refusal of Continue, lost reward responses,
+across returns, completed dungeon repeat and command replay, capped progress,
+displayed carried loot matching API totals, lost reward responses,
 Assets/Quest outages and restart recovery, and exact-once payouts. The initial
 cutover uses one verified eight-image archive and matching deterministic data
 across Core, Assets, Market, World, and Quest; refuse active runs or unresolved
@@ -109,7 +121,7 @@ definitions, two Map definitions and four Quest definitions. The completed
 cavern assignment has exactly one APPLIED Assets receipt for 160 gold and one
 Iron Ingot. The retired Core Redis Deployment and Service are absent.
 
-The current component suites pass 182 cases across the seven backend services
+The cutover component suites passed 182 cases across the seven backend services
 (Core 71, BFF 19, Expedition 20, Market 16, Assets 36, World 6, Quest 14),
 alongside combat-engine and AMQP checks. Six frontend test files, lint/build,
 and eight delivery test files passed. Native wiring is updated; native
@@ -129,3 +141,23 @@ Quest, Market or Redis run state. Both disposable namespaces were removed.
 Frontend hot reload uses the optional Docker Desktop host route. Gateway HTML,
 the Vite client, its HMR WebSocket, sign-in/out, the two-Map selector and the
 four-objective board all passed the final browser smoke check.
+
+The eight-image `dungeon-repeat-loot-20261003-v2` archive passed its complete
+isolated gate on 2026-10-03. Component checks passed 191 cases across the seven
+backend services (Core 71, BFF 19, Expedition 28, Market 16, Assets 36, World 7,
+Quest 14), plus combat-engine and AMQP checks. Frontend tests, lint and build
+passed. The gate passed 18 browser/API cases, four World/Quest phases, three
+Assets recovery phases, BFF session/expiry checks and market k6 thresholds.
+The dungeon browser case verified auto-continue restarting at floor one with
+unchanged Heroes, loot and Quest progress, matching visible loot counters, and
+one combined Return payout. A test dungeon carried 31 gold and two Iron Ingots
+before its first repeat. Exact command replay and World outage preserved the
+pinned definitions; repeated clears capped Quest progress without extra rewards.
+
+This archive has not been promoted to the daily lab. Its latest readiness
+audit still found an active User 2 cavern run, one admission reservation and
+one Quest admission, with no pending Core Assets or Market workflows. Daily
+Troll/Forest Wolf definitions and the active run still contain zero gold and
+empty drop tables. Activation requires returning active runs, then resetting
+the coupled local game databases to the verified seeds; do not bypass the
+promotion guard or rewrite an admitted run's pinned data.

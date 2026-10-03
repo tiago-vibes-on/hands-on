@@ -14,28 +14,39 @@ public final class WorldContract {
         return value;
     }
 
-    public record Drop(String resourceType, UUID resourceId, int quantity, double chance) {
+    public record GoldDrop(int minimumQuantity, int maximumQuantity, double chance) {
+        public GoldDrop { dropRange(minimumQuantity, maximumQuantity, chance); }
+    }
+
+    public record Drop(String resourceType, UUID resourceId, int minimumQuantity, int maximumQuantity, double chance) {
         public Drop {
             id(resourceId);
-            if (!("ITEM".equals(resourceType) || "RUNE".equals(resourceType)) || quantity < 1
-                    || !Double.isFinite(chance) || chance < 0 || chance > 1)
+            dropRange(minimumQuantity, maximumQuantity, chance);
+            if (!("ITEM".equals(resourceType) || "RUNE".equals(resourceType)))
                 throw new IllegalArgumentException("Invalid Creature drop.");
         }
+    }
+
+    private static void dropRange(int minimumQuantity, int maximumQuantity, double chance) {
+        if (minimumQuantity < 1 || maximumQuantity < minimumQuantity
+                || !Double.isFinite(chance) || chance < 0 || chance > 1)
+            throw new IllegalArgumentException("Invalid Creature drop range or chance.");
     }
 
     public record Creature(UUID definitionId, int version, String name, int baseExperience,
                            int maxHealth, int maxMana, int attackDamage, long attackIntervalMilliseconds,
                            int healthRecoveryPerSecond, int manaRecoveryPerSecond, double criticalChance,
-                           double criticalDamageMultiplier, long goldDrop, List<Drop> drops) {
+                           double criticalDamageMultiplier, GoldDrop goldDrop, List<Drop> drops) {
         public Creature {
             id(definitionId);
+            Objects.requireNonNull(goldDrop);
             drops = List.copyOf(drops);
             if (version < 1 || name == null || name.isBlank() || name.length() > 100
                     || baseExperience < 0 || maxHealth < 1 || maxMana < 0 || attackDamage < 0
                     || attackIntervalMilliseconds < 1 || healthRecoveryPerSecond < 0 || manaRecoveryPerSecond < 0
                     || !Double.isFinite(criticalChance) || criticalChance < 0 || criticalChance > 1
                     || !Double.isFinite(criticalDamageMultiplier) || criticalDamageMultiplier < 1
-                    || goldDrop < 0 || drops.size() > 32)
+                    || drops.size() > 32)
                 throw new IllegalArgumentException("Invalid Creature definition.");
         }
     }

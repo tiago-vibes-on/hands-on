@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { readFile, writeFile } from 'node:fs/promises'
+import { cavernReward, expectReturnedLoot } from '../loot-return.js'
 function newUuidV7() {
   const bytes = new Uint8Array(16)
   crypto.getRandomValues(bytes)
@@ -58,12 +59,12 @@ test('pins a dungeon and completion Quest before dependency outages', async ({ p
   const run = await active(page)
   expect(run.map.version).toBe(map.version); expect(run.quest.pin.assignment.assignmentId).toBe(assignment.assignmentId)
   expect(run.quest.pin.assignment.definition.version).toBe(2)
-  await writeFile(fixturePath, JSON.stringify({ agencyId, heroes: party.heroIds, runId: run.expeditionId, mapId: map.definitionId, partyId: party.id, assignmentId: assignment.assignmentId, beforeGold: account.manager.gold, beforeItems: account.manager.items.find((row) => row.code === 'iron-ingot')?.quantity ?? 0 }))
+  await writeFile(fixturePath, JSON.stringify({ agencyId, heroes: party.heroIds, runId: run.expeditionId, mapId: map.definitionId, partyId: party.id, assignmentId: assignment.assignmentId, before: account.manager }))
   await page.context().storageState({ path: statePath })
 })
 
-test('World outage preserves pinned floors and rejects new admission', async ({ browser }) => {
-  test.setTimeout(300_000)
+test('World outage preserves pinned floors and dungeon repeats while rejecting new admission', async ({ browser }) => {
+  test.setTimeout(360_000)
   await resumed(browser, async (page, fixture) => {
     // The BFF emits 502 for a connection failure; its sidecar can report 503 first.
     expect([502, 503]).toContain((await page.request.get(`${origin}/api/v1/maps`)).status())
@@ -75,7 +76,22 @@ test('World outage preserves pinned floors and rejects new admission', async ({ 
     await expect.poll(async () => (await active(page)).phase, { timeout: 150_000, intervals: [1000] }).toBe('DUNGEON_COMPLETED')
     const complete = await active(page)
     expect(complete.quest.progress).toBe(1)
+    expectReturnedLoot(fixture.before, (await (await page.request.get(`${origin}/api/v1/account`)).json()).manager, { gold: 0, items: {}, runes: {} })
+    const repeatCommand = { commandId: newUuidV7(), expectedVersion: complete.stateVersion }
+    const repeatedResponse = await page.request.post(`${origin}/api/v1/expeditions/${fixture.runId}/continue`, { headers: await headers(page), data: repeatCommand })
+    expect(repeatedResponse.status()).toBe(200)
+    const repeated = await repeatedResponse.json()
+    expect(repeated.floor).toBe(1); expect(repeated.phase).toBe('FIGHTING')
+    expect(repeated.map).toEqual(complete.map); expect(repeated.heroes).toEqual(complete.heroes)
+    expect(repeated.quest).toEqual(complete.quest); expect(repeated.carried).toEqual(complete.carried)
+    const replay = await page.request.post(`${origin}/api/v1/expeditions/${fixture.runId}/continue`, { headers: await headers(page), data: repeatCommand })
+    expect(replay.status()).toBe(200); expect((await replay.json()).stateVersion).toBe(repeated.stateVersion)
     expect((await page.request.post(`${origin}/api/v1/expeditions/${fixture.runId}/continue`, { headers: await headers(page), data: { commandId: newUuidV7(), expectedVersion: complete.stateVersion } })).status()).toBe(409)
+    await expect.poll(async () => (await active(page)).phase, { timeout: 150_000, intervals: [1000] }).toBe('AWAITING_CONTINUE')
+    const returning = await active(page)
+    expect(returning.quest.progress).toBe(1)
+    fixture.carried = returning.carried
+    await writeFile(fixturePath, JSON.stringify(fixture))
     const other = await browser.newContext({ ignoreHTTPSErrors: true }); const newcomer = await other.newPage()
     try {
       await signIn(newcomer, 'manager10@mail.com', 'manager10')
@@ -112,11 +128,10 @@ test('Quest restart recovery credits the completed dungeon reward exactly once',
     expect(board.activeAssignment).toBeNull(); expect(board.atAgency).toBe(true)
     expect(board.recentAssignments.find((q) => q.assignmentId === fixture.assignmentId).status).toBe('COMPLETED')
     const after = (await (await page.request.get(`${origin}/api/v1/account`)).json()).manager
-    expect(after.gold).toBe(fixture.beforeGold + 160)
-    expect(after.items.find((row) => row.code === 'iron-ingot').quantity).toBe(fixture.beforeItems + 1)
+    expectReturnedLoot(fixture.before, after, fixture.carried, cavernReward)
     const agency = await (await page.request.get(`${origin}/api/v1/agencies/${fixture.agencyId}/state`)).json()
     expect(agency.personalHeroes.filter((hero) => fixture.heroes.includes(hero.id)).every((hero) => hero.activity !== 'ON_EXPEDITION')).toBe(true)
     await page.waitForTimeout(3500)
-    expect((await (await page.request.get(`${origin}/api/v1/account`)).json()).manager.gold).toBe(after.gold)
+    expectReturnedLoot(after, (await (await page.request.get(`${origin}/api/v1/account`)).json()).manager, { gold: 0, items: {}, runes: {} })
   })
 })

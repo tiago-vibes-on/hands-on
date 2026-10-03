@@ -13,6 +13,7 @@ export default defineConfig({
     'expedition.spec.js',
     'k3d-expedition-api.spec.js',
     'quest.spec.js',
+    'quest-dungeon.spec.js',
   ],
   fullyParallel: false,
   workers: 1,

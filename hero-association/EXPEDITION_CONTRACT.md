@@ -23,8 +23,11 @@ API; no per-frame Core read or durable per-hit event is involved.
 The current run snapshot pins a complete World Map/Creature plan, optional
 Quest assignment/progress, Hero resources, progression and rune effects from
 Core admission, carried loot, the opening fight snapshot, RNG version/seed,
-and 1x XP/skill/drop rates. Creature seeds currently have no economic drops;
-capacity and configurable event rates remain future work. The settlement
+and 1x XP/skill/drop rates. Each defeated Troll and Forest Wolf independently
+rolls 50% for 1–25 gold, seven 1% rune rolls for one of each type, and 5% each
+for 1–5 Iron Ingots and 1–5 Magic Crystals. Quantities are uniform and inclusive;
+drops can coexist. A separate deterministic loot stream preserves combat rolls
+and replay. Capacity and configurable event rates remain future work. The settlement
 payload is derived from the frozen run on every retry rather than stored as a
 second copy inside that run. The due index is rebuildable and terminal
 commits are fenced by a Redis lease and state version. See the
@@ -83,8 +86,8 @@ reusing an ID with a different payload is a conflict.
 | --- | --- |
 | `Start(mapId, partyId, commandId)` | Reserve the entry baseline; atomically create the Manager's active-run index and UUIDv7 run. A different active run is `409 Conflict`. Start the first pinned encounter without requiring Continue. |
 | `Get(runId)` | Return the current snapshot to the owner; do not advance combat. A foreign run is not disclosed. |
-| `Continue(runId, commandId, expectedVersion)` | Only from `AWAITING_CONTINUE`, with living Heroes and no return request. Pin the next encounter and enter `FIGHTING`. It never starts automatically after a win. |
-| `Return(runId, commandId, expectedVersion)` | From `AWAITING_CONTINUE` or `WIPED`, freeze for settlement. During `FIGHTING`, persist `returnRequested=true`; finish that fight, then freeze without another encounter. |
+| `Continue(runId, commandId, expectedVersion)` | From `AWAITING_CONTINUE` or `DUNGEON_COMPLETED`, with living Heroes and no return request. Use the next pinned encounter, or restart the pinned first encounter after dungeon completion, and enter `FIGHTING`. The browser's optional auto-continue sends this same command. |
+| `Return(runId, commandId, expectedVersion)` | From `AWAITING_CONTINUE`, `DUNGEON_COMPLETED` or `WIPED`, freeze for settlement. During `FIGHTING`, persist `returnRequested=true`; finish that fight, then freeze without another encounter. |
 
 The browser connects to `/ws/v1/expeditions/{expeditionId}` through the BFF
 with its existing session cookie. The upgrade requires a matching Origin and
@@ -113,6 +116,14 @@ The phases are `FIGHTING`, `AWAITING_CONTINUE`, `DUNGEON_COMPLETED`, `WIPED`, an
 `SETTLEMENT_PENDING`. The Party is at the agency when no active run exists.
 A winning fight moves to `AWAITING_CONTINUE`, or `DUNGEON_COMPLETED` after the
 last dungeon encounter; a pending Return moves to `SETTLEMENT_PENDING`.
+The public view exposes `canContinue` for eligible phases with living Heroes
+and no return request. Continue after dungeon completion retains the Expedition
+ID, pinned World/Quest definitions, Hero resources/progression and carried loot,
+while resetting the encounter index to 1 with a fresh fight ID and RNG seed.
+State versions remain monotonic; exact command replay cannot start another pass.
+Each successful clear advances an eligible completion objective, capped at its
+requirement, with a single reward per assignment on Return. Auto-continue is off
+by default and sends no commands after leaving the Map or requesting Return.
 A wipe moves to `WIPED`, except that a pending
 Return moves to `SETTLEMENT_PENDING`. A wipe does not automatically return.
 `SETTLEMENT_PENDING` accepts no new fight commands. The private handoff and
@@ -190,7 +201,9 @@ during a fight must survive and be merged into that terminal commit, not
 overwritten by a worker using an older version. No Hero/Assets owner update
 or RabbitMQ settlement occurs during replay.
 
-`AWAITING_CONTINUE` and `WIPED` remain parked across restarts. A pending
+`AWAITING_CONTINUE`, `DUNGEON_COMPLETED` and `WIPED` remain parked across restarts.
+The browser may resume Continue when its Map page is open and auto-continue is
+enabled. A pending
 settlement resumes its retry/reconciliation path; it is never replaced with
 the entry baseline. Unknown schema/ruleset versions, missing index/run pairs,
 or corrupt snapshots fail closed and require investigation. Do not invent a

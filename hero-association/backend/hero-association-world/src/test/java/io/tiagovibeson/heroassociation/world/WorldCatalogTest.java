@@ -31,7 +31,7 @@ class WorldCatalogTest {
     @Test void publishingNewVersionsCannotChangeAnExistingPlan() throws Exception {
         Plan pinned = catalog.plan(FIELD, 1);
         Creature old = pinned.creatures().getFirst();
-        Creature newer = new Creature(old.definitionId(), 2, old.name(), 200, 4000, 100, 8, 1600, 0, 0, .1, 2, 0, List.of());
+        Creature newer = new Creature(old.definitionId(), 2, old.name(), 200, 4000, 100, 8, 1600, 0, 0, .1, 2, new GoldDrop(1, 1, 0), List.of());
         var spawn = new Spawn(newer.definitionId(), 2, 3);
         var encounter = new Encounter(pinned.map().encounter(1).encounterId(), "Three Trolls", false, List.of(spawn));
         var newerMap = new io.tiagovibeson.heroassociation.contract.WorldContract.MapDefinition(FIELD, 2, "Troll Field", MapKind.FIELD,
@@ -54,6 +54,20 @@ class WorldCatalogTest {
         }
     }
 
+    @Test void bothCreatureSeedsHaveIndependentGoldSevenRunesAndTwoMaterialDrops() {
+        Plan plan = catalog.plan(UUID.fromString("019c4c00-0006-7000-8000-000000000002"), 1);
+        assertEquals(2, plan.creatures().size());
+        for (Creature creature : plan.creatures()) {
+            assertEquals(new GoldDrop(1, 25, .5), creature.goldDrop());
+            var expected = new ArrayList<Drop>();
+            for (int number = 1; number <= 7; number++) expected.add(new Drop("RUNE",
+                    UUID.fromString("019c4c00-0020-7000-8000-%012d".formatted(number)), 1, 1, .01));
+            expected.add(new Drop("ITEM", UUID.fromString("019c4c00-0070-7000-8000-000000000002"), 1, 5, .05));
+            expected.add(new Drop("ITEM", UUID.fromString("019c4c00-0070-7000-8000-000000000001"), 1, 5, .05));
+            assertEquals(expected, creature.drops());
+        }
+    }
+
     @Test void aDungeonHasFiniteOrderedFloors() {
         Plan field = catalog.plan(FIELD, 1);
         Encounter first = field.map().encounter(1);
@@ -69,7 +83,7 @@ class WorldCatalogTest {
         Plan pinned = catalog.plan(FIELD, 1);
         assertThrows(IllegalArgumentException.class, () -> new Plan(pinned.map(), List.of()));
         assertThrows(IllegalArgumentException.class, () -> new Spawn(FIELD, 0, 3));
-        assertThrows(IllegalArgumentException.class, () -> new Drop("GOLD", FIELD, 1, 1));
+        assertThrows(IllegalArgumentException.class, () -> new Drop("GOLD", FIELD, 1, 1, 1));
         given().header("X-Hero-Association-World-Service-Key", KEY).get("/internal/v1/world/maps/" + FIELD + "/999").then().statusCode(404);
     }
 

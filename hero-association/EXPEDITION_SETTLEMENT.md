@@ -50,8 +50,10 @@ and progression; Assets owns loadouts and carried resource credit.
 
 The source Redis run remains authoritative while any handoff is unresolved.
 No per-hit, per-fight, or fixed-interval SQL update is introduced. Carried
-gold/items/runes use the pinned Creature drop tables, although the current
-Creature seeds have no economic drops. Carried assets belong to the Party's
+gold/items/runes use the pinned Creature drop tables. Each defeated Troll and
+Forest Wolf independently rolls gold, seven rune types and two material entries;
+quantities and chances follow [the game specification](SPEC.md). Repeated dungeon
+passes accumulate in the same carried totals and settle once. Carried assets belong to the Party's
 Manager. Agency-Hero borrowing and an agency share of Map gold remain future
 rules. Quest rewards use a separate Assets receipt under the assignment ID.
 

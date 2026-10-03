@@ -43,6 +43,41 @@ The unrestricted Compose market-proxy case is superseded by the Envoy limit
 test. The borrowing-quest case is deferred with Quest; it is not an active
 MVP gate.
 
+## Manually test dungeon repeats and loot
+
+Open `https://heroassociation.test` and sign in with the local test account
+`user2@mail.com` / `user2`. Use a freshly admitted Expedition after the verified
+loot build and its matching World seed data are deployed; an older admitted run
+retains its original drop tables.
+
+1. Optionally open **Quests** and accept **Clear Broken Pass Cavern**. Record
+   your personal gold and inventory before leaving the agency.
+2. Open **Map**, select **Main Party** and **Broken Pass Cavern**, then click
+   **Enter dungeon**. Enable **Auto-continue** once the battle view appears.
+3. After floor one, the Party should advance to the boss on floor two. After
+   clearing the boss, auto-continue should start floor one again in the same
+   Expedition. Hero totals and carried loot should remain accumulated.
+4. Check **Expedition progress** after each fight finishes. **Carried gold**,
+   **Items** and **Runes** show the unbanked totals; successful item/rune drops
+   also appear in the loot list. Gold is a 50% roll for 1–25 per defeated
+   Creature; each of the seven rune types has its own 1% roll for one rune;
+   Iron Ingots and Magic Crystals each have a 5% roll for 1–5. Rolls are
+   independent, so a fight can have several drops or none. Runes may take many
+   encounters to appear. Loot counters update at the terminal fight transition.
+5. Disable **Auto-continue** during a boss fight to check that **Dungeon
+   complete** stays paused afterward. Re-enable it to confirm another pass
+   starts from floor one. Leaving the Map also stops automatic Continue commands.
+6. Disable auto-continue and click **Return to agency**, or **Return after this
+   fight** during combat. Once the Party is back, personal gold/items/runes
+   should increase by the complete carried totals. If accepted, the completed
+   cavern Quest adds 160 gold and one Iron Ingot once per assignment, even after
+   several dungeon clears. Reload and confirm the payout is not repeated.
+
+For a precise display check, the browser's Network panel response for
+`GET /api/v1/expeditions/active` exposes `carried.gold`, `carried.items` and
+`carried.runes`. Compare the item/rune quantity sums with the visible counters;
+the response also shows the current floor, state version and `canContinue`.
+
 ## Verify the running k3d lab
 
 The separate k3d suite reuses an already deployed frontend, BFF, Core,
@@ -83,6 +118,13 @@ auto-continue, manual Continue, and WebSocket reconnect. It first returns
 any old User2 run, so it can be repeated. The journey can take several minutes
 because three complete encounters run at their real combat speed. Both tests
 change Hero progress in the disposable lab.
+
+The dungeon Quest journey also verifies auto-continue restarting a completed
+cavern at floor one, with the same Expedition, pinned definitions, Hero totals,
+Quest progress and carried loot. Visible gold/item/rune counters must match the
+API. Return credits the accumulated loot and one Quest reward exactly once.
+The World outage phases repeat the pinned dungeon without catalog access and
+verify that command replay cannot start an extra pass.
 
 ## Measure the market order rate limit with k6
 
