@@ -42,7 +42,7 @@ resulting state.
   2026-10-02, including 16 browser/API cases, recovery checks, and market k6.
   The same archive passed daily promotion after a coordinated Core/Market
   reset, including browser, Expedition, Map settlement, and k6 checks.
-  Core Quest combat remains live until a later Quest redesign. See the
+  Core Quest combat was retired by the World and Quest extraction. See the
   [Combat and Expedition plan](COMBAT_EXPEDITION_PLAN.md),
   [service extraction plan](SERVICE_EXTRACTION.md), and
   [ADR 0008](adr/0008-combat-engine-in-expedition.md).
@@ -57,7 +57,7 @@ resulting state.
   still separate work.
 - [x] Add hero recruiting and hero detail endpoints. The initial global board offers three free Level 1 NPCs; each can be claimed once.
 - [x] Add a hero activity command for `TRAINING` and `RESTING`. Prevent a hero
-  on a quest from changing agency activity.
+  away in an Expedition from changing agency activity.
 - [x] Add party creation and membership commands, and include party details in
   agency state. Allow a party to contain one or more heroes.
 - [x] Replace frontend-only party-preparation actions with these APIs.
@@ -65,8 +65,8 @@ resulting state.
 ## Milestone 2 — Inventory and rune loadouts
 
 - [x] Model agency storage for gold, runes, and stackable item materials.
-  Market reservations and transfers are implemented; quest loot remains to be
-  added.
+  Market reservations, transfers and fulfilled Quest rewards are implemented;
+  balanced Creature loot remains to be added.
 - [x] Equip and unequip runes atomically among Manager inventory, agency
   inventory, and a Hero's five equipped slots. Unequip returns to the acting
   Manager by default; Heroes have no loose rune inventory.
@@ -76,32 +76,29 @@ resulting state.
 - [x] Show both inventories in the frontend rune drawer and persist each
   change asynchronously without a page-wide loading state.
 
-## Milestone 3 — Quest lifecycle
+## Milestone 3 — World and optional Quest lifecycle
 
-- [x] Add initial quest definitions with an objective description, creature
-  group, party-size range, duration estimate, and gold reward. Difficulty and
-  recommended classes remain to be defined.
-- [x] Add a command to start an available quest with a prepared party. Validate
-  party membership, hero availability, and party-size eligibility.
-- [x] Persist quest status and timestamps. The seeded combat terminal states
-  persist `COMPLETED` or `FAILED`, set `finishedAt`, release the party, and
-  return its heroes to Training. Cancellation remains unimplemented.
-- [x] Add a command or scheduled process that advances an in-progress quest.
-  The seeded combat snapshot advances through an explicit sync command and a
-  five-second background worker; terminal combat states now resolve the quest.
-- [ ] Define and implement quest cancellation rules and a cancellation command.
-- [x] Replace the frontend's fixed active quest and available quest cards with
-  API data and persisted quest starts.
-- [ ] Add versioned `FIELD` and `DUNGEON` Map definitions and possible
-  encounters. A Manager enters a Map through Expedition without requiring a Quest.
-- [ ] Add one persistent Party per Manager, seeded with personal starter heroes;
-  it is editable only at the agency and cannot be emptied. Map runs initially
-  accept personal heroes only. Agency-hero borrowing for Map runs waits.
-- [ ] Support explicit return from a Map. A return requested during battle
-  occurs after that battle; a win waits for an explicit Continue command;
-  a party wipe stops encounters but does not return automatically.
-- [ ] Later add optional Quest objectives: Creature kill count, boss defeat,
-  and dungeon completion, advanced from authoritative outcomes.
+- [x] Extract Creature stats, attacks, base XP and drop tables into immutable
+  versioned World definitions, with an independently runnable service/database.
+- [x] Replace hardcoded Map encounters with versioned FIELD/DUNGEON definitions,
+  encounters, layouts and ordered floors. Seed Troll Field and Broken Pass Cavern.
+- [x] Pin Map and Creature versions in durable Core admission and Redis runs;
+  continue admitted runs without catalog access. Complete dungeons without looping.
+- [x] Extract optional Quest definitions, Manager assignments and return receipts
+  to their own service/database. Support one active Quest and agency cancellation.
+- [x] Track kill-count, boss-defeat and dungeon-completion objectives with eligible
+  Map restrictions. Bank partial progress on return and pay completed rewards
+  exactly once through Assets using the assignment ID.
+- [x] Preserve admission/release fences, replay-safe return settlement, lost-response
+  recovery, and reward recovery after service restart or Assets outage.
+- [x] Replace the frontend's Quest-start workflow with an independent objective
+  board and destination selector. Keep stable entry/Quest IDs through retries.
+- [x] Retire Core Quest tables, combat-sync API, combat worker and Creature cache.
+- [x] Support explicit return from a Map; a request during battle applies at its
+  terminal event. Wipes and completed dungeons wait for explicit return.
+- [ ] Expand Creature economic content: balanced drops, capacity, amount ranges,
+  event rates, and the mixed-stamina party loot rule.
+- [ ] Support agency-Hero borrowing in Expedition with an explicit pricing rule.
 
 ## Milestone 4 — Server-side automatic combat
 
@@ -121,10 +118,9 @@ resulting state.
   rules-changing combat-engine deployment. See the [Combat and Expedition plan](COMBAT_EXPEDITION_PLAN.md).
 - [ ] Apply the remaining displayed rune effects: attack, armor, health, mana,
   and attack speed.
-- [x] Persist a compact quest-combat snapshot and bounded event history. The
-  initial Troll encounter stores its current snapshot plus the latest 100
-  server-generated events, and every newly started quest creates a snapshot
-  from its party and creature objective.
+- [x] Keep authoritative fight state and bounded visual history. Expedition now
+  stores pinned fights and timelines in Redis; the earlier SQL Quest snapshot
+  implementation is retired.
 - [x] Replace the local Phaser combat simulation with server state. The Phaser
   view renders the synchronized snapshot.
 - [x] Render new server combat events in Phaser, including attacks, spells,
@@ -207,8 +203,8 @@ Ordered implementation:
    level-scaled, once-per-defeat XP/skill loss and chosen return resources.
 5. [ ] API and frontend: expose stamina as time, hero XP/level, all skill
    levels/progress, and agency Rest/Training levels. Replace the current
-   80%/30% color bands with >40h and <15h; clearly mark or hide advertised
-   quest gold until economic payouts exist.
+   80%/30% color bands with >40h and <15h. Optional Quest payouts are
+   implemented in Milestone 3; balanced Creature loot remains separate.
 6. [ ] Verify: unit-test boundaries (exactly 40h and 15h), `1x`/`2x`
    stacking, fractional points, class/agency rates, level-up and defeat.
    Integration-test no-kill battles, multi-kill and terminal mid-sync cases,
@@ -452,12 +448,11 @@ are established. See [ADR 0004](adr/0004-core-as-temporary-modular-monolith.md).
 - [x] Allow an agency-owned recruit only when the Manager explicitly selects it
   and is the agency leader. Delegated recruitment permission remains future work.
 - [x] Give each party a Manager owner, allow that Manager to assign their
-  personal heroes, and require ownership to change members or start quests.
+  personal heroes, and require ownership to change members or enter Maps.
   The seeded Broken Pass party keeps its agency heroes.
-- [x] Allow available agency heroes to be borrowed without transferring
-  ownership. The leader sets a nonnegative per-quest fee (default 0); a
-  quoted total is paid from the party Manager to the agency only at quest
-  start, including when the leader starts the quest.
+- [x] Allow agency-Hero assignment without transferring ownership, and retain
+  leader-configured future borrowing fees. The earlier Quest-start fee payment
+  was retired; agency borrowing in Expedition is still deferred.
 - [x] Support Manager-owned and agency-owned market orders, reserving from the
   correct wallet/inventory and enforcing leader-only agency trading. The public
   owner selector and extraction plan are revised. Personal market-sale agency
@@ -465,21 +460,20 @@ are established. See [ADR 0004](adr/0004-core-as-temporary-modular-monolith.md).
 - [x] Move gold atomically between a Manager's personal wallet and any
   agency treasury, or from an agency treasury to any Manager when authorized
   by that agency's leader. Transfers incur no market fee or agency share.
-- [ ] Add durable transfer receipts and request idempotency before wallet
+- [x] Add durable transfer receipts and request idempotency before wallet
   operations cross service or database boundaries.
 
-## Deferred until domain separation — Economic quest rewards
+## Remaining economic content
 
-- [ ] Define the reward-owning domain and its reliable creature-defeat and
-  quest-completion contracts before enabling economic payouts.
-- [ ] Roll each defeated creature gold and item entries once at
-  `min(100%, baseChance * dropRate) * lowStaminaLootFactor`, preserve
-  amount ranges, and respect party Capacity. Halve final drop chance below
-  15 hours of stamina. Decide the factor for mixed-stamina parties and add
-  the authoritative loot-chance event rate there.
-- [ ] Transfer quest items to the party Manager and split gold between the
-  Manager and agency at the applicable share. Define covered inflows and when
-  a changed share takes effect.
+- [x] Separate reward ownership: World defines Creature drops, Quest defines
+  objective rewards, Expedition evaluates kills/drops, and Assets credits returns.
+- [x] Pay a fulfilled Quest once per assignment through an atomic Assets receipt.
+- [ ] Define balanced Creature gold/item/rune drops and amount ranges. Current
+  Creature seeds retain empty economic drops; deterministic evaluation is implemented.
+- [ ] Define loot rate, Capacity and the mixed-stamina party factor before enabling
+  the previously proposed low-stamina penalty or dynamic event rate.
+- [ ] Define Manager/agency sharing and which inflows it covers; current Quest and
+  carried rewards belong entirely to the initiating Manager.
 
 ## Post-MVP
 
@@ -495,16 +489,19 @@ These do not all block the current combat-progression slice.
   after gameplay tests.
 - [ ] Define creature loot tables, gold/item amounts, and party Capacity
   behavior; test chance caps and precision for ultra-rare drops.
-- [ ] Define quest duration, difficulty, failure, and cancellation rules.
-- [ ] Define armor and attack-speed formulas, plus initial persistent creature
-  attributes.
+- [x] Define optional Quest completion, partial progress and agency cancellation rules.
+- [ ] Define timed objectives and additional difficulty/failure rules.
+- [x] Persist versioned initial Creature health, mana, attack, recovery, critical
+  and XP attributes in World.
+- [ ] Define armor and attack-speed formulas.
 - [ ] Decide whether a Manager's personal order may match an order owned by
   their own agency. For now, matching blocks identical trading owners only;
   the personal wallet and agency treasury remain separate owners.
 - [ ] Define agency-share treatment of market proceeds and refunds,
   and how rate changes affect already-started quests and open orders.
-- [x] Define and implement the agency-hero borrowing fee and charge timing.
-- [ ] Define any refund policy if quest cancellation is later introduced.
+- [ ] Define agency-Hero Expedition borrowing and charge timing; fee configuration
+  remains stored after retiring the earlier Quest-start payment.
+- [x] Cancellation of an optional Quest gives no payout or refund; acceptance is free.
 - [ ] Define additional tradable item categories.
 - [ ] Define agency invitation, ownership transfer, and permission rules.
 

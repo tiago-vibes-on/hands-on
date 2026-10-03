@@ -67,19 +67,6 @@ services:
       retries: 10
     ports:
     - ${HERO_ASSOCIATION_NATIVE_BFF_REDIS_HOST_PORT:-19679}:6379
-  redis-core:
-    image: redis:8.4.1-alpine
-    command: redis-server --save "" --appendonly no
-    healthcheck:
-      test:
-      - CMD
-      - redis-cli
-      - ping
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    ports:
-    - ${HERO_ASSOCIATION_NATIVE_CORE_REDIS_HOST_PORT:-19680}:6379
   core:
     build:
       context: .
@@ -97,11 +84,16 @@ services:
       QUARKUS_HIBERNATE_ORM_SCHEMA_MANAGEMENT_STRATEGY: drop-and-create
       QUARKUS_HIBERNATE_ORM_SQL_LOAD_SCRIPT: import.sql
       HERO_ASSOCIATION_OIDC_AUTH_SERVER_URL: http://keycloak:8080/realms/hero-association
-      HERO_ASSOCIATION_CORE_REDIS_URL: redis://redis-core:6379
       HERO_ASSOCIATION_OIDC_ISSUER: http://localhost:${HERO_ASSOCIATION_NATIVE_KEYCLOAK_HTTP_PORT:-19180}/realms/hero-association
       HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY: ${HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY:?Set
         the dedicated Core Assets credential.}
       HERO_ASSOCIATION_ASSETS_BASE_URL: http://assets:8085
+      HERO_ASSOCIATION_WORLD_BASE_URL: http://world:8086
+      HERO_ASSOCIATION_QUEST_BASE_URL: http://quest:8087
+      HERO_ASSOCIATION_WORLD_SERVICE_KEY: ${HERO_ASSOCIATION_WORLD_SERVICE_KEY:?Set
+        the dedicated service credential of at least 32 characters.}
+      HERO_ASSOCIATION_QUEST_CORE_SERVICE_KEY: ${HERO_ASSOCIATION_QUEST_CORE_SERVICE_KEY:?Set
+        the dedicated service credential of at least 32 characters.}
     expose:
     - '8081'
   postgres-market:
@@ -170,6 +162,8 @@ services:
         .env.example to .env and set HERO_ASSOCIATION_BFF_CSRF_TOKEN_SIGNATURE_KEY.}
       HERO_ASSOCIATION_BFF_REDIS_URL: redis://redis-bff:6379
       HERO_ASSOCIATION_ASSETS_BASE_URL: http://assets:8085
+      HERO_ASSOCIATION_WORLD_BASE_URL: http://world:8086
+      HERO_ASSOCIATION_QUEST_BASE_URL: http://quest:8087
     ports:
     - ${HERO_ASSOCIATION_NATIVE_BFF_HTTP_PORT:-19080}:8080
   postgres-assets:
@@ -213,10 +207,100 @@ services:
       HERO_ASSOCIATION_OIDC_ISSUER: http://localhost:${HERO_ASSOCIATION_NATIVE_KEYCLOAK_HTTP_PORT:-19180}/realms/hero-association
       HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY: ${HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY:?Set
         the dedicated Core Assets credential.}
+      HERO_ASSOCIATION_ASSETS_QUEST_SERVICE_KEY: ${HERO_ASSOCIATION_ASSETS_QUEST_SERVICE_KEY:?Set
+        the dedicated service credential of at least 32 characters.}
     expose:
     - '8085'
+  postgres-world:
+    image: postgres:18.6-alpine3.24
+    environment:
+      POSTGRES_DB: hero_association_world
+      POSTGRES_USER: hero_association_world
+      POSTGRES_PASSWORD: ${HERO_ASSOCIATION_WORLD_DATABASE_PASSWORD:?Set the separate
+        world database password.}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+    - postgres_world_data:/var/lib/postgresql
+    ports:
+    - ${HERO_ASSOCIATION_NATIVE_WORLD_DATABASE_HOST_PORT:-19436}:5432
+  world:
+    build:
+      context: .
+      dockerfile: hero-association-world/Dockerfile
+    depends_on:
+      postgres-world:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    environment:
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres-world:5432/hero_association_world
+      QUARKUS_DATASOURCE_USERNAME: hero_association_world
+      QUARKUS_DATASOURCE_PASSWORD: ${HERO_ASSOCIATION_WORLD_DATABASE_PASSWORD:?Set
+        the separate world database password.}
+      QUARKUS_HIBERNATE_ORM_SCHEMA_MANAGEMENT_STRATEGY: drop-and-create
+      QUARKUS_HIBERNATE_ORM_SQL_LOAD_SCRIPT: import.sql
+      HERO_ASSOCIATION_OIDC_AUTH_SERVER_URL: http://keycloak:8080/realms/hero-association
+      HERO_ASSOCIATION_OIDC_ISSUER: http://localhost:${HERO_ASSOCIATION_NATIVE_KEYCLOAK_HTTP_PORT:-19180}/realms/hero-association
+      HERO_ASSOCIATION_WORLD_SERVICE_KEY: ${HERO_ASSOCIATION_WORLD_SERVICE_KEY:?Set
+        the dedicated service credential of at least 32 characters.}
+    expose:
+    - '8086'
+  postgres-quest:
+    image: postgres:18.6-alpine3.24
+    environment:
+      POSTGRES_DB: hero_association_quest
+      POSTGRES_USER: hero_association_quest
+      POSTGRES_PASSWORD: ${HERO_ASSOCIATION_QUEST_DATABASE_PASSWORD:?Set the separate
+        quest database password.}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+    - postgres_quest_data:/var/lib/postgresql
+    ports:
+    - ${HERO_ASSOCIATION_NATIVE_QUEST_DATABASE_HOST_PORT:-19437}:5432
+  quest:
+    build:
+      context: .
+      dockerfile: hero-association-quest/Dockerfile
+    depends_on:
+      postgres-quest:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    environment:
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres-quest:5432/hero_association_quest
+      QUARKUS_DATASOURCE_USERNAME: hero_association_quest
+      QUARKUS_DATASOURCE_PASSWORD: ${HERO_ASSOCIATION_QUEST_DATABASE_PASSWORD:?Set
+        the separate quest database password.}
+      QUARKUS_HIBERNATE_ORM_SCHEMA_MANAGEMENT_STRATEGY: drop-and-create
+      QUARKUS_HIBERNATE_ORM_SQL_LOAD_SCRIPT: import.sql
+      HERO_ASSOCIATION_OIDC_AUTH_SERVER_URL: http://keycloak:8080/realms/hero-association
+      HERO_ASSOCIATION_OIDC_ISSUER: http://localhost:${HERO_ASSOCIATION_NATIVE_KEYCLOAK_HTTP_PORT:-19180}/realms/hero-association
+      HERO_ASSOCIATION_CORE_BASE_URL: http://core:8081
+      HERO_ASSOCIATION_ASSETS_BASE_URL: http://assets:8085
+      HERO_ASSOCIATION_QUEST_CORE_SERVICE_KEY: ${HERO_ASSOCIATION_QUEST_CORE_SERVICE_KEY:?Set
+        the dedicated service credential of at least 32 characters.}
+      HERO_ASSOCIATION_QUEST_EXPEDITION_SERVICE_KEY: ${HERO_ASSOCIATION_QUEST_EXPEDITION_SERVICE_KEY:?Set
+        the dedicated service credential of at least 32 characters.}
+      HERO_ASSOCIATION_ASSETS_QUEST_SERVICE_KEY: ${HERO_ASSOCIATION_ASSETS_QUEST_SERVICE_KEY:?Set
+        the dedicated service credential of at least 32 characters.}
+    expose:
+    - '8087'
 volumes:
   postgres_keycloak_data: null
   postgres_core_data: null
   postgres_market_data: null
   postgres_assets_data: null
+  postgres_world_data: null
+  postgres_quest_data: null

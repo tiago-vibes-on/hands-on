@@ -1,4 +1,4 @@
-const databases = new Set(['hero_association', 'hero_association_assets', 'hero_association_market'])
+const databases = new Set(['hero_association', 'hero_association_assets', 'hero_association_market', 'hero_association_world', 'hero_association_quest'])
 
 /** Only the explicit, verified pre-Flyway coupled reset may discard these schemas. */
 export function prepareSchemaReset(database, identity) {

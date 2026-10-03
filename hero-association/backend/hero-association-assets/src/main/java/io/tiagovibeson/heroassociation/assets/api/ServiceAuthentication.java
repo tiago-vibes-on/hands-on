@@ -12,8 +12,10 @@ import jakarta.ws.rs.ServiceUnavailableException;
 public class ServiceAuthentication {
     @ConfigProperty(name = "hero-association.assets.market-service-key") Optional<String> marketKey;
     @ConfigProperty(name = "hero-association.assets.core-service-key") Optional<String> coreKey;
+    @ConfigProperty(name = "hero-association.assets.quest-service-key") Optional<String> questKey;
     public void market(String key) { require(marketKey, key); }
     public void core(String key) { require(coreKey, key); }
+    public void quest(String key) { require(questKey, key); }
     private void require(Optional<String> configured, String provided) {
         String expected = configured.orElse("");
         if (expected.length() < 32) throw new ServiceUnavailableException("Private Assets credentials are not configured.");

@@ -59,15 +59,11 @@ public class CoreAdmissionClient {
                         hero.staminaMilliseconds(), hero.runeIds(), hero.criticalChance(),
                         hero.criticalDamageMultiplier()))
                 .toList();
-        Creature creature = response.creature();
-        CreatureProfile profile = new CreatureProfile(creature.definitionId(), creature.version(),
-                creature.name(), creature.maxHealth(), creature.maxMana(), creature.attackDamage(),
-                creature.attackIntervalMilliseconds(), creature.healthRecoveryPerSecond(),
-                creature.manaRecoveryPerSecond(), creature.criticalChance(),
-                creature.criticalDamageMultiplier(), creature.baseExperience());
+        if (response.world() == null) throw new IllegalStateException("Core admission omitted the pinned Map plan.");
+        CreatureProfile profile = WorldPlans.profile(response.world().creature(response.world().map().encounter(1).spawns().getFirst()));
         return new PreparedEntry(response.expeditionId(), response.ownerManagerId(),
                 response.agencyId(), response.partyId(), response.mapId(),
-                response.mapVersion(), heroes, profile);
+                response.mapVersion(), heroes, profile, response.world());
     }
 
     public UUID currentManagerId(String playerAccessToken) {
@@ -158,16 +154,12 @@ public class CoreAdmissionClient {
     private record ManagerIdentityResponse(UUID managerId) { }
     public record ReservationCandidate(UUID expeditionId, UUID ownerManagerId) { }
     private record AdmissionResponse(UUID expeditionId, UUID ownerManagerId, UUID agencyId, UUID partyId,
-                                     UUID mapId, int mapVersion, Baseline baseline, Creature creature) { }
+                                     UUID mapId, int mapVersion, Baseline baseline,
+                                     io.tiagovibeson.heroassociation.contract.WorldContract.Plan world) { }
     private record Baseline(List<HeroBaseline> heroes) { }
     private record HeroBaseline(UUID heroId, String name, HeroClass heroClass, long experience,
                                 Map<HeroSkill, BigDecimal> skillPoints, int health, int mana,
                                 long staminaMilliseconds, String previousActivity,
                                 Map<Integer, UUID> runeIds, double criticalChance,
                                 double criticalDamageMultiplier) { }
-    private record Creature(UUID definitionId, String name, int version, int baseExperience,
-                            int maxHealth, int maxMana, int attackDamage,
-                            long attackIntervalMilliseconds, int healthRecoveryPerSecond,
-                            int manaRecoveryPerSecond, double criticalChance,
-                            double criticalDamageMultiplier) { }
 }

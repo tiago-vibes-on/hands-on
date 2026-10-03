@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: world
+  namespace: hero-association
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: world
+  template:
+    metadata:
+      labels:
+        app: world
+        sidecar.istio.io/inject: 'true'
+    spec:
+      serviceAccountName: hero-association-world
+      terminationGracePeriodSeconds: 45
+      containers:
+      - name: world
+        image: hero-association-world:k3d
+        imagePullPolicy: Never
+        env:
+        - name: QUARKUS_DATASOURCE_JDBC_URL
+          value: jdbc:postgresql://postgres-world:5432/hero_association_world
+        - name: QUARKUS_DATASOURCE_USERNAME
+          value: hero_association_world
+        - name: QUARKUS_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: hero-association-world-credentials
+              key: WORLD_DATABASE_PASSWORD
+        - name: HERO_ASSOCIATION_OIDC_AUTH_SERVER_URL
+          value: http://keycloak:8080/realms/hero-association
+        - name: HERO_ASSOCIATION_OTLP_ENDPOINT
+          value: http://otel-lgtm.hero-association-observability.svc.cluster.local:4317
+        - name: HERO_ASSOCIATION_OTEL_DISABLED
+          value: 'false'
+        - name: HERO_ASSOCIATION_OIDC_ISSUER
+          value: https://auth.heroassociation.test/realms/hero-association
+        - name: HERO_ASSOCIATION_WORLD_SERVICE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: hero-association-world-credentials
+              key: HERO_ASSOCIATION_WORLD_SERVICE_KEY
+        ports:
+        - name: http
+          containerPort: 8086
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep 15
+        startupProbe:
+          httpGet:
+            path: /q/health/started
+            port: http
+          periodSeconds: 5
+          failureThreshold: 60
+        readinessProbe:
+          httpGet:
+            path: /q/health/ready
+            port: http
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /q/health/live
+            port: http
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: 500m
+            memory: 384Mi
+          limits:
+            memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: world
+  namespace: hero-association
+spec:
+  type: ClusterIP
+  selector:
+    app: world
+  ports:
+  - name: http
+    port: 8086
+    targetPort: http

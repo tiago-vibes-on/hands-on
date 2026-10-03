@@ -24,6 +24,11 @@ public class FightFactory {
     private final SecureRandom seedSource = new SecureRandom();
 
     public FightState start(List<HeroState> heroes, CreatureProfile creature, Instant startedAt) {
+        return start(heroes, WorldPlans.field(creature.definitionId(), 1, creature), 1, startedAt);
+    }
+
+    public FightState start(List<HeroState> heroes, io.tiagovibeson.heroassociation.contract.WorldContract.Plan world,
+                            int encounterIndex, Instant startedAt) {
         List<Combatant> party = new ArrayList<>(heroes.size());
         for (HeroState hero : heroes) {
             HeroClass heroClass = hero.heroClass();
@@ -36,18 +41,24 @@ public class FightFactory {
                     hero.criticalChance(), hero.criticalDamageMultiplier(),
                     heroClass == HeroClass.MAGE ? List.of(CombatSpell.values()) : List.of()));
         }
-        List<Combatant> trolls = new ArrayList<>(3);
-        for (int index = 0; index < 3; index++) {
-            trolls.add(new Combatant(
-                    UuidV7.next().toString(), creature.name(), CombatTeam.CREATURES,
+        List<Combatant> creatures = new ArrayList<>();
+        var pinned = new java.util.TreeMap<String, io.tiagovibeson.heroassociation.contract.WorldContract.Creature>();
+        for (var spawn : world.map().encounter(encounterIndex).spawns()) {
+          var creature = world.creature(spawn);
+          for (int index = 0; index < spawn.count(); index++) {
+            String combatantId = UuidV7.next().toString();
+            pinned.put(combatantId, creature);
+            creatures.add(new Combatant(
+                    combatantId, creature.name(), CombatTeam.CREATURES,
                     creature.maxHealth(), creature.maxMana(), creature.maxHealth(), creature.maxMana(),
                     creature.attackDamage(), 0, creature.attackIntervalMilliseconds(),
                     creature.healthRecoveryPerSecond(), creature.manaRecoveryPerSecond(), 0,
                     creature.criticalChance(), creature.criticalDamageMultiplier(), List.of()));
+          }
         }
-        CombatBattle battle = CombatBattle.start(party, trolls);
+        CombatBattle battle = CombatBattle.start(party, creatures);
         return new FightState(UuidV7.next(), startedAt, seedSource.nextLong(),
                 "core-v1", "java-random-v1", BigDecimal.ONE, BigDecimal.ONE, BigDecimal.ONE,
-                battle.snapshot());
+                battle.snapshot(), pinned);
     }
 }

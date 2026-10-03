@@ -2,7 +2,7 @@
 
 Core, BFF, Market, Assets and Expedition run independently. BFF is the public
 session and CSRF boundary: it routes Market orders to Market, gold transfers to
-Assets, and Hero/agency/Quest commands to Core. Core composes asset projections
+Assets, Creature/Map catalogs to World, optional objectives to Quest, and Hero/agency commands to Core. Core composes asset projections
 using a private Assets API. Each service has its own database or runtime store;
 Core has no wallet, inventory, catalog or equipped-slot tables.
 
@@ -15,8 +15,8 @@ private credential; its server-held access token has Core, Market and Assets
 audiences. See the [Assets module](hero-association-assets/README.md) and
 [extraction audit](../ASSETS_ARCHITECTURE.md).
 
-Rune and Quest commands are durable Core workflows. Supply a UUIDv7
-`operationKey` in equip/Quest JSON and `X-Operation-Key` for unequip. `200` confirms
+Rune commands are durable Core workflows. Supply a UUIDv7
+`operationKey` in equip JSON and `X-Operation-Key` for unequip. `200` confirms
 updated agency state; `202` returns a saved operation reference. Poll
 `GET /api/v1/asset-operations/{operationKey}` as the initiating Manager, or retry
 the identical request. Pending or conflicting operations retain eligibility
@@ -55,7 +55,7 @@ same uncommitted 32-character-or-longer
 `HERO_ASSOCIATION_EXPEDITION_BFF_SERVICE_KEY` in both services; enable the
 Expedition player API deliberately as well. An opt-in frontend Map page
 now uses these commands and the socket. The Map journey passed in full k3d
-and hybrid mode; Core Quest combat remains live.
+and hybrid mode; Core Quest combat and Creature caching are retired.
 Agency-state Hero responses include cumulative `experience`; a successful
 fight can increase XP without immediately increasing a Hero level.
 The private settlement handoff is disabled by default. See the [Expedition README](hero-association-expedition/README.md)
@@ -78,7 +78,7 @@ the opt-in authenticated k3d path. Normal backend deployment does not
 enable Expedition; rerun the integration command after it. The k3d frontend
 build enables Map by default.
 
-For an explicitly requested six-service build and k3d promotion, run
+For an explicitly requested eight-service build and k3d promotion, run
 `../pipeline/run-k3d-pipeline.sh` as described in the
 [pipeline README](../pipeline/README.md). It archives Core, BFF, Expedition, Market,
 and a Map-enabled frontend, then verifies browser, Map, and market paths.
@@ -118,7 +118,7 @@ password, and both private credentials in `.env` for Compose.
 
 The component runner accepts `core`, `bff`, `expedition`, `market`, `assets`, or
 `all`; all dependencies are disposable k3d resources. The full gate verifies an
-exact six-image archive. Hybrid mode supports each service, including
+exact eight-image archive. Hybrid mode supports each service, including
 `../deploy/k3d/hybrid.sh run assets`, and validates existing schemas.
 
 Before Flyway, schema changes require a coupled Core/Assets/Market reset. First
@@ -126,8 +126,8 @@ build and pass the complete candidate archive in disposable k3d. For the initial
 Assets extraction, stage `../deploy/k3d/stage-assets.sh ARCHIVE`, then promote
 with `node ../pipeline/deploy-k3d.mjs --reset-game-db ARCHIVE`. Promotion stops
 application entry points and writers, refuses unfinished Expeditions and Core or
-Market workflows, recreates the three matching deterministic seeds, and verifies
-all six images and player flows. A failed reset leaves writers stopped; automatic
+Market workflows, recreates the five matching deterministic seeds, and verifies
+all eight images and player flows. A failed reset leaves writers stopped; automatic
 image rollback cannot restore data. Existing lab resets must use this verified
 archive path. `deploy-backend.sh` only bootstraps a new empty lab.
 
@@ -164,6 +164,44 @@ Expedition, and frontend worktree and trusted-`main` builds, plus a
 verified-artifact deploy job for each service. Builds and deployments are
 manual; pushing to Git does not change the running k3d environment.
 Normal Quarkus dev mode remains independent.
+
+## World catalogs and optional Quests
+
+World runs on `8086` (dev `17086`) and Quest on `8087` (dev `17087`). Each owns
+its PostgreSQL database and role: `hero_association_world` and
+`hero_association_quest`. Creature stats, attacks, XP and drop tables, Maps,
+encounters and dungeon floors are versioned World data. Admission pins all
+versions before Heroes leave; existing runs survive catalog outage or updates.
+The Quest board offers one optional Manager assignment, banked on return, with
+kill, boss or dungeon objectives. Fulfilled returns pay the pinned reward once
+through Assets. Core's former Quest worker, tables and Creature Redis cache are
+removed. The sample content adds the two-floor Broken Pass Cavern.
+
+Build either service from the backend root:
+
+```bash
+./mvnw -pl hero-association-world -am package
+./mvnw -pl hero-association-quest -am package
+../deploy/k3d/test-isolated-components.sh all
+```
+
+The independently runnable service workflows are documented in
+[World](hero-association-world/README.md), [Quest](hero-association-quest/README.md)
+and [the return contracts](../WORLD_QUEST_ARCHITECTURE.md). Hybrid mode supports
+`world` and `quest`; it forwards their own PostgreSQL and required upstreams and
+validates existing schemas. New databases use host ports `15436` and `15437`.
+Compose requires separate database passwords plus `HERO_ASSOCIATION_WORLD_SERVICE_KEY`,
+`HERO_ASSOCIATION_QUEST_CORE_SERVICE_KEY`, `HERO_ASSOCIATION_QUEST_EXPEDITION_SERVICE_KEY`
+and `HERO_ASSOCIATION_ASSETS_QUEST_SERVICE_KEY`, each service credential at least
+32 characters. Never place these keys in the browser or BFF.
+
+Local extraction promotion builds an eight-image archive, verifies it in the
+isolated stack (five game databases), stages new owners with
+`deploy/k3d/stage-world-quest.sh ARCHIVE`, and uses
+`node pipeline/deploy-k3d.mjs --reset-game-db ARCHIVE` for the coordinated lab
+reset. Return active runs and finish pending Core/Quest/Market commands first.
+Pre-Flyway schemas and deterministic seeds are recreated directly. Restore the
+frontend hot-reload mode after full k3d promotion with `hybrid.sh run frontend`.
 
 ## Local development
 
@@ -217,31 +255,11 @@ A Manager with no membership can create one empty Level 1 agency as its leader;
 invitations are a later task. Parties belong to individual Managers inside
 their agency. A Manager can assign their own available heroes or available
 agency-owned heroes to a prepared party. The agency leader sets each agency
-hero's nonnegative per-quest borrowing fee (0 by default). Party assignment
-is free; quest start submits the expected total and atomically transfers it
-from the Manager's personal gold to the agency. Stale quotes and insufficient
-funds reject the start without charging. Quest start applies agency recovery
-before pinning Hero resources, levels, class combat values, spell state, and
-equipped runes. New quest battles copy the versioned Creature definition
-through a 60-second Redis read-through cache; PostgreSQL is authoritative,
-and a cache error falls back to PostgreSQL. Troll has 2,000 health and Forest
-Wolf has 120. Active snapshots retain these inputs if roster or definition
-data changes. Compiled spell
-formulas are not versioned yet; see the planned
-[Combat and Expedition plan](../COMBAT_EXPEDITION_PLAN.md). The Map UI is available
-in full k3d and hybrid mode with Expedition integration enabled, and reuses
-the Phaser battle animations.
-Any onboarded Manager can claim a globally available recruit into their personal
-roster through `POST /api/v1/recruits/{recruitId}/claim`, even before creating
-an agency. Agency leaders can explicitly claim a recruit for their agency
-through `POST /api/v1/agencies/{agencyId}/recruits/{recruitId}/claim`; all
-claims are exclusive across both ownership choices.
-The local Keycloak login page uses the versioned Hero Association theme in
-`keycloak/theme/hero-association`. It preserves Keycloak's standard login
-layout while matching the frontend's dark, gold-accented visual style.
-The development realm includes these established workflow accounts. Ten more
-seeded `managerN@mail.com` / `managerN` accounts belong to three multi-Manager
-agencies; see the complete [test-data map](../TEST_DATA.md):
+hero's nonnegative future borrowing fee (0 by default). Assignment is free.
+The current Map path accepts personal Heroes and charges no fee. Admission
+applies recovery, then pins Hero state and Assets loadouts with a World plan.
+Quest acceptance is independent of Party selection; rewards settle through
+Assets after an objective is fulfilled and the Party returns.
 
 | Email | Password | Keycloak profile | Seeded Manager | Agency role |
 | --- | --- | --- | --- | --- |
@@ -274,7 +292,7 @@ the CA or leaf private keys.
 The repository-level [`../e2e`](../e2e) Playwright project verifies
 registration, session continuity, agency actions, market limits, and
 Map/Expedition through a disposable k3d namespace and Envoy Gateway. For a
-build-once candidate, create the six-image archive in
+build-once candidate, create the eight-image archive in
 [`../pipeline`](../pipeline/README.md), then from `hero-association/` run:
 
 ```bash
@@ -311,13 +329,13 @@ docker compose up --build
 The standalone Compose stack publishes its own development ports and does
 not include a browser-facing HTTPS gateway. Use k3d Envoy Gateway for the
 integrated browser workflow. Both packaged JVM/native Compose stacks reset
-and reseed their disposable Core, Assets and Market databases on service startup; do not use
+and reseed their disposable Core, Assets, Market, World and Quest databases on service startup; do not use
 them with data you need to keep.
 
 The JVM Compose workflow publishes the BFF at `http://localhost:17080` and
 Keycloak at `http://localhost:17180`; Core remains on the private Compose
 network. The native Compose workflow has separate default ports—BFF `19080`,
-Keycloak `19180`, BFF Redis `19679`, and Core cache Redis `19680`—so it can run alongside the
+Keycloak `19180` and BFF Redis `19679`—so it can run alongside the
 hot-reload workflow. It runs a native Core behind the JVM BFF:
 
 ```bash
@@ -327,7 +345,7 @@ docker compose -f compose.native.yaml up --build
 Build and test each service from its own directory. Core-specific workflows,
 including native compilation, are documented in
 [`hero-association-core/README.md`](hero-association-core/README.md).
-For one reusable local archive containing the Core, BFF, Expedition, Market, Assets, and frontend images,
+For one reusable local archive containing the Core, BFF, Expedition, Market, Assets, World, Quest, and frontend images,
 use the separate [`pipeline`](../pipeline/README.md) build stage. It runs
 the service tests and frontend checks without deploying or changing this
 development environment.
@@ -341,11 +359,11 @@ credentials, and Gateway verification, see
 That workflow supports rebuilding and rolling only BFF when Core has not
 changed, without resetting the lab database.
 
-For build-once deployment of an E2E-verified six-service archive, use
+For build-once deployment of an E2E-verified eight-service archive, use
 the [pipeline promotion command](../pipeline/README.md#promote-the-verified-archive-to-k3d).
 Its default mode rolls the isolated k3d app Deployments without database
 bootstrap. For an intentional schema/seed reset, the full verified archive
-can be promoted with `--reset-game-db`; the isolated k3d Core, Assets and Market
+can be promoted with `--reset-game-db`; the isolated k3d Core, Assets, Market, World and Quest
 databases are recreated from their respective archived images. Schema-changing
 images require this reset in the pre-Flyway lab before validating Pods can start. Do not deploy that image over an
 old Core schema without a reset or explicit schema update. Neither mode changes this host-run
@@ -357,14 +375,12 @@ The `quarkus-smallrye-health` extension exposes `/q/health/started`,
 `/q/health/ready`, and `/q/health/live` for Kubernetes probes in each backend service.
 The k3d Core validates its schema on startup; a separate one-shot Job seeds a
 new lab database. For an existing disposable k3d schema change, use the verified archive promotion
-with `--reset-game-db` to recreate the three matching databases. The direct-build
+with `--reset-game-db` to recreate the five matching databases. The direct-build
 bootstrap in `deploy/k3d/` is restricted to a fresh lab. Core's scheduled jobs use
 PostgreSQL advisory locks to avoid overlapping across Pods. The recovery job
 also restores stamina from elapsed time at the Training rate or current
-agency Rest Level rate, capped at 48 hours. An isolated concurrency test
-exercises two, four, and eight Core Pods, active combat and recovery,
-concurrent database reads, and Pod restarts without duplicate quest
-resolution. Separate CPU HPAs keep
+agency Rest Level rate, capped at 48 hours. The earlier Core SQL Quest concurrency and mixed-combat labs require
+redesign for Expedition; combat load tests remain deferred. Separate CPU HPAs keep
 BFF and Core between two and eight Pods in k3d; normal host-run development
 remains unchanged. See the
 [autoscaling test](../deploy/k3d/README.md#autoscaling-and-sustained-validation)

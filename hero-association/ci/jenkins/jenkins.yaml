@@ -27,7 +27,7 @@ jenkins:
 
 jobs:
   - script: |
-      def services = ['core', 'bff', 'expedition', 'market', 'assets', 'frontend']
+      def services = ['core', 'bff', 'expedition', 'market', 'assets', 'world', 'quest', 'frontend']
       services.each { service ->
         def worktreeScript = '''
           pipeline {
@@ -51,7 +51,7 @@ jobs:
           }
         '''.replace('__SERVICE__', service)
         pipelineJob("hero-association-" + service + "-build-worktree") {
-          description("Manual: build " + service + " from a local worktree snapshot and verify its six-image archive; no deployment.")
+          description("Manual: build " + service + " from a local worktree snapshot and verify its eight-image archive; no deployment.")
           definition { cps { script(worktreeScript); sandbox() } }
         }
 

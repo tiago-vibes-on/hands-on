@@ -15,7 +15,7 @@ From `hero-association/backend`:
 
 Production listens on `8085`; development uses `17085`. Configure the datasource
 URL, username and separate password, Core base URL, Keycloak issuer/auth-server,
-and two independent credentials of at least 32 characters:
+and three independent credentials of at least 32 characters:
 
 - `HERO_ASSOCIATION_ASSETS_MARKET_SERVICE_KEY` matches Market; it authorizes
   reservation, settlement, closure and receipt recovery.
@@ -29,7 +29,7 @@ Core outage without moving gold again. BFF routes only this public API and holds
 neither private credential. New reservations additionally validate a player JWT;
 settlement/refund recovery uses previously accepted authorization.
 
-`/internal/v1/assets/core/commands` supports equipment, Quest fees, pinned loadout
+`/internal/v1/assets/core/commands` supports equipment, pinned loadout
 snapshots and Expedition credit. Core persists authorization and eligibility
 fences before sending these commands. Assets commits each command, its resource
 changes, postings and immutable receipt atomically. Unknown delivery retries the
@@ -48,3 +48,10 @@ Expeditions or asset workflows. The full gate requires all six exact images;
 component tests use disposable PostgreSQL and a Core authority contract fixture.
 See [contracts](../../ASSETS_CONTRACT.md), [recovery](../../ASSETS_RECOVERY.md),
 and [architecture and audit](../../ASSETS_ARCHITECTURE.md).
+
+`HERO_ASSOCIATION_ASSETS_QUEST_SERVICE_KEY` is a third separate credential for
+`POST /internal/v1/assets/quest/rewards`. It permits only `QUEST_REWARD`, bound
+to the assignment ID, Manager and immutable gold/item/rune amounts. Core's key
+cannot credit this reward; `QUEST_START` is retired. The resource changes,
+ledger postings and exact receipt commit atomically. See
+[World/Quest return rules](../../WORLD_QUEST_ARCHITECTURE.md).

@@ -1,9 +1,15 @@
 # Assets and Market recovery protocol
 
+Current World/Quest cutover: [WORLD_QUEST_ARCHITECTURE.md](WORLD_QUEST_ARCHITECTURE.md)
+is authoritative for versioned Map admission, optional objectives and return
+rewards. Core's earlier Quest combat, borrowing payment and Creature cache
+workflows described below are retired. Return aggregates now use schema version
+2 with pinned Map metadata and nullable Quest progress.
+
 Status: implemented by Market's durable placement, trade, and cancellation
 records, worker, pending API responses and frontend. Assets implements private
 authenticated commands, reservation/receipt reads and permanent closure.
-Core also implements durable equipment, Quest-start and Expedition-credit
+Core also implements durable equipment and Expedition-credit
 workflows with Hero fences and verified Assets receipts. The local extraction
 passed outage, restart and exact-replay checks on 2026-10-02.
 See [architecture](MARKET_ARCHITECTURE.md) for actual service ownership.
@@ -120,10 +126,10 @@ authorization, receipts, and closure races. Market workflow tests exercise
 HTTP faults, stale claims and concurrent workers; browser tests exercise
 pending responses, lost confirmations, reloads and exact retries.
 
-## Core equipment, Quest payment and Expedition recovery
+## Core equipment and Expedition recovery
 
 Core's `asset_workflow` stores actor, immutable request/command, state, attempts,
-due time and a 60-second claim token. Hero and Party `pending_asset_operation`
+due time and a 60-second claim token. Hero `pending_asset_operation`
 fences prevent conflicting mutations. The worker sends stable commands outside
 Core transactions and verifies their echoed request, key, kind and loadouts.
 `APPLIED` completes the Core transition; a valid `REJECTED` receipt clears its
@@ -145,8 +151,16 @@ or contradictory receipts retain the pending aggregate for investigation. The
 broker acknowledges only after both confirmations; duplicate delivery reads the
 Core cursor and cannot repeat credit or XP.
 
-Coupled lab reset requires an exact passing six-image archive and no unfinished
-Expeditions or Core/Market workflows. Promotion drains all application entry
-points and asset writers before checking stable data. Core, Assets and Market
+Coupled lab reset requires an exact passing eight-image archive and no unfinished
+Expeditions or Core/Quest/Market workflows. Promotion drains all application entry
+points and asset writers before checking stable data. Core, Assets, Market, World and Quest
 seeds reset together. A failed reset stops writers and requires inspection;
 restoring old images cannot undo a database reset.
+
+Quest's `quest_admission` owns its immutable return and reward claim. A fulfilled
+objective remains `REWARD_PENDING` and keeps its Manager claim until the exact
+Assets reward receipt is validated. Lost responses and expired worker claims
+replay the assignment key; a contradictory receipt becomes `CONFLICT`. Core
+keeps its Hero reservation until Quest and carried-return application are both
+confirmed. Dependency recovery, rather than a new assignment or entry key,
+finishes the original handoff.

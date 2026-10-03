@@ -27,9 +27,6 @@ class CoreAssetCommandsTest {
     private CoreAssetCommands.Command rune(UUID key, String kind, UUID rune, String source) {
         return new CoreAssetCommands.Command(key, kind, MANAGER, AGENCY, HERO, 0, rune, source, null, null, null, null, null);
     }
-    private CoreAssetCommands.Command quest(UUID key, long fee) {
-        return new CoreAssetCommands.Command(key, "QUEST_START", MANAGER, AGENCY, null, null, null, null, fee, List.of(HERO), null, null, null);
-    }
     private CoreAssetCommands.Command reward(UUID key, long gold, Map<UUID,Integer> items, Map<UUID,Integer> runes) {
         return new CoreAssetCommands.Command(key, "EXPEDITION_CREDIT", MANAGER, AGENCY, null, null, null, null, null, null, gold, items, runes);
     }
@@ -55,23 +52,21 @@ class CoreAssetCommandsTest {
         assertEquals("REJECTED", commands.execute(command).status()); assertEquals(1, balances.quantity(MANAGER, "RUNE", ATTACK));
         assertTrue(snapshots.loadouts(List.of(HERO)).get(HERO).isEmpty());
     }
-    @Test @TestTransaction void questFeeAndSnapshotCommitOnceAndBindTheAmount() {
-        long manager = gold(MANAGER), agency = gold(AGENCY);
-        var command = quest(UuidV7.next(), 25);
-        var first = commands.execute(command);
-        assertEquals(first, commands.execute(command)); assertEquals(manager - 25, gold(MANAGER)); assertEquals(agency + 25, gold(AGENCY));
-        assertEquals(Set.of(HERO), first.heroes().keySet()); assertEquals(2, postings(command.operationKey()));
-        assertThrows(AssetOperationRejectedException.class, () -> commands.execute(quest(command.operationKey(), 26)));
+    @Test @TestTransaction void questRewardsCreditGoldAndItemsOnceAndBindTheAmount() {
+        long before = gold(MANAGER); int items = balances.quantity(MANAGER, "ITEM", ITEM);
+        var command = new CoreAssetCommands.Command(UuidV7.next(), "QUEST_REWARD", MANAGER, null, null, null, null, null, null, null, 160L, Map.of(ITEM, 1), Map.of());
+        var receipt = commands.execute(command);
+        assertEquals("APPLIED", receipt.status()); assertEquals(receipt, commands.execute(command));
+        assertEquals(before + 160, gold(MANAGER)); assertEquals(items + 1, balances.quantity(MANAGER, "ITEM", ITEM));
+        assertEquals(2, postings(command.operationKey()));
+        var changed = new CoreAssetCommands.Command(command.operationKey(), "QUEST_REWARD", MANAGER, null, null, null, null, null, null, null, 161L, Map.of(ITEM, 1), Map.of());
+        assertThrows(AssetOperationRejectedException.class, () -> commands.execute(changed));
     }
-    @Test @TestTransaction void insufficientQuestFeeHasNoDebitAndPersistsARejectedReceipt() {
-        long manager = gold(MANAGER), agency = gold(AGENCY);
-        var command = quest(UuidV7.next(), manager + 1);
-        var result = commands.execute(command);
-        assertEquals("REJECTED", result.status()); assertEquals(result, commands.execute(command));
-        assertEquals(manager, gold(MANAGER)); assertEquals(agency, gold(AGENCY)); assertEquals(0, postings(command.operationKey()));
-    }
-    @Test @TestTransaction void freeQuestDoesNotCreateGoldPostings() {
-        var command = quest(UuidV7.next(), 0); assertEquals("APPLIED", commands.execute(command).status()); assertEquals(0, postings(command.operationKey()));
+    @Test @TestTransaction void retiredQuestFeeCommandIsRejectedWithoutDebit() {
+        long before = gold(MANAGER);
+        var retired = new CoreAssetCommands.Command(UuidV7.next(), "QUEST_START", MANAGER, AGENCY, null, null, null, null, 25L, List.of(HERO), null, null, null);
+        assertThrows(AssetOperationRejectedException.class, () -> commands.execute(retired));
+        assertEquals(before, gold(MANAGER)); assertEquals(0, postings(retired.operationKey()));
     }
     @Test @TestTransaction void expeditionCreditsAllCarriedAssetsOnceWithAnAtomicReceipt() {
         long before = gold(MANAGER); int items = balances.quantity(MANAGER, "ITEM", ITEM);
@@ -102,7 +97,7 @@ class CoreAssetCommandsTest {
         assertEquals(first,commands.execute(snapshot)); assertTrue(first.heroes().get(HERO).isEmpty());
         assertFalse(snapshots.loadouts(List.of(HERO)).get(HERO).isEmpty());
     }
-    @Test @TestTransaction void equipmentAndQuestCannotReuseEachOthersKeys() {
-        UUID key=UuidV7.next();commands.execute(quest(key,0));assertThrows(AssetOperationRejectedException.class,()->commands.execute(rune(key,"RUNE_EQUIP",ATTACK,"AGENCY")));
+    @Test @TestTransaction void equipmentAndRewardCannotReuseEachOthersKeys() {
+        UUID key=UuidV7.next();commands.execute(reward(key,0,Map.of(),Map.of()));assertThrows(AssetOperationRejectedException.class,()->commands.execute(rune(key,"RUNE_EQUIP",ATTACK,"AGENCY")));
     }
 }

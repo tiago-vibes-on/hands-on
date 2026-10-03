@@ -6,14 +6,14 @@ project_dir="$script_dir/../.."
 k3d_bin="${K3D_BIN:-k3d}"
 
 if [[ $# -gt 1 ]]; then
-  printf 'Usage: %s [core|bff|expedition|market|assets]\n' "$0" >&2
+  printf 'Usage: %s [core|bff|expedition|market|assets|world|quest]\n' "$0" >&2
   exit 2
 fi
-services=(core bff market assets)
+services=(core bff market assets world quest)
 if [[ $# -eq 1 ]]; then
   case "$1" in
-    core|bff|expedition|market|assets) services=("$1") ;;
-    *) printf 'Usage: %s [core|bff|expedition|market|assets]\n' "$0" >&2; exit 2 ;;
+    core|bff|expedition|market|assets|world|quest) services=("$1") ;;
+    *) printf 'Usage: %s [core|bff|expedition|market|assets|world|quest]\n' "$0" >&2; exit 2 ;;
   esac
 fi
 
@@ -21,7 +21,7 @@ fi
 
 images=()
 for service in "${services[@]}"; do
-  if [[ "$service" == core || "$service" == expedition || "$service" == market || "$service" == assets ]]; then
+  if [[ "$service" == core || "$service" == expedition || "$service" == market || "$service" == assets || "$service" == world || "$service" == quest ]]; then
     backend_dir="$project_dir/backend"
     (cd "$backend_dir" && ./mvnw -pl "hero-association-$service" -am package)
     docker build -f "$backend_dir/hero-association-$service/Dockerfile" -t "hero-association-$service:k3d" "$backend_dir"

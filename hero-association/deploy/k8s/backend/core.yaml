@@ -17,70 +17,85 @@ spec:
     metadata:
       labels:
         app: core
-        sidecar.istio.io/inject: "true"
+        sidecar.istio.io/inject: 'true'
     spec:
       serviceAccountName: hero-association-core
       terminationGracePeriodSeconds: 45
       containers:
-        - name: core
-          image: hero-association-core:k3d
-          imagePullPolicy: Never
-          env:
-            - name: HERO_ASSOCIATION_ASSETS_BASE_URL
-              value: http://assets:8085
-            - name: HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: hero-association-assets-credentials
-                  key: HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY
-            - name: QUARKUS_DATASOURCE_JDBC_URL
-              value: jdbc:postgresql://postgres-core:5432/hero_association
-            - name: QUARKUS_DATASOURCE_USERNAME
-              value: hero_association
-            - name: QUARKUS_DATASOURCE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: hero-association-k3d-credentials
-                  key: CORE_DATABASE_PASSWORD
-            - name: HERO_ASSOCIATION_CORE_REDIS_URL
-              value: redis://redis-core:6379
-            - name: HERO_ASSOCIATION_OIDC_AUTH_SERVER_URL
-              value: http://keycloak:8080/realms/hero-association
-            - name: HERO_ASSOCIATION_OTLP_ENDPOINT
-              value: http://otel-lgtm.hero-association-observability.svc.cluster.local:4317
-            - name: HERO_ASSOCIATION_OTEL_DISABLED
-              value: "false"
-            - name: HERO_ASSOCIATION_OIDC_ISSUER
-              value: https://auth.heroassociation.test/realms/hero-association
-          ports:
-            - name: http
-              containerPort: 8081
-          lifecycle:
-            preStop:
-              exec:
-                command: ["/bin/sh", "-c", "sleep 15"]
-          startupProbe:
-            httpGet:
-              path: /q/health/started
-              port: http
-            periodSeconds: 5
-            failureThreshold: 60
-          readinessProbe:
-            httpGet:
-              path: /q/health/ready
-              port: http
-            periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /q/health/live
-              port: http
-            periodSeconds: 20
-          resources:
-            requests:
-              cpu: 500m
-              memory: 384Mi
-            limits:
-              memory: 1Gi
+      - name: core
+        image: hero-association-core:k3d
+        imagePullPolicy: Never
+        env:
+        - name: HERO_ASSOCIATION_ASSETS_BASE_URL
+          value: http://assets:8085
+        - name: HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: hero-association-assets-credentials
+              key: HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY
+        - name: QUARKUS_DATASOURCE_JDBC_URL
+          value: jdbc:postgresql://postgres-core:5432/hero_association
+        - name: QUARKUS_DATASOURCE_USERNAME
+          value: hero_association
+        - name: QUARKUS_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: hero-association-k3d-credentials
+              key: CORE_DATABASE_PASSWORD
+        - name: HERO_ASSOCIATION_OIDC_AUTH_SERVER_URL
+          value: http://keycloak:8080/realms/hero-association
+        - name: HERO_ASSOCIATION_OTLP_ENDPOINT
+          value: http://otel-lgtm.hero-association-observability.svc.cluster.local:4317
+        - name: HERO_ASSOCIATION_OTEL_DISABLED
+          value: 'false'
+        - name: HERO_ASSOCIATION_OIDC_ISSUER
+          value: https://auth.heroassociation.test/realms/hero-association
+        - name: HERO_ASSOCIATION_WORLD_BASE_URL
+          value: http://world:8086
+        - name: HERO_ASSOCIATION_WORLD_SERVICE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: hero-association-world-credentials
+              key: HERO_ASSOCIATION_WORLD_SERVICE_KEY
+        - name: HERO_ASSOCIATION_QUEST_BASE_URL
+          value: http://quest:8087
+        - name: HERO_ASSOCIATION_QUEST_CORE_SERVICE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: hero-association-quest-credentials
+              key: HERO_ASSOCIATION_QUEST_CORE_SERVICE_KEY
+        ports:
+        - name: http
+          containerPort: 8081
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep 15
+        startupProbe:
+          httpGet:
+            path: /q/health/started
+            port: http
+          periodSeconds: 5
+          failureThreshold: 60
+        readinessProbe:
+          httpGet:
+            path: /q/health/ready
+            port: http
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /q/health/live
+            port: http
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: 500m
+            memory: 384Mi
+          limits:
+            memory: 1Gi
 ---
 apiVersion: v1
 kind: Service
@@ -92,6 +107,6 @@ spec:
   selector:
     app: core
   ports:
-    - name: http
-      port: 8081
-      targetPort: http
+  - name: http
+    port: 8081
+    targetPort: http

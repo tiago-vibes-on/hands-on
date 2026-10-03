@@ -5,7 +5,8 @@ resources:
   - ../backend/postgres-core.yaml
   - ../backend/postgres-market.yaml
   - ../backend/postgres-assets.yaml
-  - ../backend/redis-core.yaml
+  - ../backend/postgres-world.yaml
+  - ../backend/postgres-quest.yaml
   - ../backend/redis-bff.yaml
   - ../expedition/rabbitmq.yaml
   - ../expedition/redis.yaml

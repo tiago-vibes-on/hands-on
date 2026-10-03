@@ -113,14 +113,6 @@ export async function removeHeroFromParty({ agencyId, partyId, heroId }) {
   })
 }
 
-export async function startQuest({ agencyId, questId, partyId, expectedBorrowingFeeGold, operationKey }) {
-  return request(`/api/v1/agencies/${agencyId}/quests/${questId}/start`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ partyId, expectedBorrowingFeeGold, operationKey }),
-  })
-}
-
 export async function synchronizeQuestCombat({ agencyId, questId }) {
   return request(`/api/v1/agencies/${agencyId}/quests/${questId}/combat/sync`, {
     method: 'POST',

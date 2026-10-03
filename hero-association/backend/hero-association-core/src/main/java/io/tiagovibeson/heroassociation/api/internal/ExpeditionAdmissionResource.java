@@ -12,9 +12,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 import io.quarkus.security.Authenticated;
 import io.tiagovibeson.heroassociation.application.AgencyAccessService;
-import io.tiagovibeson.heroassociation.application.CreatureDefinitionResolver;
 import io.tiagovibeson.heroassociation.application.expedition.ExpeditionAdmissionService;
-import io.tiagovibeson.heroassociation.domain.CreatureCombatProfile;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.ForbiddenException;
@@ -37,7 +35,6 @@ public class ExpeditionAdmissionResource {
 
     @Inject ExpeditionAdmissionService admission;
     @Inject AgencyAccessService access;
-    @Inject CreatureDefinitionResolver creatures;
 
     @ConfigProperty(name = "hero-association.expedition.core-service-key")
     Optional<String> serviceKey;
@@ -48,15 +45,14 @@ public class ExpeditionAdmissionResource {
     public ExpeditionAdmissionResponse reserve(@HeaderParam("X-Hero-Association-Service-Key") String key,
                                                 ReserveRequest request) {
         requireServiceKey(key);
-        if (request == null || !FIRST_FIELD_ID.equals(request.mapId())) {
-            throw new IllegalArgumentException("The requested Map is not available.");
-        }
-        CreatureCombatProfile troll = creatures.resolveLatest("Troll");
+        if (request == null) throw new IllegalArgumentException("Admission request is required.");
+        io.tiagovibeson.heroassociation.contract.WorldContract.id(request.mapId());
         UUID managerId = access.currentManager().getId();
+        var world = admission.pinWorld(request.expeditionId(), managerId, request.agencyId(), request.partyId(), request.mapId());
         var baseline = admission.reserve(request.expeditionId(), managerId,
                 request.agencyId(), request.partyId());
         return new ExpeditionAdmissionResponse(request.expeditionId(), managerId,
-                request.agencyId(), request.partyId(), FIRST_FIELD_ID, 1, baseline, troll);
+                request.agencyId(), request.partyId(), request.mapId(), world.map().version(), baseline, world);
     }
 
     @GET

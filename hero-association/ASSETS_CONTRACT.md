@@ -141,7 +141,7 @@ JWT. BFF has no private credential or route.
   and `heroes: [UUIDv7]` (up to 256); returns wallets, catalog-enriched loose stacks
   and five-slot loadout entries. Unknown owners have empty holdings.
 - `POST /commands` takes `operationKey`, `kind`, `managerId` and the immutable
-  operation fields. Supported kinds are `RUNE_EQUIP`, `RUNE_UNEQUIP`, `QUEST_START`,
+  operation fields. Supported kinds are `RUNE_EQUIP`, `RUNE_UNEQUIP`,
   `HERO_LOADOUT_SNAPSHOT` and `EXPEDITION_CREDIT`. Each command commits all resource
   changes, available-resource/slot postings and an immutable receipt in one local
   transaction. A changed actor, kind or payload under the same key returns `409`.
@@ -155,3 +155,12 @@ Snapshots for admission and Quest start remain pinned on exact replay despite
 later equipment changes. Core validates receipts before acknowledging its own
 transition. Available postings, reservation history and immutable receipts form
 the resource audit trail; there is no distributed SQL transaction.
+
+Quest pays through `POST /internal/v1/assets/quest/rewards`, protected by the
+separate `X-Hero-Association-Assets-Quest-Service-Key`. The canonical command
+kind is `QUEST_REWARD`, keyed by assignment UUIDv7, bound to Manager and pinned
+reward amounts. Its gold/items/runes and receipt commit atomically. Core's
+credential is denied this kind; Quest's route rejects equipment, agency and
+Hero fields. `QUEST_START` is retired and rejected. Capacity overflow retries
+with the same key after space is freed. Unknown catalogs produce a definitive
+receipt that Quest quarantines as a conflicting reward.

@@ -8,11 +8,11 @@ export function fetchActiveExpedition() {
   return request('/api/v1/expeditions/active')
 }
 
-export function startExpedition({ agencyId, partyId }) {
+export function startExpedition({ agencyId, partyId, mapId = FIRST_FIELD_ID, expeditionId = newUuidV7(), commandId = newUuidV7() }) {
   return request('/api/v1/expeditions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ expeditionId: newUuidV7(), agencyId, partyId, mapId: FIRST_FIELD_ID, commandId: newUuidV7() }),
+    body: JSON.stringify({ expeditionId, agencyId, partyId, mapId, commandId }),
   })
 }
 
@@ -31,4 +31,8 @@ export function connectExpedition(expeditionId) {
   const url = new URL(`/ws/v1/expeditions/${expeditionId}`, window.location.href)
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
   return new WebSocket(url)
+}
+
+export function fetchMaps() {
+  return request('/api/v1/maps')
 }

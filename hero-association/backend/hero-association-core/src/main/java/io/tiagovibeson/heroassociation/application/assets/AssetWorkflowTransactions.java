@@ -23,8 +23,6 @@ public class AssetWorkflowTransactions {
     @Inject AssetCommandLocks keys;
     @Inject HeroRepository heroRepository;
     @Inject PartyRepository parties;
-    @Inject QuestRepository quests;
-    @Inject CreatureDefinitionResolver creatures;
     @Inject AssetsClient assets;
     @Inject io.tiagovibeson.heroassociation.application.expedition.ExpeditionSettlementTransactions settlements;
 
@@ -42,7 +40,7 @@ public class AssetWorkflowTransactions {
         boolean agencyHero = hero.getAgency() != null && agency.equals(hero.getAgency().getId());
         boolean personalHero = hero.getOwnerManager() != null && manager.equals(hero.getOwnerManager().getId());
         if (!agencyHero && !personalHero) throw new HeroNotFoundException(heroId);
-        if (hero.getActivity() == HeroActivity.ON_QUEST || hero.getActivity() == HeroActivity.ON_EXPEDITION) throw new HeroOnQuestException(heroId);
+        if (hero.getActivity() == HeroActivity.ON_EXPEDITION) throw new HeroAwayException(heroId);
         hero.requireNoPendingAssets();
         if (slot < 0 || slot > 4) throw new InvalidRuneSlotException(slot);
         if (equip) { requireId(rune); if (source == null) throw new BadRequestException("Rune source is required."); }
@@ -51,40 +49,6 @@ public class AssetWorkflowTransactions {
         if (equip) command.put("runeId", rune.toString()).put("sourceOwnerType", source.name());
         AssetWorkflow workflow = new AssetWorkflow(key, kind, manager, agency, request.toString(), command.toString());
         workflow.heroId = heroId; em.persist(workflow); hero.fenceAssets(key); em.flush(); return key;
-    }
-    @Transactional(REQUIRES_NEW)
-    public UUID quest(UUID key, UUID agency, UUID questId, UUID partyId, long expectedFee) {
-        requireId(key); requireId(agency); requireId(questId); requireId(partyId);
-        UUID manager = access.currentManager().getId();
-        var request = mapper.createObjectNode().put("agencyId", agency.toString()).put("questId", questId.toString()).put("partyId", partyId.toString()).put("expectedBorrowingFeeGold", expectedFee);
-        keys.lock(key);
-        if (replay(key, "QUEST_START", manager, request) != null) return key;
-        access.requireMembership(agency);
-        Quest quest = quests.findForStart(agency, questId).orElseThrow(() -> new QuestNotFoundException(questId));
-        Party party = parties.findOwnedForUpdate(agency, partyId, manager).orElseThrow(() -> new PartyNotFoundException(partyId));
-        party.requireNoPendingAssets();
-        if (quest.getStatus() != QuestStatus.AVAILABLE || em.createQuery("select count(w) from AssetWorkflow w where w.questId = :quest and w.status in ('PENDING', 'CONFLICT')", Long.class)
-                .setParameter("quest", questId).getSingleResult() != 0) throw new QuestNotAvailableException(questId);
-        if (party.getQuest() != null && party.getQuest().getStatus() == QuestStatus.IN_PROGRESS) throw new PartyOnQuestException(partyId);
-        List<Hero> heroes = heroRepository.listByPartyForUpdate(partyId);
-        if (heroes.size() < quest.getMinimumHeroes() || heroes.size() > quest.getMaximumHeroes()) throw new InvalidQuestPartySizeException(quest.getMinimumHeroes(), quest.getMaximumHeroes());
-        long fee = 0;
-        for (Hero hero : heroes) {
-            hero.requireNoPendingAssets();
-            if (hero.getActivity() == HeroActivity.ON_QUEST || hero.getActivity() == HeroActivity.ON_EXPEDITION) throw new HeroOnQuestException(hero.getId());
-            if (hero.getOwnerManager() != null && !manager.equals(hero.getOwnerManager().getId())) throw new HeroNotFoundException(hero.getId());
-            if (hero.getOwnerManager() == null) {
-                if (hero.getAgency() == null || !agency.equals(hero.getAgency().getId())) throw new BorrowingFeeRejectedException("A Party Hero is not owned by this agency.");
-                try { fee = Math.addExact(fee, hero.getBorrowingFeeGold()); } catch (ArithmeticException overflow) { throw new BorrowingFeeRejectedException("Borrowing fee total is too large."); }
-            }
-        }
-        if (fee != expectedFee) throw new BorrowingFeeRejectedException("Borrowing fee changed; refresh before starting the Quest.");
-        var command = base(mapper, key, "QUEST_START", manager);
-        command.put("agencyId", agency.toString()).put("feeGold", fee).set("heroIds", mapper.valueToTree(heroes.stream().map(Hero::getId).toList()));
-        AssetWorkflow workflow = new AssetWorkflow(key, "QUEST_START", manager, agency, request.toString(), command.toString());
-        workflow.questId = questId; workflow.partyId = partyId;
-        workflow.contextJson = mapper.valueToTree(creatures.resolveLatest(quest.getCreatureName())).toString();
-        em.persist(workflow); party.fenceAssets(key); heroes.forEach(hero -> hero.fenceAssets(key)); em.flush(); return key;
     }
     public AssetWorkflow replay(UUID key, String kind, UUID manager, JsonNode request) {
         AssetWorkflow existing = em.find(AssetWorkflow.class, key);
@@ -107,27 +71,14 @@ public class AssetWorkflowTransactions {
             if (rejected) throw new ProtocolConflict("Assets rejected the authoritative Expedition aggregate.");
             settlements.finish(workflow, receipt);
         } else {
-            Quest quest = workflow.questId == null ? null : em.find(Quest.class, workflow.questId, LockModeType.PESSIMISTIC_WRITE);
-            Party party = workflow.partyId == null ? null : em.find(Party.class, workflow.partyId, LockModeType.PESSIMISTIC_WRITE);
             List<UUID> ids = workflow.heroId == null ? ids(json(workflow.commandJson).path("heroIds")) : List.of(workflow.heroId);
             List<Hero> heroes = ids.stream().sorted().map(id -> em.find(Hero.class, id, LockModeType.PESSIMISTIC_WRITE)).toList();
-            if (heroes.stream().anyMatch(hero -> hero == null || !workflow.id.equals(hero.getPendingAssetOperation()))
-                    || party != null && !workflow.id.equals(party.getPendingAssetOperation())) throw new ProtocolConflict("Core eligibility fence differs from the staged operation.");
+            if (heroes.stream().anyMatch(hero -> hero == null || !workflow.id.equals(hero.getPendingAssetOperation()))) throw new ProtocolConflict("Core eligibility fence differs from the staged operation.");
             Map<UUID, List<AssetsClient.RuneSlot>> loadouts = rejected ? Map.of() : loadouts(receipt.path("heroes"));
             if (!rejected && !loadouts.keySet().equals(new HashSet<>(ids))) throw new ProtocolConflict("Assets receipt omitted an affected Hero loadout.");
             if (!rejected) assets.decorate(heroes, loadouts);
             heroes.forEach(hero -> hero.finishAssets(workflow.id));
-            if (party != null) party.finishAssets(workflow.id);
-            if (!rejected && quest != null) {
-                if (quest.getStatus() != QuestStatus.AVAILABLE || party.getQuest() != null && party.getQuest().getStatus() == QuestStatus.IN_PROGRESS)
-                    throw new ProtocolConflict("Core Quest changed while its payment was pending.");
-                quest.startWith(party);
-                heroes.forEach(hero -> hero.changeActivity(HeroActivity.ON_QUEST, party.getAgency().getRestLevel()));
-                CreatureCombatProfile profile;
-                try { profile = mapper.readValue(workflow.contextJson, CreatureCombatProfile.class); }
-                catch (java.io.IOException invalid) { throw new ProtocolConflict("Pinned creature profile is invalid."); }
-                em.persist(QuestCombat.start(quest, heroes, profile));
-            }
+
         }
         workflow.status = rejected ? "REJECTED" : "APPLIED";
         workflow.rejectionStatus = rejected ? receipt.path("rejectionStatus").asInt() : null;

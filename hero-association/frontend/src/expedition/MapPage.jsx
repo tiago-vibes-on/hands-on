@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiRequestError } from '../api/agency'
-import { commandExpedition, connectExpedition, fetchActiveExpedition, startExpedition } from '../api/expedition'
+import { commandExpedition, connectExpedition, fetchActiveExpedition, fetchMaps, startExpedition, newUuidV7 } from '../api/expedition'
+import { readPending, savePending, clearPending, definitiveFailure } from '../api/pendingCommand'
 import CombatScene from '../combat/CombatScene'
 import { shouldAutoContinue, spellAvailability, toLoadoutHeroes, toPhaserBattle } from './expeditionCombat'
 import './MapPage.css'
@@ -8,27 +9,32 @@ import './MapPage.css'
 const phases = {
   FIGHTING: 'In battle',
   AWAITING_CONTINUE: 'Encounter complete',
+  DUNGEON_COMPLETED: 'Dungeon complete',
   WIPED: 'Party defeated',
   SETTLEMENT_PENDING: 'Returning to agency',
 }
 
 const skills = [['MELEE', 'Melee'], ['DISTANCE', 'Distance'], ['MAGIC', 'Magic'], ['SHIELD', 'Shield']]
 
-async function sendAction({ action, agencyId, partyId, expeditionId, stateVersion },
+async function sendAction({ action, agencyId, managerId, partyId, mapId, expeditionId, stateVersion },
   acceptRun, setError, setPendingAction, inFlightRef) {
   if (inFlightRef.current) return
   inFlightRef.current = action
   setPendingAction(action)
   setError(null)
+  const key = `hero-association:expedition-entry:${managerId}`
   try {
+    const intent = action === 'start' ? readPending(key) ?? savePending(key, { agencyId, partyId, mapId, expeditionId: newUuidV7(), commandId: newUuidV7() }) : null
     const current = action === 'start'
-      ? await startExpedition({ agencyId, partyId })
+      ? await startExpedition(intent)
       : await commandExpedition({ expeditionId, action, expectedVersion: stateVersion })
     acceptRun(current)
+    if (action === 'start') clearPending(key)
   } catch (failure) {
     if (failure instanceof ApiRequestError && (failure.status === 409 || failure.status === 404)) {
       try { acceptRun(await fetchActiveExpedition()) } catch { /* Keep the last known snapshot. */ }
     }
+    if (action === 'start' && definitiveFailure(failure)) clearPending(key)
     setError(failure.message)
   } finally {
     inFlightRef.current = null
@@ -45,7 +51,7 @@ function FightView({ run, knownHeroes, lastBattle }) {
   const combatTime = displayed?.battle.currentTimeMilliseconds ?? 0
   return <section className="panel map-fight" aria-label="Current encounter">
     <div className="map-fight__heading">
-      <div><p className="eyebrow">Troll Field · Encounter {run.encounterIndex}</p><h2>{phases[run.phase] ?? run.phase}</h2></div>
+      <div><p className="eyebrow">{run.map.name} · Floor {run.floor} · Encounter {run.encounterIndex}</p><h2>{phases[run.phase] ?? run.phase}</h2></div>
       {currentBattle && <span className="map-fight__time">{Math.floor(currentBattle.currentTimeMilliseconds / 1000)}s</span>}
     </div>
     {run.lastOutcome && <p className="map-fight__outcome">Last fight: {run.lastOutcome.status === "HERO_VICTORY" ? "Victory" : "Defeat"}</p>}
@@ -89,9 +95,10 @@ function ProgressView({ run, itemInventory, runeInventory }) {
       <div><span>Runes</span><strong>{carriedRunes.reduce((sum, [, count]) => sum + count, 0)}</strong></div>
     </div>
     {(carriedItems.length > 0 || carriedRunes.length > 0) && <ul className="map-progress__loot">
-      {carriedItems.map(([id, count]) => <li key={id}>{itemNames.get(id) ?? `Item ${id.slice(0, 8)}`} × {count}</li>)}
-      {carriedRunes.map(([id, count]) => <li key={id}>{runeNames.get(id) ?? `Rune ${id.slice(0, 8)}`} × {count}</li>)}
+      {carriedItems.map(([id, count]) => <li key={id}>{itemNames.get(id) ?? 'Item'} × {count}</li>)}
+      {carriedRunes.map(([id, count]) => <li key={id}>{runeNames.get(id) ?? 'Rune'} × {count}</li>)}
     </ul>}
+    {run.quest?.pin.assignment && <div className="map-progress__quest"><h3>{run.quest.pin.assignment.definition.title}</h3><p>{run.quest.pin.eligible ? `${run.quest.progress} / ${run.quest.pin.assignment.definition.required} · saved on return` : 'This destination does not count toward your Quest.'}</p></div>}
     <div className="map-progress__heroes">{run.heroes.map((hero) => <article key={hero.heroId}>
       <h3>{hero.name}</h3>
       <p>XP {hero.experience} · Stamina {(hero.staminaMilliseconds / 3_600_000).toFixed(1)}h / 48h</p>
@@ -109,6 +116,9 @@ export default function MapPage({ agencyId, managerId, heroes, preparedParties, 
   const [error, setError] = useState(null)
   const [pendingAction, setPendingAction] = useState(null)
   const [selectedPartyId, setSelectedPartyId] = useState('')
+  const [maps, setMaps] = useState([])
+  const [mapError, setMapError] = useState(null)
+  const [selectedMapId, setSelectedMapId] = useState('')
   const [socketEpoch, setSocketEpoch] = useState(0)
   const [socketStatus, setSocketStatus] = useState('connecting')
   const [autoContinue, setAutoContinue] = useState(false)
@@ -118,8 +128,10 @@ export default function MapPage({ agencyId, managerId, heroes, preparedParties, 
 
   const acceptRun = useCallback((next) => {
     setRun(next)
+    const entryKey = `hero-association:expedition-entry:${managerId}`
+    if (next?.expeditionId === readPending(entryKey)?.expeditionId) clearPending(entryKey)
     if (next?.fight?.visual) setLastBattle({ fightId: next.fight.fightId, run: next })
-  }, [])
+  }, [managerId])
 
   useEffect(() => {
     let cancelled = false
@@ -139,6 +151,13 @@ export default function MapPage({ agencyId, managerId, heroes, preparedParties, 
     })
     return () => { cancelled = true }
   }, [agencyId, acceptRun])
+
+  useEffect(() => {
+    let active = true
+    fetchMaps().then((catalog) => { if (active) { setMaps(catalog); setMapError(null) } })
+      .catch((failure) => { if (active) setMapError(failure.message) })
+    return () => { active = false }
+  }, [agencyId, expeditionId])
 
   useEffect(() => {
     if (!expeditionId) return undefined
@@ -194,10 +213,13 @@ export default function MapPage({ agencyId, managerId, heroes, preparedParties, 
     && party.heroIds.every((id) => heroesById.get(id)?.ownerManagerId === managerId))
   const partyId = eligibleParties.some((party) => party.id === selectedPartyId) ? selectedPartyId : eligibleParties[0]?.id
 
+  const destination = maps.find((map) => map.definitionId === selectedMapId) ?? maps[0]
+  const mapId = destination?.definitionId
+  const pendingEntry = readPending(`hero-association:expedition-entry:${managerId}`)
   const stateVersion = run?.stateVersion
   function submit(action) {
     if (inFlightRef.current) return
-    sendAction({ action, agencyId, partyId, expeditionId, stateVersion },
+    sendAction({ action, agencyId, managerId, partyId, mapId, expeditionId, stateVersion },
       acceptRun, setError, setPendingAction, inFlightRef)
   }
 
@@ -216,16 +238,19 @@ export default function MapPage({ agencyId, managerId, heroes, preparedParties, 
   }, [autoContinueReady, agencyId, partyId, expeditionId, stateVersion, acceptRun])
 
   return <>
-    <header className="page-heading"><div><p className="eyebrow">Explore</p><h1>Map</h1><p className="page-heading__description">Enter a field with your party. Battles run on the server; continue manually or enable auto-continue while this page is open.</p></div></header>
+    <header className="page-heading"><div><p className="eyebrow">Explore</p><h1>Map</h1><p className="page-heading__description">Choose a field or dungeon for your party. Battles run on the server; continue manually or enable auto-continue while this page is open.</p></div></header>
     {loading && <p className="map-notice" role="status">Checking your active expedition…</p>}
     {unavailable && <p className="map-notice" role="status">The Map is not enabled in this environment yet.</p>}
     {error && !unavailable && <p className="inline-error" role="alert">{error}</p>}
     {!loading && !unavailable && !run && <section className="panel map-entry">
-      <p className="eyebrow">First destination</p><h2>Troll Field</h2>
-      <p>Take one of your prepared personal-hero parties into a field of Trolls. The first encounter starts when you enter.</p>
+      <p className="eyebrow">Destination</p><h2>{destination?.name ?? 'Choose a destination'}</h2>
+      <p>Fields repeat encounters. Dungeons finish after their final floor. The first battle starts when you enter.</p>
+      {mapError && <p className="inline-error" role="alert">{mapError}</p>}
+      {pendingEntry && <p role="status">Retry entry to confirm your previous destination and party.</p>}
       {eligibleParties.length > 0 ? <div className="map-entry__actions">
-        <label><span>Party</span><select value={partyId} onChange={(event) => setSelectedPartyId(event.target.value)} disabled={Boolean(pendingAction)}>{eligibleParties.map((party) => <option key={party.id} value={party.id}>{party.name} · {party.heroIds.length} heroes</option>)}</select></label>
-        <button className="button button--primary" type="button" disabled={Boolean(pendingAction)} onClick={() => submit('start')}>{pendingAction === 'start' ? 'Entering…' : 'Enter field'}</button>
+        <label><span>Destination</span><select value={mapId ?? ''} onChange={(event) => setSelectedMapId(event.target.value)} disabled={Boolean(pendingAction) || Boolean(pendingEntry)}>{maps.map((map) => <option key={map.definitionId} value={map.definitionId}>{map.name} · {map.kind === 'DUNGEON' ? `${map.floors.length} floors` : 'Field'}</option>)}</select></label>
+        <label><span>Party</span><select value={partyId} onChange={(event) => setSelectedPartyId(event.target.value)} disabled={Boolean(pendingAction) || Boolean(pendingEntry)}>{eligibleParties.map((party) => <option key={party.id} value={party.id}>{party.name} · {party.heroIds.length} heroes</option>)}</select></label>
+        <button className="button button--primary" type="button" disabled={Boolean(pendingAction) || (!mapId && !pendingEntry)} onClick={() => submit('start')}>{pendingAction === 'start' ? 'Entering…' : pendingEntry ? 'Retry entry' : destination?.kind === 'DUNGEON' ? 'Enter dungeon' : 'Enter field'}</button>
       </div> : <p>Prepare a party with personal heroes before entering. The server checks that at least one can fight.</p>}
     </section>}
     {run && <>
@@ -235,13 +260,14 @@ export default function MapPage({ agencyId, managerId, heroes, preparedParties, 
         <span className="map-controls__connection" role="status">{socketStatus === 'connected' ? 'Live' : 'Reconnecting to battle…'}</span>
         <label className="map-controls__auto">
           <input type="checkbox" checked={autoContinue}
-            disabled={run.returnRequested || run.phase === 'SETTLEMENT_PENDING'}
+            disabled={run.returnRequested || ['SETTLEMENT_PENDING', 'DUNGEON_COMPLETED'].includes(run.phase)}
             onChange={(event) => {
               autoContinueAttemptRef.current = null
               setAutoContinue(event.target.checked)
             }} />
           <span>Auto-continue</span>
         </label>
+        {run.phase === 'DUNGEON_COMPLETED' && <span>All floors cleared. Return to save your results.</span>}
         {run.phase === 'AWAITING_CONTINUE' && <button className="button button--primary" type="button" disabled={Boolean(pendingAction)} onClick={() => submit('continue')}>{pendingAction === 'continue' ? 'Continuing…' : 'Continue'}</button>}
         {run.phase !== 'SETTLEMENT_PENDING' && !run.returnRequested && <button className="button button--secondary" type="button" disabled={Boolean(pendingAction)} onClick={() => submit('return')}>{run.phase === 'FIGHTING' ? 'Return after this fight' : 'Return to agency'}</button>}
         {run.returnRequested && <span>Return requested; this fight will finish first.</span>}

@@ -107,6 +107,12 @@ class ExpeditionFlowTest {
             }
         };
         ExpeditionEntryService entryService = new ExpeditionEntryService(core, service, store);
+        entryService.quests = new QuestClient() {
+            @Override public io.tiagovibeson.heroassociation.contract.QuestContract.Pin pin(PreparedEntry e) {
+                return new io.tiagovibeson.heroassociation.contract.QuestContract.Pin(e.expeditionId(), e.ownerManagerId(), e.agencyId(), e.mapId(), e.mapVersion(), null, false);
+            }
+            @Override public void release(UUID expedition, UUID manager) { }
+        };
         assertThrows(RunConflictException.class, () -> entryService.start(blocked.expeditionId(),
                 blocked.agencyId(), blocked.partyId(), blocked.mapId(), UuidV7.next(), "player-token"));
         assertTrue(released.get());

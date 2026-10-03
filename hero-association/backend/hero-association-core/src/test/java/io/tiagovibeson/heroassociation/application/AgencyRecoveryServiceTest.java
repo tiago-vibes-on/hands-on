@@ -100,9 +100,9 @@ class AgencyRecoveryServiceTest {
 
     @Test
     @TestTransaction
-    void shouldNotRecoverHeroesOnQuest() {
+    void shouldNotRecoverHeroesOnExpedition() {
         Instant synchronizedAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
-        seedRecoveringHero(OAKSHIELD_HERO_ID, HeroActivity.ON_QUEST, synchronizedAt);
+        seedRecoveringHero(OAKSHIELD_HERO_ID, HeroActivity.ON_EXPEDITION, synchronizedAt);
         entityManager.clear();
         agencyRecoveryService.recoverAt(synchronizedAt);
         entityManager.clear();

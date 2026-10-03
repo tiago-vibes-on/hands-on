@@ -11,7 +11,7 @@ import { inspectArchive, prepareArchive } from '../e2e/archive-images.js'
 const executeFile = promisify(execFile)
 const projectDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const kubeconfig = process.env.HERO_ASSOCIATION_K3D_KUBECONFIG || path.join(projectDirectory, 'deploy/k3d/.kubeconfig')
-const components = ['core', 'bff', 'expedition', 'market', 'assets', 'frontend']
+const components = ['core', 'bff', 'expedition', 'market', 'assets', 'world', 'quest', 'frontend']
 
 async function command(name, args) {
   const { stdout } = await executeFile(name, args, { maxBuffer: 10 * 1024 * 1024 })
@@ -62,7 +62,7 @@ async function liveImage(component) {
 async function main() {
   const [component, candidateDirectory, destination] = process.argv.slice(2)
   if (process.argv.length !== 5 || !components.includes(component)) {
-    throw new Error('Usage: node assemble-service-archive.mjs <core|bff|expedition|market|assets|frontend> <candidate-archive> <full-archive>')
+    throw new Error('Usage: node assemble-service-archive.mjs <core|bff|expedition|market|assets|world|quest|frontend> <candidate-archive> <full-archive>')
   }
   const candidate = await inspectArchive(candidateDirectory)
   if (candidate.component !== component || candidate.promoteComponent) {

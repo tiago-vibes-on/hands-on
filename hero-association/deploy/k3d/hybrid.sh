@@ -10,7 +10,7 @@ export KUBECONFIG="$script_dir/.kubeconfig"
 state_dir="$script_dir/.hybrid-state"
 
 usage() {
-  printf 'Usage: %s <run|restore|status> <core|bff|expedition|market|assets|frontend>\n' "$0" >&2
+  printf 'Usage: %s <run|restore|status> <core|bff|expedition|market|assets|world|quest|frontend>\n' "$0" >&2
   exit 2
 }
 
@@ -23,6 +23,8 @@ case "$service" in
   bff) host_port=17080; service_port=8080; ready_path=/q/health/ready; service_account=hero-association-bff; istio=true ;;
   expedition) host_port=17083; service_port=8083; ready_path=/q/health/ready; service_account=hero-association-expedition; istio=true ;;
   market) host_port=17084; service_port=8084; ready_path=/q/health/ready; service_account=hero-association-market; istio=true ;;
+  world) host_port=17086; service_port=8086; ready_path=/q/health/ready; service_account=hero-association-world; istio=true ;;
+  quest) host_port=17087; service_port=8087; ready_path=/q/health/ready; service_account=hero-association-quest; istio=true ;;
   assets) host_port=17085; service_port=8085; ready_path=/q/health/ready; service_account=hero-association-assets; istio=true ;;
   frontend) host_port=15172; service_port=80; ready_path=/; service_account=default; istio=false ;;
   *) usage ;;
@@ -193,8 +195,8 @@ if port_listening "$host_port"; then
   exit 1
 fi
 
-if [[ "$service" == core || "$service" == expedition || "$service" == market || "$service" == assets ]]; then
-  (cd "$backend_dir" && ./mvnw --batch-mode -pl hero-association-lib/combat-engine -am install)
+if [[ "$service" == core || "$service" == expedition || "$service" == market || "$service" == assets || "$service" == world || "$service" == quest ]]; then
+  (cd "$backend_dir" && ./mvnw --batch-mode -pl hero-association-lib/combat-engine,hero-association-lib/game-contracts -am install)
 fi
 if [[ "$service" == frontend && ! -d "$project_dir/frontend/node_modules" ]]; then
   (cd "$project_dir/frontend" && npm ci)
@@ -236,6 +238,8 @@ if [[ "$service" != frontend ]]; then
   case "$service" in
     core) keycloak_port=17181; otlp_port=14317 ;;
     market) keycloak_port=17184; otlp_port=14347 ;;
+    world) keycloak_port=17186; otlp_port=14349 ;;
+    quest) keycloak_port=17187; otlp_port=14350 ;;
     assets) keycloak_port=17185; otlp_port=14348 ;;
     bff) keycloak_port=17180; otlp_port=14327 ;;
     expedition) keycloak_port=17182; otlp_port=14337 ;;
@@ -251,7 +255,6 @@ fi
 case "$service" in
   core)
     start_forward "$namespace" service/postgres-core 15432 5432
-    start_forward "$namespace" service/redis-core 16380 6379
     start_forward "$namespace" service/rabbitmq-expedition 15675 5672
     export QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://127.0.0.1:15432/hero_association
     export QUARKUS_DATASOURCE_USERNAME=hero_association
@@ -261,6 +264,12 @@ case "$service" in
     start_forward "$namespace" service/assets 18087 8085
     export HERO_ASSOCIATION_ASSETS_BASE_URL=http://127.0.0.1:18087
     export HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY="$(secret_value hero-association-assets-credentials HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY)"
+    start_forward "$namespace" service/world 18089 8086
+    start_forward "$namespace" service/quest 18090 8087
+    export HERO_ASSOCIATION_WORLD_BASE_URL=http://127.0.0.1:18089
+    export HERO_ASSOCIATION_QUEST_BASE_URL=http://127.0.0.1:18090
+    export HERO_ASSOCIATION_WORLD_SERVICE_KEY="$(secret_value hero-association-world-credentials HERO_ASSOCIATION_WORLD_SERVICE_KEY)"
+    export HERO_ASSOCIATION_QUEST_CORE_SERVICE_KEY="$(secret_value hero-association-quest-credentials HERO_ASSOCIATION_QUEST_CORE_SERVICE_KEY)"
     export HERO_ASSOCIATION_CORE_BOOTSTRAP_MODE=false
     export HERO_ASSOCIATION_CORE_EXPEDITION_ENABLED=true
     export HERO_ASSOCIATION_EXPEDITION_RABBITMQ_HOST=127.0.0.1
@@ -274,6 +283,10 @@ case "$service" in
     start_forward "$namespace" service/expedition 18083 8083
     start_forward "$namespace" service/market 18085 8084
     start_forward "$namespace" service/assets 18086 8085
+    start_forward "$namespace" service/world 18091 8086
+    start_forward "$namespace" service/quest 18092 8087
+    export HERO_ASSOCIATION_WORLD_BASE_URL=http://127.0.0.1:18091
+    export HERO_ASSOCIATION_QUEST_BASE_URL=http://127.0.0.1:18092
     export HERO_ASSOCIATION_ASSETS_BASE_URL=http://127.0.0.1:18086
     export HERO_ASSOCIATION_MARKET_BASE_URL=http://127.0.0.1:18085
     export HERO_ASSOCIATION_CORE_BASE_URL=http://127.0.0.1:18081
@@ -297,6 +310,7 @@ case "$service" in
     export HERO_ASSOCIATION_CORE_BASE_URL=http://127.0.0.1:18088
     export HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY="$(secret_value hero-association-assets-credentials HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY)"
     export HERO_ASSOCIATION_ASSETS_MARKET_SERVICE_KEY="$(secret_value hero-association-market-credentials HERO_ASSOCIATION_ASSETS_MARKET_SERVICE_KEY)"
+    export HERO_ASSOCIATION_ASSETS_QUEST_SERVICE_KEY="$(secret_value hero-association-quest-credentials HERO_ASSOCIATION_ASSETS_QUEST_SERVICE_KEY)"
     ;;
   market)
     start_forward "$namespace" service/postgres-market 15434 5432
@@ -309,10 +323,33 @@ case "$service" in
     export HERO_ASSOCIATION_ASSETS_BASE_URL=http://127.0.0.1:18084
     export HERO_ASSOCIATION_ASSETS_MARKET_SERVICE_KEY="$(secret_value hero-association-market-credentials HERO_ASSOCIATION_ASSETS_MARKET_SERVICE_KEY)"
     ;;
+  world|quest)
+    if [[ "$service" == world ]]; then database_port=15436; else database_port=15437; fi
+    start_forward "$namespace" "service/postgres-$service" "$database_port" 5432
+    export QUARKUS_DATASOURCE_JDBC_URL="jdbc:postgresql://127.0.0.1:$database_port/hero_association_$service"
+    export QUARKUS_DATASOURCE_USERNAME="hero_association_$service"
+    export QUARKUS_DATASOURCE_PASSWORD="$(secret_value "hero-association-$service-credentials" "${service^^}_DATABASE_PASSWORD")"
+    export QUARKUS_HIBERNATE_ORM_SCHEMA_MANAGEMENT_STRATEGY=validate
+    export QUARKUS_HIBERNATE_ORM_SQL_LOAD_SCRIPT=no-file
+    if [[ "$service" == world ]]; then
+      export HERO_ASSOCIATION_WORLD_SERVICE_KEY="$(secret_value hero-association-world-credentials HERO_ASSOCIATION_WORLD_SERVICE_KEY)"
+    else
+      start_forward "$namespace" service/core 18093 8081
+      start_forward "$namespace" service/assets 18094 8085
+      export HERO_ASSOCIATION_CORE_BASE_URL=http://127.0.0.1:18093
+      export HERO_ASSOCIATION_ASSETS_BASE_URL=http://127.0.0.1:18094
+      export HERO_ASSOCIATION_QUEST_CORE_SERVICE_KEY="$(secret_value hero-association-quest-credentials HERO_ASSOCIATION_QUEST_CORE_SERVICE_KEY)"
+      export HERO_ASSOCIATION_QUEST_EXPEDITION_SERVICE_KEY="$(secret_value hero-association-quest-credentials HERO_ASSOCIATION_QUEST_EXPEDITION_SERVICE_KEY)"
+      export HERO_ASSOCIATION_ASSETS_QUEST_SERVICE_KEY="$(secret_value hero-association-quest-credentials HERO_ASSOCIATION_ASSETS_QUEST_SERVICE_KEY)"
+    fi
+    ;;
   expedition)
     start_forward "$namespace" service/redis-expedition 16381 6379
     start_forward "$namespace" service/rabbitmq-expedition 15676 5672
     start_forward "$namespace" service/core 18082 8081
+    start_forward "$namespace" service/quest 18095 8087
+    export HERO_ASSOCIATION_QUEST_BASE_URL=http://127.0.0.1:18095
+    export HERO_ASSOCIATION_QUEST_EXPEDITION_SERVICE_KEY="$(secret_value hero-association-quest-credentials HERO_ASSOCIATION_QUEST_EXPEDITION_SERVICE_KEY)"
     export HERO_ASSOCIATION_EXPEDITION_REDIS_HOST_PORT=16381
     export HERO_ASSOCIATION_EXPEDITION_RABBITMQ_HOST=127.0.0.1
     export HERO_ASSOCIATION_EXPEDITION_RABBITMQ_HOST_PORT=15676
@@ -358,7 +395,7 @@ run_app() {
       cd "$backend_dir/hero-association-bff"
       exec ./mvnw quarkus:dev -Dquarkus.http.host="$wsl_ip" -Dquarkus.http.port="$host_port"
       ;;
-    expedition|market|assets)
+    expedition|market|assets|world|quest)
       cd "$backend_dir/hero-association-$service"
       exec ../mvnw quarkus:dev -Dquarkus.http.host="$wsl_ip" -Dquarkus.http.port="$host_port"
       ;;

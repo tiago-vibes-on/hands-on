@@ -5,7 +5,7 @@ import java.util.UUID;
 import io.tiagovibeson.heroassociation.api.v1.agency.AgencyStateResponse;
 import io.tiagovibeson.heroassociation.application.exception.AgencyNotFoundException;
 import io.tiagovibeson.heroassociation.application.exception.HeroNotFoundException;
-import io.tiagovibeson.heroassociation.application.exception.HeroOnQuestException;
+import io.tiagovibeson.heroassociation.application.exception.HeroAwayException;
 import io.tiagovibeson.heroassociation.application.exception.InvalidHeroActivityException;
 import io.tiagovibeson.heroassociation.domain.Agency;
 import io.tiagovibeson.heroassociation.domain.Hero;
@@ -42,10 +42,10 @@ public class HeroActivityService {
                 .withLock(LockModeType.PESSIMISTIC_WRITE)
                 .firstResultOptional()
                 .orElseThrow(() -> new HeroNotFoundException(heroId));
-        if (hero.getParty() != null || hero.getActivity() == HeroActivity.ON_QUEST || hero.getActivity() == HeroActivity.ON_EXPEDITION) {
-            throw new HeroOnQuestException(heroId);
+        if (hero.getParty() != null || hero.getActivity() == HeroActivity.ON_EXPEDITION) {
+            throw new HeroAwayException(heroId);
         }
-        if (activity == null || activity == HeroActivity.ON_QUEST || activity == HeroActivity.ON_EXPEDITION) {
+        if (activity == null || activity == HeroActivity.ON_EXPEDITION) {
             throw new InvalidHeroActivityException();
         }
 

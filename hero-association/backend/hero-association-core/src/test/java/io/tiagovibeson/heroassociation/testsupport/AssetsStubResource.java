@@ -38,8 +38,26 @@ public class AssetsStubResource implements QuarkusTestResourceLifecycleManager {
         try {
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             server.createContext("/internal/v1/assets/core", this::respond);
+            server.createContext("/internal/v1/world/maps", exchange -> {
+                byte[] bytes = getClass().getResourceAsStream("/world-plan-fixture.json").readAllBytes();
+                int status = KEY.equals(exchange.getRequestHeaders().getFirst("X-Hero-Association-World-Service-Key")) ? 200 : 403;
+                exchange.getResponseHeaders().set("Content-Type", "application/json"); exchange.sendResponseHeaders(status, bytes.length);
+                exchange.getResponseBody().write(bytes); exchange.close();
+            });
+            server.createContext("/internal/v1/quests/returns", exchange -> {
+                JsonNode request = JSON.readTree(exchange.getRequestBody());
+                var result = JSON.createObjectNode().put("expeditionId", request.path("expeditionId").asText()).put("status", "APPLIED").put("ownerManagerId", request.path("ownerManagerId").asText());
+                if (request.path("progress").isNull()) result.putNull("assignmentId");
+                else result.put("assignmentId", request.path("progress").path("pin").path("assignment").path("assignmentId").asText());
+                byte[] bytes = JSON.writeValueAsBytes(result); exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, bytes.length); exchange.getResponseBody().write(bytes); exchange.close();
+            });
             server.setExecutor(Executors.newVirtualThreadPerTaskExecutor()); server.start();
-            return Map.of("hero-association.assets.base-url", "http://127.0.0.1:" + server.getAddress().getPort(),
+            return Map.of("hero-association.world.base-url", "http://127.0.0.1:" + server.getAddress().getPort(),
+                          "hero-association.world.service-key", KEY,
+                          "hero-association.quest.base-url", "http://127.0.0.1:" + server.getAddress().getPort(),
+                          "hero-association.quest.core-service-key", KEY,
+                          "hero-association.assets.base-url", "http://127.0.0.1:" + server.getAddress().getPort(),
                           "hero-association.assets.core-service-key", KEY);
         } catch (IOException failure) { throw new IllegalStateException(failure); }
     }
@@ -92,15 +110,6 @@ public class AssetsStubResource implements QuarkusTestResourceLifecycleManager {
         result.putNull("rejectionStatus"); result.putNull("message"); result.set("request", request.deepCopy());
         ObjectNode manager = owner(request.path("managerId").asText(), "MANAGER");
         switch (request.path("kind").asText()) {
-            case "QUEST_START" -> {
-                long fee = request.path("feeGold").asLong();
-                if (manager.path("gold").asLong() < fee) result.put("status", "REJECTED").put("rejectionStatus", 409).put("message", "The Manager does not have enough gold for the borrowing fee.");
-                else {
-                    manager.put("gold", manager.path("gold").asLong() - fee);
-                    ObjectNode agency = owner(request.path("agencyId").asText(), "AGENCY"); agency.put("gold", agency.path("gold").asLong() + fee);
-                }
-                result.set("heroes", loadouts(request.path("heroIds")));
-            }
             case "HERO_LOADOUT_SNAPSHOT" -> result.set("heroes", loadouts(request.path("heroIds")));
             case "RUNE_EQUIP", "RUNE_UNEQUIP" -> {
                 String hero = request.path("heroId").asText(); int index = request.path("slotIndex").asInt();

@@ -96,4 +96,15 @@ class GameCoreProxyResourceTest {
                 .body("authorization", equalTo("Bearer test-access-token"))
                 .body("method", equalTo("POST"));
     }
+    @Test void worldCatalogAndQuestCommandsReachTheirOwners() {
+        given().get("/api/v1/maps").then().statusCode(200).body("path", equalTo("/world/api/v1/maps")).body("authorization", equalTo("Bearer test-access-token"));
+        given().get("/api/v1/creatures").then().statusCode(200).body("path", equalTo("/world/api/v1/creatures"));
+        given().get("/api/v1/quests").then().statusCode(200).body("path", equalTo("/quest/api/v1/quests"));
+        Response session = given().get("/api/v1/session").then().statusCode(200).extract().response();
+        given().cookie("hero-association-csrf", session.getCookie("hero-association-csrf"))
+            .header("X-CSRF-TOKEN", session.jsonPath().getString("csrfToken")).contentType("application/json").body("{\"commandId\":\"019c4c00-0007-7000-8000-000000000001\"}")
+            .post("/api/v1/quests/019c4c00-0003-7000-8000-000000000001/accept").then().statusCode(200)
+            .body("path", equalTo("/quest/api/v1/quests/019c4c00-0003-7000-8000-000000000001/accept")).body("method", equalTo("POST"));
+    }
+
 }

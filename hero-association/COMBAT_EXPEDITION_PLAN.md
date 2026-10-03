@@ -1,5 +1,11 @@
 # Combat and Expedition implementation plan
 
+Current World/Quest cutover: [WORLD_QUEST_ARCHITECTURE.md](WORLD_QUEST_ARCHITECTURE.md)
+is authoritative for versioned Map admission, optional objectives and return
+rewards. Core's earlier Quest combat, borrowing payment and Creature cache
+workflows described below are retired. Return aggregates now use schema version
+2 with pinned Map metadata and nullable Quest progress.
+
 Status: player-facing Map cutover complete in k3d; load tests deferred. The
 shared combat library, Expedition encounter loop, and aggregate settlement
 handoff are live. Ordinary local development still keeps Map opt-in. Follow

@@ -10,9 +10,12 @@ public class ExpeditionSettlementService {
     @Inject ExpeditionSettlementTransactions transactions;
     @Inject AssetWorkflows workflows;
     @Inject AssetWorkflowTransactions states;
+    @Inject io.tiagovibeson.heroassociation.application.quest.QuestClient quests;
     public enum Result { APPLIED, DUPLICATE }
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public Result apply(byte[] body, String messageId, String contentType) {
+        var questReturn = transactions.validate(body, messageId, contentType);
+        quests.apply(questReturn);
         var stage = transactions.stage(body, messageId, contentType);
         if (stage.duplicate()) return Result.DUPLICATE;
         workflows.recover(stage.operationKey());

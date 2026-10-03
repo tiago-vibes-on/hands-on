@@ -1,5 +1,11 @@
 # Assets service extraction
 
+Current World/Quest cutover: [WORLD_QUEST_ARCHITECTURE.md](WORLD_QUEST_ARCHITECTURE.md)
+is authoritative for versioned Map admission, optional objectives and return
+rewards. Core's earlier Quest combat, borrowing payment and Creature cache
+workflows described below are retired. Return aggregates now use schema version
+2 with pinned Map metadata and nullable Quest progress.
+
 Status: extracted and cut over locally on 2026-10-02. Assets is the sole owner of wallets,
 item and rune catalogs, inventories, equipped Hero rune slots, reservations,
 receipts, and resource postings. Core retains identity, agency permission,

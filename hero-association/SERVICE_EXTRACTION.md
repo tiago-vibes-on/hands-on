@@ -1,7 +1,13 @@
 # Domain and service extraction plan
 
-Status: in progress. This plan distinguishes scaffolded services from live
-ownership: Core remains the working game backend. See
+Current World/Quest cutover: [WORLD_QUEST_ARCHITECTURE.md](WORLD_QUEST_ARCHITECTURE.md)
+is authoritative for versioned Map admission, optional objectives and return
+rewards. Core's earlier Quest combat, borrowing payment and Creature cache
+workflows described below are retired. Return aggregates now use schema version
+2 with pinned Map metadata and nullable Quest progress.
+
+Status: staged extraction. Core owns identity, agency and permanent Hero state;
+Assets, Market, World, Quest and Expedition own their extracted domains. See
 [ADR 0004](adr/0004-core-as-temporary-modular-monolith.md),
 [Combat and Expedition plan](COMBAT_EXPEDITION_PLAN.md),
 [Market architecture](MARKET_ARCHITECTURE.md),
@@ -28,10 +34,10 @@ idempotency, retries, and recovery.
 | Account | Manager profile and Keycloak-subject mapping, not login credentials | In Core; extraction planned |
 | Agency | Membership, leadership, permissions, and upgrades | In Core; extraction planned |
 | Hero | Recruited heroes, permanent resources, XP, skills, and equipment eligibility | In Core; extraction planned |
-| Map | Reusable field/dungeon definitions, floor layouts, and possible encounters | Not implemented; extraction planned |
-| Expedition | One persistent Party per Manager, active Map run, encounter coordination, and explicit return | Player-facing k3d Map cutover complete; ordinary local Map remains opt-in |
-| Quest | Optional objectives, rewards, and objective progress | Current quest-based flow in Core; extraction planned |
-| Creature | Versioned creature definitions: stats, attacks, XP, and drop tables | In Core; extraction planned |
+| Map | Reusable field/dungeon definitions, floor layouts, and possible encounters | Versioned definitions in World |
+| Expedition | One persistent Party per Manager, active Map run, encounter coordination, and explicit return | Player-facing Map runs in Expedition; Map enabled by default in pipeline and hybrid frontend |
+| Quest | Optional objectives, rewards, and objective progress | Optional assignments, objectives and reward recovery in Quest |
+| Creature | Versioned creature definitions: stats, attacks, XP, and drop tables | Immutable versions in World |
 | Social | Feed posts; proposed future scope is manager-authored text only | In Core; extraction planned |
 | Assets | Manager/agency gold and inventories; Hero-owned equipped runes; transfers and reservations | Extracted to `hero-association-assets`; local six-image cutover complete |
 | Market | Orders, matching, trade history, and order state | Extracted to `hero-association-market` |
@@ -43,8 +49,8 @@ owns that Manager's single persistent, nonempty Party and at most one active
 Map run. The Party starts with the three personal starter heroes. It can be
 edited only at the agency, after the Manager has joined or created one. The
 first Map version accepts personal heroes only; agency-hero borrowing and its
-fee are deferred. Quest may later attach an optional objective to a Map run,
-but never becomes a prerequisite for entering a Map. Expedition runs
+fee are deferred. Quest pins an optional assignment at admission and banks authoritative progress
+on Return; it never becomes a prerequisite for entering a Map. Expedition runs
 fights using the combat-engine library. Cities and travel remain deferred.
 
 An Expedition has no time limit. After a winning fight, it waits for an
@@ -52,8 +58,8 @@ explicit Continue command before starting another encounter. A Manager may
 request return to the agency; between fights this returns immediately, while
 an active fight finishes first and no further encounter begins. A party
 wipe ends the fight and prevents new encounters, but does not return the Party automatically. The Manager must
-choose to return. The current Core quest flow and its borrowing fee remain
-unchanged until the new Map path is cut over.
+choose to return. Completed dungeons also wait for Return. Core Quest combat
+and its borrowing-fee payment are retired; future Expedition borrowing remains deferred.
 
 `hero-association-assets` implements Assets.
 Manager and agency own gold, item stacks, and unequipped rune inventories;
@@ -76,13 +82,13 @@ The player-facing Map/Expedition cutover is complete in k3d. The
 [Expedition contract](EXPEDITION_CONTRACT.md) defines its run admission,
 lifecycle, and durable Redis state.
 [ADR 0008](adr/0008-combat-engine-in-expedition.md) supersedes the standalone
-Combat-service cutover in ADR 0007. Expedition owns Map fights; Core remains
-the Quest-battle writer until Quest is redesigned. The standalone Combat
-sandbox and its Core fact inbox have been retired. Combat load tests and
-optional Quest objectives are deferred. The Assets extraction and exact
-six-image local cutover are complete. Market's order book and recovery
+Combat-service cutover in ADR 0007. Expedition owns Map fights. The standalone
+Combat sandbox and its Core fact inbox are retired. Combat load tests remain
+deferred. World and optional Quest objectives are implemented; their verified
+eight-image cutover is recorded in WORLD_QUEST_ARCHITECTURE.md. The earlier
+Assets extraction and six-image local cutover are complete. Market's order book and recovery
 are already separate. Assets owns economic mutations; Core retains player
-permission decisions and durable Hero/Quest/Expedition workflows. See the
+permission decisions and durable Hero/Expedition workflows. See the
 [Assets architecture](ASSETS_ARCHITECTURE.md) and
 [recovery protocol](ASSETS_RECOVERY.md). Other service extractions remain
 separate work.
@@ -95,12 +101,12 @@ decision; ADR 0008 defines the current library-in-Expedition approach.
 
 ## Deferred domain extractions
 
-### 4. Add optional Quest objectives
+### 4. Add optional Quest objectives (implemented)
 
-- [ ] Model creature kill-count, boss-defeat, and dungeon-completion
+- [x] Model creature kill-count, boss-defeat, and dungeon-completion
   objectives. A Quest may be location-independent, allow several eligible
   Maps, or target a dungeon; it never gates entry to a Map. Apply progress
-  from authoritative Combat and Expedition outcomes, not browser reports.
+  from authoritative Expedition combat outcomes, not browser reports.
 
 ### 5. Establish Assets contracts in Core (completed before extraction)
 

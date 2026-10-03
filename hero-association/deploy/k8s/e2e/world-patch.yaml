@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: world
+  namespace: hero-association
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        sidecar.istio.io/inject: 'false'
+    spec:
+      containers:
+      - name: world
+        env:
+        - name: HERO_ASSOCIATION_OIDC_ISSUER
+          value: https://auth.e2e.heroassociation.test/realms/hero-association

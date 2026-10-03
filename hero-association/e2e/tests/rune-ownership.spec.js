@@ -106,6 +106,7 @@ test('recovers a lost equipment response after reload, then moves the rune betwe
 })
 
 test('allows a member to use agency runes but blocks another Manager’s Hero and away Heroes', async ({ page }) => {
+  test.setTimeout(180_000)
   await signIn(page, 'manager1@mail.com', 'manager1')
   const initial = await agencyState(page)
   const account = await (await page.request.get('/api/v1/account')).json()
@@ -156,37 +157,16 @@ test('allows a member to use agency runes but blocks another Manager’s Hero an
     })
     expect(removed.status()).toBe(200)
   }
-  const quest = transferred.quests.find((candidate) => candidate.title === 'Lost Courier')
-  expect(quest?.status).toBe('AVAILABLE')
-  let lostQuest
-  await page.route('**/api/v1/agencies/*/quests/*/start', async (route) => {
-    if (lostQuest) return route.continue()
-    const response = await route.fetch()
-    expect(response.status()).toBe(200)
-    lostQuest = { url: route.request().url(), data: route.request().postDataJSON() }
-    await route.fulfill({ status: 503, contentType: 'application/json',
-      body: JSON.stringify({ message: 'Quest response lost after commit.' }) })
-  })
-  await page.reload()
-  await page.getByRole('button', { name: 'Quests', exact: true }).click()
-  const questCard = page.locator('.quest-card').filter({
-    has: page.getByRole('heading', { name: 'Lost Courier', exact: true }),
-  })
-  await questCard.getByRole('combobox').selectOption(party.id)
-  await questCard.getByRole('button', { name: 'Start quest' }).click()
-  await expect(page.getByText('Quest response lost after commit.')).toBeVisible()
-  expect(lostQuest.data.operationKey).toBeTruthy()
+  const entry = await page.request.post('/api/v1/expeditions', { headers, data: {
+    expeditionId: uuidV7(), commandId: uuidV7(), agencyId, partyId: party.id,
+    mapId: '019c4c00-0006-7000-8000-000000000002',
+  } })
+  expect(entry.status()).toBe(201)
+  const run = await entry.json()
   await page.reload()
   await page.getByRole('button', { name: 'Heroes', exact: true }).click()
   const refreshedSession = await (await page.request.get('/api/v1/session')).json()
   headers = { 'X-CSRF-TOKEN': refreshedSession.csrfToken }
-  const replayedQuest = await page.request.put(lostQuest.url, { headers, data: lostQuest.data })
-  expect(replayedQuest.status()).toBe(200)
-  expect((await replayedQuest.json()).personalHeroes.find((hero) => hero.id === memberWarrior.id).activity)
-    .toBe('ON_QUEST')
-  await expect.poll(() => page.evaluate(() => Object.keys(sessionStorage)
-    .filter((key) => key.startsWith('hero-association.assets:'))
-    .flatMap((key) => JSON.parse(sessionStorage.getItem(key))).length)).toBe(0)
   const awaySlot = page.getByRole('group', { name: `${memberWarrior.alias} rune slots` })
     .getByRole('button', { name: new RegExp(`${memberWarrior.alias} rune slot 5`) })
   await expect(awaySlot).toBeDisabled()
@@ -198,4 +178,8 @@ test('allows a member to use agency runes but blocks another Manager’s Hero an
   expect((await equip(user1WarriorId)).status()).toBe(404)
   expect((await equip(memberWarrior.id)).status()).toBe(409)
   expect(quantity((await agencyState(page)).personalRuneInventory, 'vitality-rune')).toBe(1)
+  const returned = await page.request.post(`/api/v1/expeditions/${run.expeditionId}/return`, { headers, data: { commandId: uuidV7(), expectedVersion: run.stateVersion } })
+  expect(returned.status()).toBe(200)
+  await expect.poll(async () => (await page.request.get('/api/v1/expeditions/active')).status(), { timeout: 120_000, intervals: [1000] }).toBe(204)
+
 })

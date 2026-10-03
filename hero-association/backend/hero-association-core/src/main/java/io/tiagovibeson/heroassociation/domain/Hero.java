@@ -281,7 +281,7 @@ public class Hero extends UuidEntity {
         if (restLevel < 1) {
             throw new IllegalArgumentException("Rest level must be positive.");
         }
-        if (pendingAssetOperation != null || activity == HeroActivity.ON_QUEST || activity == HeroActivity.ON_EXPEDITION
+        if (pendingAssetOperation != null || activity == HeroActivity.ON_EXPEDITION
                 || !synchronizedAt.isAfter(lastResourceSynchronizedAt)) {
             return;
         }

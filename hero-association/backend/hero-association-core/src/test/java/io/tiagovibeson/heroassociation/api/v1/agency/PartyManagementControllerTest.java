@@ -52,14 +52,21 @@ class PartyManagementControllerTest {
                 .body("parties.find { it.id == '%s' }.heroIds".formatted(partyId), empty());
     }
 
+    @jakarta.inject.Inject io.tiagovibeson.heroassociation.application.expedition.ExpeditionAdmissionService admission;
     @Test
-    void shouldRejectMembershipChangesForAnActiveQuestParty() {
-        given()
-                .when()
-                .put("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, BROKEN_PASS_PARTY_ID, PERSONAL_WARRIOR_ID))
-                .then()
-                .statusCode(409)
-                .body("message", is("Party with id %s is on a quest and its membership cannot change.".formatted(BROKEN_PASS_PARTY_ID)));
+    void shouldRejectMembershipChangesForAnActiveExpeditionParty() {
+        String party = createParty("Active expedition test").then().statusCode(200).extract().path("parties.find { it.name == 'Active expedition test' }.id");
+        given().put("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, party, PERSONAL_WARRIOR_ID)).then().statusCode(200);
+        var run = io.tiagovibeson.heroassociation.domain.UuidV7.next();
+        var manager = java.util.UUID.fromString("019c4c00-0000-7000-8000-000000000001");
+        admission.reserve(run, manager, java.util.UUID.fromString(AGENCY_ID), java.util.UUID.fromString(party));
+        try {
+            given().put("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, party, OAKSHIELD_ID)).then().statusCode(409);
+            given().delete("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, party, PERSONAL_WARRIOR_ID)).then().statusCode(409);
+        } finally {
+            admission.releaseProvenAbsent(run, manager);
+            given().delete("/api/v1/agencies/%s/parties/%s/heroes/%s".formatted(AGENCY_ID, party, PERSONAL_WARRIOR_ID)).then().statusCode(200);
+        }
     }
 
     @Test

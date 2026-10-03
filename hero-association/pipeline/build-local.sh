@@ -10,7 +10,7 @@ if [[ "$map_enabled" != true && "$map_enabled" != false ]]; then
 fi
 
 usage() {
-  printf 'Usage: %s [all|core|bff|expedition|market|assets|frontend] [build-id]\n' "$0" >&2
+  printf 'Usage: %s [all|core|bff|expedition|market|assets|world|quest|frontend] [build-id]\n' "$0" >&2
   exit 2
 }
 
@@ -20,8 +20,8 @@ fi
 
 component="${1:-all}"
 case "$component" in
-  all) services=(core bff expedition market assets frontend) ;;
-  core|bff|expedition|market|assets|frontend) services=("$component") ;;
+  all) services=(core bff expedition market assets world quest frontend) ;;
+  core|bff|expedition|market|assets|world|quest|frontend) services=("$component") ;;
   *) usage ;;
 esac
 
@@ -66,7 +66,7 @@ for service in "${services[@]}"; do
       (cd "$module_dir" && ./mvnw --batch-mode -DskipTests package)
       docker build --tag "hero-association-$service:$build_id" "$module_dir"
       ;;
-    expedition|market|assets)
+    expedition|market|assets|world|quest)
       backend_dir="$project_dir/backend"
       (cd "$backend_dir" && ./mvnw --batch-mode -pl "hero-association-$service" -am -DskipTests package)
       docker build --file "$backend_dir/hero-association-$service/Dockerfile" --tag "hero-association-$service:$build_id" "$backend_dir"

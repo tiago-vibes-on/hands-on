@@ -46,6 +46,9 @@ public class GameCoreProxyResource {
     @Inject
     AssetsClient assetsClient;
 
+    @Inject io.tiagovibeson.heroassociation.bff.world.WorldClient worldClient;
+    @Inject io.tiagovibeson.heroassociation.bff.quest.QuestClient questClient;
+
     @Inject
     SecurityIdentity securityIdentity;
 
@@ -116,6 +119,14 @@ public class GameCoreProxyResource {
                     headers.getHeaderString(HttpHeaders.CONTENT_TYPE), accessToken, body);
         }
 
+        if ("v1/maps".equals(path) || "v1/creatures".equals(path)) {
+            return worldClient.forward(method, path, uriInfo.getRequestUri().getRawQuery(),
+                    headers.getHeaderString(HttpHeaders.ACCEPT), headers.getHeaderString(HttpHeaders.CONTENT_TYPE), accessToken, body);
+        }
+        if ("v1/quests".equals(path) || path != null && path.startsWith("v1/quests/")) {
+            return questClient.forward(method, path, uriInfo.getRequestUri().getRawQuery(),
+                    headers.getHeaderString(HttpHeaders.ACCEPT), headers.getHeaderString(HttpHeaders.CONTENT_TYPE), accessToken, body);
+        }
         if ("v1/gold-transfers".equals(path)) {
             return assetsClient.forward(method, path, uriInfo.getRequestUri().getRawQuery(),
                     headers.getHeaderString(HttpHeaders.ACCEPT),

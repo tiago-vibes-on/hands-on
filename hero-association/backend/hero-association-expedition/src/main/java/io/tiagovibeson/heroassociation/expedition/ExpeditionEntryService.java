@@ -17,6 +17,7 @@ public class ExpeditionEntryService {
     private final CoreAdmissionClient core;
     private final ExpeditionService expeditions;
     private final RedisRunStore runs;
+    @jakarta.inject.Inject QuestClient quests;
 
     @ConfigProperty(name = "hero-association.expedition.admission-reconciler.enabled", defaultValue = "false")
     boolean reconcilerEnabled;
@@ -32,6 +33,8 @@ public class ExpeditionEntryService {
                           UUID commandId, String playerAccessToken) {
         PreparedEntry entry = core.reserve(expeditionId, agencyId, partyId, mapId, playerAccessToken);
         try {
+            var pin = quests.pin(entry);
+            entry = entry.withQuest(pin);
             return expeditions.startPrepared(entry, commandId);
         } catch (RuntimeException failure) {
             try {
@@ -48,7 +51,9 @@ public class ExpeditionEntryService {
         if (!runs.cancelIfAbsent(managerId, expeditionId)) {
             return false;
         }
-        return core.releaseProvenAbsent(expeditionId, managerId);
+        boolean released = core.releaseProvenAbsent(expeditionId, managerId);
+        quests.release(expeditionId, managerId);
+        return released;
     }
 
     @Scheduled(every = "30s", concurrentExecution = Scheduled.ConcurrentExecution.SKIP)
@@ -63,6 +68,10 @@ public class ExpeditionEntryService {
                 } catch (RuntimeException failure) {
                     LOG.warnf(failure, "Could not reconcile Expedition reservation %s", candidate.expeditionId());
                 }
+            }
+            for (QuestClient.Orphan candidate : quests.orphans()) {
+                try { releaseIfAbsent(candidate.ownerManagerId(), candidate.expeditionId()); }
+                catch (RuntimeException failure) { LOG.warnf(failure, "Could not reconcile Quest admission %s", candidate.expeditionId()); }
             }
         } catch (RuntimeException failure) {
             LOG.warn("Core admission reconciliation is unavailable; reservations remain locked.", failure);

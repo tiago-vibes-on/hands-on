@@ -28,6 +28,15 @@ public class ExpeditionReservation {
     @Column(nullable = false, columnDefinition = "text")
     private String baselineJson;
 
+    @Column(columnDefinition = "text", updatable = false)
+    private String worldPlanJson;
+
+    public String getWorldPlanJson() { return worldPlanJson; }
+    public void pinWorldPlan(String plan) {
+        if (worldPlanJson != null) throw new IllegalStateException("Map plan is already pinned.");
+        worldPlanJson = java.util.Objects.requireNonNull(plan);
+    }
+
     @Column(nullable = false)
     private Instant reservedAt;
 

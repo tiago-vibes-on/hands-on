@@ -15,6 +15,10 @@
 
     <dependencyManagement>
         <dependencies>
+        <dependency>
+            <groupId>io.tiagovibeson</groupId><artifactId>hero-association-game-contracts</artifactId><version>0.1.0-SNAPSHOT</version>
+        </dependency>
+
             <dependency>
                 <groupId>io.quarkus.platform</groupId>
                 <artifactId>quarkus-bom</artifactId>
@@ -26,6 +30,10 @@
     </dependencyManagement>
 
     <dependencies>
+        <dependency>
+            <groupId>io.tiagovibeson</groupId><artifactId>hero-association-game-contracts</artifactId><version>0.1.0-SNAPSHOT</version>
+        </dependency>
+
         <dependency>
             <groupId>io.tiagovibeson</groupId>
             <artifactId>hero-association-combat-engine</artifactId>

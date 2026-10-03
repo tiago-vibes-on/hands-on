@@ -13,7 +13,7 @@ test('User2 default party enters Troll Field, reconnects, continues, and settles
   const previous = await page.request.get('/api/v1/expeditions/active')
   if (previous.status() === 200) {
     const active = await previous.json()
-    await page.getByRole('button', { name: 'Map' }).click()
+    await page.getByRole('button', { name: 'Map', exact: true }).click()
     if (!active.returnRequested && active.phase !== 'SETTLEMENT_PENDING') {
       await page.getByRole('button', {
         name: active.phase === 'FIGHTING' ? 'Return after this fight' : 'Return to agency',
@@ -59,13 +59,26 @@ test('User2 default party enters Troll Field, reconnects, continues, and settles
     }
   })
   await page.reload()
-  await expect(page.getByRole('button', { name: 'Map' })).toBeVisible()
-  await page.getByRole('button', { name: 'Map' }).click()
+  await expect(page.getByRole('button', { name: 'Map', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Map', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Troll Field' })).toBeVisible()
   await page.getByRole('combobox', { name: 'Party' }).selectOption(party.id)
+  let lostEntry
+  await page.route('**/api/v1/expeditions', async (route) => {
+    if (route.request().method() !== 'POST' || lostEntry) return route.continue()
+    const response = await route.fetch()
+    expect(response.status()).toBe(201)
+    lostEntry = route.request().postDataJSON()
+    await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'Entry response lost after admission.' }) })
+  })
   const webSocketOpened = page.waitForEvent('websocket', (socket) => socket.url().includes('/ws/v1/expeditions/'))
   await page.getByRole('button', { name: 'Enter field' }).click()
+  await expect(page.getByText('Entry response lost after admission.')).toBeVisible()
+  expect(lostEntry.expeditionId).toBeTruthy()
+  await page.reload()
+  await page.getByRole('button', { name: 'Map', exact: true }).click()
   await webSocketOpened
+  await expect.poll(() => page.evaluate((manager) => sessionStorage.getItem(`hero-association:expedition-entry:${manager}`), managerId)).toBeNull()
   await expect(page.getByRole('heading', { name: 'In battle' })).toBeVisible()
   await expect(page.locator('.combat-scene canvas')).toBeVisible()
   const loadout = page.getByRole('region', { name: 'Party loadout' })
@@ -106,14 +119,14 @@ test('User2 default party enters Troll Field, reconnects, continues, and settles
     const current = await (await page.request.get('/api/v1/expeditions/active')).json()
     return current.fight?.visual?.elapsedMilliseconds ?? 0
   }, { timeout: 15_000, intervals: [1_000] }).toBeGreaterThan(beforeLeaving + 3_000)
-  await page.getByRole('button', { name: 'Map' }).click()
+  await page.getByRole('button', { name: 'Map', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'In battle' })).toBeVisible()
   await expect(page.locator('.combat-scene canvas')).toBeVisible()
   const resumedSeconds = Number.parseInt(await page.locator('.map-fight__time').textContent(), 10)
   expect(resumedSeconds).toBeGreaterThanOrEqual(Math.floor(beforeLeaving / 1_000) + 3)
 
   await page.reload()
-  await page.getByRole('button', { name: 'Map' }).click()
+  await page.getByRole('button', { name: 'Map', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'In battle' })).toBeVisible()
   await expect(page.locator('.combat-scene canvas')).toBeVisible()
   await expect(page.locator('.map-fight__time')).toHaveText(/[1-9][0-9]*s/, { timeout: 20_000 })

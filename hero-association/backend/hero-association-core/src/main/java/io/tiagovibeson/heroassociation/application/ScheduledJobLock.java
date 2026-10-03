@@ -23,8 +23,7 @@ public class ScheduledJobLock {
     }
 
     public enum Job {
-        AGENCY_RECOVERY(1),
-        QUEST_COMBAT(2);
+        AGENCY_RECOVERY(1);
 
         private final int id;
 

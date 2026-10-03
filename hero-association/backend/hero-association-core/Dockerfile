@@ -3,6 +3,8 @@ FROM maven:3.9.16-eclipse-temurin-25 AS build
 WORKDIR /workspace
 
 COPY pom.xml ./
+COPY hero-association-world/pom.xml ./hero-association-world/pom.xml
+COPY hero-association-quest/pom.xml ./hero-association-quest/pom.xml
 COPY hero-association-bff/pom.xml ./hero-association-bff/pom.xml
 COPY hero-association-expedition/pom.xml ./hero-association-expedition/pom.xml
 COPY hero-association-assets/pom.xml ./hero-association-assets/pom.xml

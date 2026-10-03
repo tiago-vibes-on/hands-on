@@ -26,8 +26,13 @@ public class GameCoreStubResource implements QuarkusTestResourceLifecycleManager
             server.createContext("/expedition/api/v1/expeditions/" + ExpeditionSocketFixture.OWNED_ID, ExpeditionSocketFixture::opening);
             server.createContext("/expedition/api/v1/expeditions/" + ExpeditionSocketFixture.FOREIGN_ID, ExpeditionSocketFixture::opening);
             server.createContext("/expedition/internal/v1/expedition-visuals/", ExpeditionSocketFixture::visual);
+            server.createContext("/world/api/v1/maps", this::respondToEcho);
+            server.createContext("/world/api/v1/creatures", this::respondToEcho);
+            server.createContext("/quest/api/v1/quests", this::respondToEcho);
             server.start();
             return java.util.Map.of(
+                    "hero-association.world.base-url", "http://localhost:" + server.getAddress().getPort() + "/world",
+                    "hero-association.quest.base-url", "http://localhost:" + server.getAddress().getPort() + "/quest",
                     "hero-association.core.base-url",
                     "http://localhost:" + server.getAddress().getPort(),
                     "hero-association.expedition.base-url",

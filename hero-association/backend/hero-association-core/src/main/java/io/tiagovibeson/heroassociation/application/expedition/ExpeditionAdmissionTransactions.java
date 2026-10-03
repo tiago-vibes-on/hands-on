@@ -14,7 +14,6 @@ import io.tiagovibeson.heroassociation.domain.HeroActivity;
 import io.tiagovibeson.heroassociation.domain.HeroSkill;
 import io.tiagovibeson.heroassociation.domain.RuneEffect;
 import io.tiagovibeson.heroassociation.domain.Party;
-import io.tiagovibeson.heroassociation.domain.QuestStatus;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -34,6 +33,12 @@ public class ExpeditionAdmissionTransactions {
 
     @Transactional(jakarta.transaction.Transactional.TxType.REQUIRES_NEW)
     public ExpeditionBaseline reserve(UUID expeditionId, UUID managerId, UUID agencyId, UUID partyId) {
+        return reserve(expeditionId, managerId, agencyId, partyId, null);
+    }
+
+    @Transactional(jakarta.transaction.Transactional.TxType.REQUIRES_NEW)
+    public ExpeditionBaseline reserve(UUID expeditionId, UUID managerId, UUID agencyId, UUID partyId,
+                                     io.tiagovibeson.heroassociation.contract.WorldContract.Plan plan) {
         if (expeditionId == null || expeditionId.version() != 7 || managerId == null || managerId.version() != 7
                 || agencyId == null || agencyId.version() != 7 || partyId == null || partyId.version() != 7) {
             throw new IllegalArgumentException("Expedition admission requires UUIDv7 IDs.");
@@ -46,14 +51,13 @@ public class ExpeditionAdmissionTransactions {
                 throw new IllegalArgumentException("Expedition ID belongs to a different reservation.");
             }
             if (existing.getAppliedAt() != null || existing.getReleasedAt() != null) {
-                throw new IllegalStateException("A settled Expedition ID cannot be admitted again.");
+                throw new ReservationClosedException();
             }
             return decode(existing.getBaselineJson());
         }
         Party party = em.find(Party.class, partyId, LockModeType.PESSIMISTIC_WRITE);
         if (party == null || !party.getOwnerManager().getId().equals(managerId)
-                || !party.getAgency().getId().equals(agencyId)
-                || party.getQuest() != null && party.getQuest().getStatus() == QuestStatus.IN_PROGRESS) {
+                || !party.getAgency().getId().equals(agencyId)) {
             throw new IllegalArgumentException("Party is not available to this Manager for Expedition.");
         }
         Long membership = em.createQuery("select count(m) from AgencyMember m "
@@ -62,7 +66,7 @@ public class ExpeditionAdmissionTransactions {
         if (membership != 1) {
             throw new IllegalArgumentException("Manager is not a member of this agency.");
         }
-        party.requireNoPendingAssets();
+
         List<Hero> heroes = em.createQuery("select h from Hero h where h.party.id = :party order by h.id", Hero.class)
                 .setParameter("party", partyId).setLockMode(LockModeType.PESSIMISTIC_WRITE).getResultList();
         if (heroes.isEmpty() || heroes.size() > 4 || heroes.stream().noneMatch(hero -> hero.getCurrentHealth() > 0)) {
@@ -73,7 +77,6 @@ public class ExpeditionAdmissionTransactions {
         for (Hero hero : heroes) {
             hero.requireNoPendingAssets();
             if (hero.getOwnerManager() == null || !hero.getOwnerManager().getId().equals(managerId)
-                    || hero.getActivity() == HeroActivity.ON_QUEST
                     || hero.getActivity() == HeroActivity.ON_EXPEDITION) {
                 throw new IllegalArgumentException("All reserved Heroes must be available personal Heroes.");
             }
@@ -82,7 +85,12 @@ public class ExpeditionAdmissionTransactions {
         }
         ExpeditionBaseline baseline = new ExpeditionBaseline(heroes.stream()
                 .map(hero -> snapshot(hero, previousActivities.get(hero.getId()))).toList());
-        em.persist(new ExpeditionReservation(expeditionId, managerId, agencyId, partyId, encode(baseline), now));
+        var reservation = new ExpeditionReservation(expeditionId, managerId, agencyId, partyId, encode(baseline), now);
+        if (plan != null) {
+            try { reservation.pinWorldPlan(mapper.writeValueAsString(plan)); }
+            catch (JsonProcessingException invalid) { throw new IllegalStateException("Could not pin Map plan.", invalid); }
+        }
+        em.persist(reservation);
         em.flush();
         return baseline;
     }
@@ -213,5 +221,19 @@ public class ExpeditionAdmissionTransactions {
         reservation.confirmAssetsSnapshot(encode(finalBaseline)); em.flush(); return finalBaseline;
     }
     public record AdmissionClaim(java.util.UUID commandKey, java.util.UUID managerId, ExpeditionBaseline baseline, boolean confirmed) { }
+
+    @Transactional(jakarta.transaction.Transactional.TxType.REQUIRES_NEW)
+    public io.tiagovibeson.heroassociation.contract.WorldContract.Plan worldPlan(UUID expeditionId, UUID managerId, UUID agencyId, UUID partyId, UUID mapId) {
+        var reservation = em.find(ExpeditionReservation.class, expeditionId);
+        if (reservation == null) return null;
+        if (!managerId.equals(reservation.getOwnerManagerId()) || !agencyId.equals(reservation.getAgencyId())
+                || !partyId.equals(reservation.getPartyId()) || reservation.getWorldPlanJson() == null)
+            throw new IllegalArgumentException("Expedition ID belongs to a different admission.");
+        try {
+            var plan = mapper.readValue(reservation.getWorldPlanJson(), io.tiagovibeson.heroassociation.contract.WorldContract.Plan.class);
+            if (!mapId.equals(plan.map().definitionId())) throw new IllegalArgumentException("Expedition ID already pinned another Map.");
+            return plan;
+        } catch (JsonProcessingException invalid) { throw new IllegalStateException("Pinned Map is invalid.", invalid); }
+    }
 
 }

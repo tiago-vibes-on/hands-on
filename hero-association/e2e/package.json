@@ -11,7 +11,8 @@
     "test:k3d:map": "HERO_ASSOCIATION_K3D_PLAYWRIGHT_CONFIG=playwright.k3d.map.config.js node run-k3d-playwright.js",
     "test:market:k6": "node run-k3d-k6.js",
     "load:k3d": "HERO_ASSOCIATION_K3D_PLAYWRIGHT_CONFIG=playwright.k3d.load.config.js node run-k3d-playwright.js",
-    "load:mixed:k3d": "HERO_ASSOCIATION_K3D_PLAYWRIGHT_CONFIG=playwright.k3d.mixed.config.js node run-k3d-playwright.js"
+    "load:mixed:k3d": "HERO_ASSOCIATION_K3D_PLAYWRIGHT_CONFIG=playwright.k3d.mixed.config.js node run-k3d-playwright.js",
+    "test:k3d:quest": "HERO_ASSOCIATION_K3D_PLAYWRIGHT_CONFIG=playwright.k3d.quest.config.js node run-k3d-playwright.js"
   },
   "engines": {
     "node": ">=24"

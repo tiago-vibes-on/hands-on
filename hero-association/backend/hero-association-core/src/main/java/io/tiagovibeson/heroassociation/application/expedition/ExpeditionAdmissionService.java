@@ -13,6 +13,15 @@ public class ExpeditionAdmissionService {
     @Inject ExpeditionAdmissionTransactions transactions;
     @Inject AssetsClient assets;
     @Inject ObjectMapper mapper;
+    @Inject io.tiagovibeson.heroassociation.application.world.WorldClient world;
+
+    @Transactional(Transactional.TxType.NOT_SUPPORTED)
+    public io.tiagovibeson.heroassociation.contract.WorldContract.Plan pinWorld(UUID expedition, UUID manager, UUID agency, UUID party, UUID map) {
+        var stored = transactions.worldPlan(expedition, manager, agency, party, map);
+        var plan = stored == null ? world.plan(map) : stored;
+        transactions.reserve(expedition, manager, agency, party, plan);
+        return transactions.worldPlan(expedition, manager, agency, party, map);
+    }
     @Transactional(Transactional.TxType.NOT_SUPPORTED)
     public ExpeditionBaseline reserve(UUID expedition, UUID manager, UUID agency, UUID party) {
         transactions.reserve(expedition, manager, agency, party);

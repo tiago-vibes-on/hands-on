@@ -25,7 +25,7 @@ class CoreAdmissionClientTest {
         UUID mapId = UuidV7.next();
         UUID heroId = UuidV7.next();
         UUID creatureId = UuidV7.next();
-        String response = ("""
+        String baselineResponse = ("""
                 {"expeditionId":"%s","ownerManagerId":"%s","agencyId":"%s","partyId":"%s",
                  "mapId":"%s","mapVersion":1,
                  "baseline":{"heroes":[{"heroId":"%s","name":"Test Warrior","heroClass":"WARRIOR",
@@ -38,6 +38,11 @@ class CoreAdmissionClientTest {
                    "attackIntervalMilliseconds":1600,"healthRecoveryPerSecond":0,
                    "manaRecoveryPerSecond":0,"criticalChance":0.1,"criticalDamageMultiplier":2.0}}
                 """).formatted(expeditionId, managerId, agencyId, partyId, mapId, heroId, creatureId);
+        var responseNode = new ObjectMapper().readTree(baselineResponse);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) responseNode).remove("creature");
+        var profile = new RunState.CreatureProfile(creatureId, 1, "Troll", 2000, 100, 10, 1600, 0, 0, .1, 2, 100);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) responseNode).set("world", new ObjectMapper().valueToTree(WorldPlans.field(mapId, 1, profile)));
+        String response = responseNode.toString();
         AtomicBoolean authenticated = new AtomicBoolean();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/internal/v1/expedition-admissions/reservations", exchange -> {

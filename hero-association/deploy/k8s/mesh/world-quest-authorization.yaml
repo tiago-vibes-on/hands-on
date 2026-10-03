@@ -1,0 +1,124 @@
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: world-strict-mtls
+  namespace: hero-association
+spec:
+  selector:
+    matchLabels:
+      app: world
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: quest-strict-mtls
+  namespace: hero-association
+spec:
+  selector:
+    matchLabels:
+      app: quest
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: world-from-services
+  namespace: hero-association
+spec:
+  selector:
+    matchLabels:
+      app: world
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+        - cluster.local/ns/hero-association/sa/hero-association-core
+    to:
+    - operation:
+        methods:
+        - GET
+        paths:
+        - /internal/v1/world/maps/*
+  - from:
+    - source:
+        principals:
+        - cluster.local/ns/hero-association/sa/hero-association-bff
+    to:
+    - operation:
+        methods:
+        - GET
+        paths:
+        - /api/v1/maps
+        - /api/v1/creatures
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: quest-from-services
+  namespace: hero-association
+spec:
+  selector:
+    matchLabels:
+      app: quest
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+        - cluster.local/ns/hero-association/sa/hero-association-bff
+    to:
+    - operation:
+        methods:
+        - GET
+        - POST
+        paths:
+        - /api/v1/quests
+        - /api/v1/quests/*
+  - from:
+    - source:
+        principals:
+        - cluster.local/ns/hero-association/sa/hero-association-expedition
+    to:
+    - operation:
+        methods:
+        - GET
+        - POST
+        paths:
+        - /internal/v1/quests/admissions
+        - /internal/v1/quests/admissions/*
+  - from:
+    - source:
+        principals:
+        - cluster.local/ns/hero-association/sa/hero-association-core
+    to:
+    - operation:
+        methods:
+        - POST
+        paths:
+        - /internal/v1/quests/returns
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: core-from-quest
+  namespace: hero-association
+spec:
+  selector:
+    matchLabels:
+      app: core
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+        - cluster.local/ns/hero-association/sa/hero-association-quest
+    to:
+    - operation:
+        methods:
+        - GET
+        paths:
+        - /internal/v1/quest-authority/me

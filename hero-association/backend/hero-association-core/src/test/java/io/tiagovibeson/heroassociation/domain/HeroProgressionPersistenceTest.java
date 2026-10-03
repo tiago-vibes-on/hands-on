@@ -3,15 +3,12 @@ package io.tiagovibeson.heroassociation.domain;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.math.BigDecimal;
-import java.util.List;
 import java.util.UUID;
 
 import io.quarkus.test.TestTransaction;
 import io.quarkus.test.junit.QuarkusTest;
 import io.tiagovibeson.heroassociation.api.v1.agency.AgencyStateResponse;
-import io.tiagovibeson.heroassociation.repository.CreatureDefinitionRepository;
 import io.tiagovibeson.heroassociation.repository.HeroRepository;
-import io.tiagovibeson.heroassociation.repository.QuestRepository;
 import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
@@ -19,16 +16,11 @@ import org.junit.jupiter.api.Test;
 @QuarkusTest
 class HeroProgressionPersistenceTest {
 
-    private static final UUID TROLL_QUEST_ID = UUID.fromString("019c4c00-0003-7000-8000-000000000001");
 
     @Inject
     HeroRepository heroRepository;
 
-    @Inject
-    QuestRepository questRepository;
 
-    @Inject
-    CreatureDefinitionRepository creatureDefinitionRepository;
 
     @Inject
     EntityManager entityManager;
@@ -71,19 +63,5 @@ class HeroProgressionPersistenceTest {
         assertEquals(115, AgencyStateResponse.HeroResponse.from(reloaded).maxHealth());
         assertEquals(560, AgencyStateResponse.HeroResponse.from(reloaded).maxMana());
 
-        QuestCombat combat = QuestCombat.start(questRepository.findById(TROLL_QUEST_ID), List.of(reloaded),
-                CreatureCombatProfile.from(creatureDefinitionRepository.findLatestByName("Troll").orElseThrow()));
-        QuestCombatant snapshot = combat.getCombatants().stream()
-                .filter(combatant -> combatant.getHero() != null)
-                .findFirst()
-                .orElseThrow();
-        assertEquals(2, snapshot.getHeroLevel());
-        assertEquals(1, snapshot.getMeleeLevel());
-        assertEquals(1, snapshot.getDistanceLevel());
-        assertEquals(1, snapshot.getShieldLevel());
-        assertEquals(reloaded.getStaminaMilliseconds(), snapshot.getStartingStaminaMilliseconds());
-        assertEquals(20, snapshot.getBasicAttackManaCost());
-        assertEquals(115, snapshot.getMaxHealth());
-        assertEquals(560, snapshot.getMaxMana());
     }
 }

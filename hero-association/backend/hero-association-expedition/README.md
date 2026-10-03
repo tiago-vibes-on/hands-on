@@ -1,11 +1,11 @@
-# Expedition (private, pre-cutover)
+# Expedition
 
-This Quarkus service owns the provisional Redis-backed encounter loop.
-BFF now routes `/api/v1/expeditions` HTTP commands here, but
-`HERO_ASSOCIATION_EXPEDITION_PLAYER_API_ENABLED` defaults to false. There is
-a disabled-by-default BFF WebSocket and a feature-flagged frontend Map
-page. Neither is enabled for normal players yet; Core
-Quest combat remains live.
+Expedition owns the Redis Map run and fight loop. The player and visual APIs
+remain opt-in in ordinary development and are enabled in the k3d lab.
+Core Quest combat is retired. Admission pins World Map/Creature versions and
+an optional Quest assignment, alongside Core Hero baselines. Dungeons have
+finite floors and wait for Return after completion; fields repeat encounters.
+
 Never construct a `PreparedEntry` from browser input: Core reserves the
 Party and supplies the trusted Hero baseline.
 
@@ -87,3 +87,9 @@ after both services share that key and dedicated Expedition Redis is healthy. Se
 [settlement handoff](../../EXPEDITION_SETTLEMENT.md),
 [plan](../../COMBAT_EXPEDITION_PLAN.md) and
 [run contract](../../EXPEDITION_CONTRACT.md).
+
+Return aggregates use schema version 2 with `mapId`, `mapVersion` and nullable
+`quest` progress. Core confirms Quest progress/reward, carried Assets and Hero
+progress before acknowledging. Configure `HERO_ASSOCIATION_QUEST_BASE_URL` and
+`HERO_ASSOCIATION_QUEST_EXPEDITION_SERVICE_KEY` for admission/release. See
+[World and Quest contracts](../../WORLD_QUEST_ARCHITECTURE.md).

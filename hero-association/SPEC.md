@@ -30,8 +30,8 @@ The backend is split into independently buildable services:
   responsibilities into the following packages:
 
   - `domain`: JPA models for accounts, managers, agency memberships, agencies,
-    heroes, parties, quests, and feed posts; asset values are immutable projections
-    from Assets, while combat keeps its own pinned rune snapshots; it consumes the pure, non-persistent
+    heroes, parties, and feed posts; asset values are immutable projections
+    from Assets; Expedition keeps pinned combat inputs; it consumes the pure, non-persistent
     `hero-association-lib/combat-engine` rules engine
   - `application`: game-state use cases
   - `application.exception`: application exceptions
@@ -47,6 +47,14 @@ The backend is split into independently buildable services:
   and durable orchestration; no service reads another service's database.
   See [the extraction audit and contracts](ASSETS_ARCHITECTURE.md).
 
+- `backend/hero-association-world`: immutable Creature and Map catalogs on port
+  `8086`, with a separate PostgreSQL database. Expedition admission pins a
+  complete versioned plan; active runs do not read changing catalog values.
+- `backend/hero-association-quest`: optional Manager objectives and return
+  reward recovery on port `8087`, with a separate PostgreSQL database. The
+  Expedition path replaces Core's old Quest-driven battle lifecycle. See
+  [the World and Quest contracts](WORLD_QUEST_ARCHITECTURE.md).
+
 `AgencyStateService` coordinates the initial state query. An unknown agency is
 translated to `404 Not Found` at the Core API boundary. The BFF preserves that
 status and response body for the browser.
@@ -56,14 +64,14 @@ status and response body for the browser.
 The local pipeline tests Core, BFF, Expedition, and Market against disposable k3d
 PostgreSQL, Redis, and RabbitMQ before packaging their JVM images with
 `-DskipTests`; frontend lint and build stay local. The images are saved in one
-checksummed archive. Candidate builds require all six daily application
+checksummed archive. Candidate builds use disposable dependencies; promotion requires all eight daily application
 services in full k3d mode and never promote them automatically. Direct Maven
 builds remain independent and may use local Dev Services or Testcontainers.
 Core tests do not retain PostgreSQL Dev Services across runs, even when
 Testcontainers reuse is enabled globally on the developer machine.
 Before deployment, the disposable k3d E2E gate must run those exact images,
 verify every application Pod image ID against the archive, and pass browser,
-session, isolated Core-cache fallback, BFF outage, and market k6 checks through
+session, pinned World-outage dungeon, Quest reward recovery, BFF outage, and market k6 checks through
 Envoy. Only after namespace cleanup does it write matching passing k3d
 verification beside the archive. The optional Compose test record does not
 authorize deployment. A one-command manual pipeline tests rollback logic,
@@ -73,13 +81,13 @@ passing record before loading images or importing them into the cluster. Only af
 E2E, and market k6 pass does promotion write a local result. See
 [the pipeline guide](pipeline/README.md).
 
-Jenkins has independent Core, BFF, Expedition, Market, Assets, and frontend build jobs for an
+Jenkins has independent Core, BFF, Expedition, Market, Assets, World, Quest, and frontend build jobs for an
 uncommitted worktree and trusted `main`, plus one deploy-local job per service.
 A service build tests its new image together with the other five currently
 deployed k3d images in one checksummed archive. Both build modes are manual;
 no Git polling or successful build automatically deploys. A shared Jenkins
 lock serializes trusted-`main` builds. An explicit deploy job rejects a
-changed baseline, promotes only the candidate image, verifies all six
+changed baseline, promotes only the candidate image, verifies all eight
 running Pod digests, runs browser E2E and market k6, and rolls back the
 target service if a post-rollout gate fails. The latest successful deployment
 of a service wins; this local lab does not coordinate cross-service releases.
@@ -111,9 +119,9 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
   returns membership-protected detail for agency-owned heroes only.
 - `GET /api/v1/agencies/{agencyId}/state` returns an agency, its leader and
   upgrade levels, agency heroes in `heroes`, the caller's personal heroes
-  and agency-party participants in `personalHeroes`, parties and quests,
+  and agency-party participants in `personalHeroes`, parties,
   agency rune and item inventory, the caller's `personalRuneInventory`, hero
-  rune slots, feed posts, and any persisted quest-combat snapshot. Party records
+  rune slots and feed posts. Party records
   expose `ownerManagerId`; Hero records expose `ownerManagerId` only for
   personally owned heroes and `borrowingFeeGold` (default 0) for each hero.
 - `PUT /api/v1/agencies/{agencyId}/heroes/{heroId}/rune-slots/{slotIndex}`
@@ -129,7 +137,7 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
   agency state.
 - `PUT /api/v1/agencies/{agencyId}/heroes/{heroId}/borrowing-fee` accepts
   `{ "feeGold": 0 }` or another nonnegative integer. Only the agency leader
-  can set the per-quest price of an agency-owned hero.
+  can configure a future borrowing price; the current personal-hero Map path charges no fee.
 - `POST /api/v1/agencies/{agencyId}/parties` creates a named prepared party
   owned by the authenticated Manager and returns the updated agency state.
 - `PUT /api/v1/agencies/{agencyId}/parties/{partyId}/heroes/{heroId}` adds
@@ -138,18 +146,19 @@ frontend always calls `http://localhost:17080/api/...` rather than Core.
   a hero already assigned to another party returns `409 Conflict`.
 - `DELETE /api/v1/agencies/{agencyId}/parties/{partyId}/heroes/{heroId}`
   removes a hero from the authenticated Manager's prepared party.
-- `PUT /api/v1/agencies/{agencyId}/quests/{questId}/start` starts an available
-  quest with a UUIDv7 `operationKey`, the authenticated Manager's `partyId`,
-  and nonnegative `expectedBorrowingFeeGold`. Core validates eligibility and
-  the quote, then stages a durable workflow. Assets atomically pays the fee
-  and pins loadouts; Core starts the Quest after confirming that receipt.
-  Stale quotes and insufficient personal gold return `409 Conflict` without
-  starting the quest or charging the Manager. Confirmed changes return the
-  updated agency state (`200`); uncertain delivery returns a durable operation
-  reference (`202`). Another Manager's party appears as not found.
-- `POST /api/v1/agencies/{agencyId}/quests/{questId}/combat/sync` advances an
-  existing combat snapshot by elapsed wall time and returns the updated agency
-  state.
+- `GET /api/v1/maps` and `GET /api/v1/creatures` read the latest versioned World catalogs.
+- `GET /api/v1/quests` reads optional definitions, the Manager's active assignment,
+  recent completed/cancelled assignments, and whether agency commands are allowed.
+- `POST /api/v1/quests/{definitionId}/accept` accepts one optional objective;
+  `POST /api/v1/quests/assignments/{assignmentId}/cancel` cancels it. Both require
+  a UUIDv7 `commandId`, bind it to the authenticated Manager and exact request,
+  and allow exact replay. They require being at the agency with no active run.
+  Quests select no Party and charge no fee. Progress is banked on return;
+  fulfilled objectives credit gold/items/runes through Assets once per assignment.
+- Expedition admission accepts any published Map UUIDv7, pins its exact version,
+  Creature definitions, Hero baseline and optional Quest assignment. Fields repeat;
+  dungeons finish after their last encounter. `DUNGEON_COMPLETED` permits Return
+  and rejects Continue. A wipe also waits for explicit Return.
 - `POST /api/v1/agencies/{agencyId}/feed-posts` creates an agency-scoped text
   post and returns the updated agency state.
 - `GET /api/v1/market/orders` returns the global open market order book.
@@ -247,18 +256,19 @@ Equipping transfers one rune atomically from the chosen Manager or agency
 inventory to a Hero slot. Replacing or unequipping transfers the old rune to
 the acting Manager's inventory by default. Any agency member can use that
 agency's runes; this does not change leader-only agency gold and Market rules.
-The Hero must be at the agency, not on a quest or Expedition. An unavailable
+The Hero must be at the agency, not on an Expedition. An unavailable
 rune or away Hero returns `409 Conflict`; a slot outside 0 through 4 returns
 `400 Bad Request`.
 Agency item inventory contains stackable materials. The seed contains Magic
-Crystals and Iron Ingots; item equipment and quest drops are not implemented
-yet.
+Crystals and Iron Ingots; item equipment remains planned. Creature drop evaluation is implemented, but
+initial Creature definitions intentionally have empty economic drops. Quest rewards
+introduce explicit gold and item payouts.
 Agency levels are Agency, Training, Rest, Size, Reputation, and Intelligence.
 Rest represents the agency's recovery facilities; there is no Medical Level.
-Its concrete upgrade effect is still to be defined. Quest heroes cannot change
+Its concrete upgrade effect is still to be defined. Away heroes cannot change
 their agency activity or rune loadout and return `409 Conflict`.
 Prepared-party members remain at the agency and retain their `TRAINING` or
-`RESTING` activity until a quest starts. Each party has a Manager owner.
+`RESTING` activity until an Expedition starts. Each party has a Manager owner.
 A new Manager receives a Main Party containing their three personal starter
 heroes immediately at onboarding. Its agency is initially unset; creating an
 agency attaches the Party without changing hero ownership. Every seeded
@@ -266,97 +276,63 @@ Manager also has one Party: User 1 retains Broken Pass Party, while the others
 have Main Party. There is no Party deletion operation, so Managers keep at
 least one Party. Creating additional parties remains supported but is not
 the primary flow for now.
-The owner can assign their own available personal heroes or available heroes
-owned by the same agency, and start a quest with that party. Agency-hero
-ownership does not change. Each agency hero has a leader-configured,
-nonnegative gold fee per quest (zero by default). The entire fee is due from
-the party Manager, including the agency leader, to the agency treasury when
-the quest starts; assignment is free. Party membership cannot change while
-the party is on an in-progress quest, and a hero already assigned elsewhere
-cannot be moved into the party; both return `409 Conflict`. Party names must
-be unique per Manager within an agency. Other game actions are still being
-specified.
-Quest definitions include a description, creature objective, party-size range,
-duration estimate, and gold reward. The Map is player-facing in the isolated
-k3d lab when Expedition integration and a Map-enabled frontend are deployed;
-ordinary local development keeps that path disabled by default.
-The planned Map domain will define fields, dungeons, reusable layouts, and
-possible encounters. Expedition will own one persistent Party per Manager and
-its Map run; a Quest will be an optional objective, never a prerequisite for
-entering a Map. The first Map path will accept personal heroes only, with
-agency-hero borrowing deferred. A wipe will end battle but leave the Party
-on the Map until the Manager explicitly requests return. After a win, the
-server waits for a Continue command before another fight. The Map has an
-opt-in auto-continue toggle, off by default, that sends this command after
-a short pause only while the page is open. It never advances a wipe or a
-requested return. This flow does not yet replace the current quest-based API. See [GAME.md](GAME.md) and
-[SERVICE_EXTRACTION.md](SERVICE_EXTRACTION.md).
-Equipment and Quest-start commands require a caller-generated UUIDv7 operation
-key. Quest-start JSON adds `operationKey` to `partyId` and
-`expectedBorrowingFeeGold`. Core stages the authorized intent and persists Hero
-and Party eligibility fences before sending the economic command to Assets
-outside its transaction. Assets commits one atomic command receipt; Core verifies
-it before starting combat or clearing the equipment fence. Confirmed requests
-return `200` with agency state. Unknown delivery returns `202` with
-`{ operationKey, kind, status, rejectionStatus, message }`. The initiating Manager
-reads that shape at `GET /api/v1/asset-operations/{operationKey}`. An exact replay
-retains the actor and immutable payload; changed inputs return `409`. A definitive
-rejection clears eligibility fences, while a contradictory receipt keeps them
-and marks the operation `CONFLICT`. A one-second Core worker recovers pending
-operations using stable keys, 60-second claims and bounded backoff without storing
-player tokens. The frontend saves these keys in session storage and reconciles
-status across reloads. All wallet and inventory changes now execute in Assets.
-Signed-in equipment changes require a working backend connection; a temporary
-outage does not move runes in the browser's local display inventory.
+The owner can assign their own available personal heroes or available agency
+heroes to a Party. The current Map path admits one to four personal heroes only;
+agency borrowing is deferred and no fee is charged. Active Expedition membership
+is immutable, including adding an idle Hero to an away Party. Each Party name
+is unique per Manager within an agency.
 
-Expedition admission reserves Core Heroes before obtaining an immutable Assets
-loadout snapshot. Return credit and Hero progression have separate local
-transactions with a durable Core cursor; broker acknowledgement follows both.
-Duplicate or lost delivery cannot repeat asset credit or Hero XP. Capacity
-overflow leaves return pending until capacity is freed. See
+World owns append-only versioned Creature and Map definitions in separate
+PostgreSQL. Maps reference exact Creature versions, grouped into named encounters
+and ordered floors with a layout identifier. Core durably pins the complete plan
+before reserving Heroes; an exact retry reuses the original plan. Expedition
+copies it to Redis and performs no World lookup during combat or Continue.
+Troll Field repeats three Trolls (2,000 HP, 4 attack, 100 base XP). Broken Pass
+Cavern has three Forest Wolves on floor one and a Troll boss on floor two.
+Creature gold and probabilistic item/rune drops use a separate deterministic RNG
+stream, so adding drops cannot change combat rolls. Results, kill counts, Hero
+progression and Quest progress commit in the same Redis fight transition.
+
+Quest owns immutable definitions, assignments, admission pins, return receipts
+and payout recovery. A Manager may accept one optional Quest at the agency,
+complete it through one or more Expeditions, or cancel at the agency. Supported
+objectives are Creature kill counts, boss defeats and dungeon completions;
+objectives can restrict eligible Maps. Progress cannot exceed the requirement.
+The admitted assignment version and reward remain fixed throughout the run.
+Completion and cancellation permit later acceptance with a new assignment ID.
+
+A win waits for Continue; a wipe or completed dungeon waits for Return.
+Return requested during a fight takes effect when that fight finishes. The
+frontend's optional auto-continue acts only while the Map page is open and the
+run is waiting after a victory. Core's old SQL Quest battle API, tables, Creature
+cache, combat-sync command and five-second combat worker are retired.
+
+Rune commands remain durable Core asset workflows. Supply UUIDv7 `operationKey`
+for equip and `X-Operation-Key` for unequip. Core stages the authorized request
+and Hero fence, calls Assets outside the SQL transaction, and confirms the exact
+receipt before clearing the fence. Unknown delivery returns `202`; exact replay
+or `GET /api/v1/asset-operations/{operationKey}` recovers the original operation.
+Conflicting receipts retain the fence. The browser stores stable command keys
+through uncertain delivery and reloads; it does not optimistically move runes.
+
+The deterministic combat engine resolves attack timers, health/mana recovery,
+spells, criticals, deaths and terminal outcomes from pinned inputs. Expedition
+stores one fight timeline, bounded visual event windows and terminal state in
+Redis; it writes no per-hit SQL or broker messages. XP and skills advance for
+eligible living Heroes with their stamina at the event time. Spells remain
+compiled rules rather than versioned catalog data. Shield progress awaits a
+block rule.
+
+Return settlement uses schema version 2 and includes pinned Map identity/version
+and nullable Quest progress. Core validates the entire aggregate before asking
+Quest to bank progress and confirm any payout. Assets commits a Quest reward and
+receipt atomically under the assignment UUID. Quest then marks the assignment
+completed. Core separately confirms carried Assets credit and Hero progression
+through its durable cursor. Rabbit acknowledgement and Redis removal follow all
+confirmations. A dependency outage retains the away fences; workers recover the
+same immutable requests after restart. Capacity overflow remains pending until
+space is freed. See [World and Quest contracts](WORLD_QUEST_ARCHITECTURE.md),
 [Assets contracts](ASSETS_CONTRACT.md) and [recovery](ASSETS_RECOVERY.md).
-
-Starting a quest requires a prepared party whose member count is inside that
-quest's range. It changes the quest to
-`IN_PROGRESS`, links it to the party, and changes every party member to
-`ON_QUEST`. It persists `startedAt` and `expectedCompletionAt`, calculated
-from the quest duration. A quest that is not `AVAILABLE` returns `409
-Conflict`; an ineligible party size returns `400 Bad Request`. In-progress
-combat progresses through its persisted snapshot and the combat-sync command.
-The internal combat engine is deterministic: callers advance a supplied combat
-time and supply its random source. It resolves independent basic-attack
-timers, hero health and mana recovery, mage spell cooldowns and mana costs,
-critical hits, deaths, and battle completion. Quest start first applies
-agency recovery to each Hero, then persists a battle snapshot from the
-recovered resources. It pins Hero class, level and skill baselines, starting
-stamina, attack and recovery values, basic-attack mana cost, spell
-eligibility/cooldowns, effective critical bonuses, and equipped rune slot
-details. The API exposes the active combat state, not all internal pinned
-inputs. A newly started quest resolves its Creature definition by name through
-an optional Redis read-through cache and copies its versioned stats into each
-combatant snapshot; existing battles are not rebalanced. PostgreSQL remains
-authoritative. Cache entries expire after 60 seconds, so a changed definition
-may take up to a minute to appear in a new battle; Redis errors fall back to
-PostgreSQL. The canonical Troll starts with 2,000 health, while Forest Wolf
-keeps 120. Spell formulas are still compiled rules, not versioned data.
-The snapshot retains its latest 100 server-generated combat
-events, including actions,
-recovery, mana costs, hits, criticals, and defeats. A combat-sync command
-restores a snapshot into the engine, advances it by the time since its
-previous sync, and persists the result and any new events atomically. A
-background worker uses the same operation every five seconds for all active
-snapshots. `GET /state` is read-only and does not advance combat. Each
-synchronization also persists the current health and mana of heroes in the
-encounter. It drains each living hero by elapsed active battle time, stopping
-at the actual terminal event or that hero defeat. Valid Warrior and Archer
-basic attacks earn Melee and Distance points; mana actually spent earns Magic
-points using the class aptitude and below-15-hour stamina penalty. The full
-new event stream is processed inside the combat transaction before retaining
-only the latest 100 UI events. Each creature defeat awards its full base
-XP separately to every living party hero using the stamina of each hero at
-the kill time. Provisional creatures currently have 100 base XP. Shield
-combat points, economic rewards, and death resolution remain planned.
-Agency stamina recovery is implemented.
 
 Core now persists cumulative hero XP, fractional Melee, Distance, Magic, and
 Shield points, and up to 48 hours of millisecond-precise stamina. Hero and
@@ -375,17 +351,13 @@ block rule. Agency Training recovers one stamina minute per real minute; Resting
 per later level. Training skill progress will start at 2x and gain 5% of that
 baseline per later Training Level. Above 40 hours adds 50 percentage points
 to hero XP only; below 15 hours halves hero XP and skill progress. A battle
-with no kill can still drain stamina and advance skills. Gold and item rewards
-remain deferred until game domains are separated.
+with no kill can still drain stamina and advance skills. Quest gold and item rewards are credited by Assets on fulfilled return;
+Creature seed drop amounts remain an economic-content decision.
 
-Both five-second Core jobs use separate transaction-scoped PostgreSQL
-advisory locks, so a competing Pod skips that tick rather than repeating
-combat progression or agency recovery. Each lock spans the same transaction
-as its updates and is released when the transaction ends. The next tick uses
-persisted timestamps to catch up. A k3d integration test scales an isolated
-Core deployment from two to four to eight Pods against one temporary PostgreSQL
-database while read-only SQL traffic runs. It verifies recovery, combat event
-continuity, and single quest resolution through Pod restarts.
+Core's five-second agency recovery job uses a transaction-scoped PostgreSQL
+advisory lock, so competing replicas skip a tick. Expedition fight transitions
+use atomic Redis state/version checks; Quest and Assets serialize commands and
+payouts under their own database locks and exact receipts.
 
 Feed posts are limited to 500 characters. An agency can post as itself, its
 single current leader, or one of its heroes; the author must belong to the
@@ -418,30 +390,25 @@ IDs must not be added for entities or exposed through the API.
 ## Runtime
 
 - PostgreSQL stores game state.
-- Database tables use singular entity names, including `agency`, `manager`,
-  `hero`, `party`, `quest`, `creature_definition`, `quest_combat`, `quest_combatant`,
-  `quest_combatant_rune`, `quest_combat_event`, `quest_combat_hit`,
-  `asset_workflow`, `expedition_reservation` and `feed_post`. Core's Manager and agency tables contain no wallet balance.
-  Assets stores `asset_wallet`, `asset_stack`, `rune`, `item`, `hero_rune`,
-  `asset_reservation`, `asset_reservation_closure`, `asset_operation_receipt`,
-  `asset_command_receipt`, and `asset_ledger_entry`. Market's separate database stores `market_book`,
-  `market_placement`, `market_order`, and `market_trade`. A hero is either recruitable,
-  agency-owned, or Manager-owned; personal heroes cannot be recruited by
-  an agency.
-- The standalone Combat sandbox and Core Combat-fact inbox were retired.
-  Core Quest combat and Expedition Map combat still use the same pure
-  `hero-association-lib/combat-engine` library; only Expedition owns live
-  Map fight timelines and returns aggregated progress to Core.
-- Until Flyway is introduced, Core, Assets and Market development and test profiles drop and
+- Database tables use singular entity names. Core owns identity, agency, Hero,
+  Party, reservation and orchestration tables; World owns `creature_definition`
+  and `map_definition`; Quest owns `quest_definition`, `quest_assignment`,
+  `quest_manager`, `quest_command` and `quest_admission`. Assets and Market retain
+  separate databases and roles. Core contains no Creature or Quest battle tables.
+- Shared `combat-engine` and `game-contracts` libraries contain no persistence or
+  service runtime. Core has no Redis dependency; BFF sessions and Expedition runs
+  use separate Redis instances. RabbitMQ carries immutable return aggregates and
+  owner acknowledgements.
+- Until Flyway is introduced, Core, Assets, Market, World and Quest development and test profiles drop and
   recreate the schema on startup, then load deterministic state from
   `import.sql`. Packaged Docker Compose explicitly keeps this disposable
   reset behavior. The k3d lab instead runs a single bootstrap Job per database when
-  a schema is absent or an explicit reset is requested; normal Core, Assets and
-  Market Pods validate their schemas without modifying data. For a schema-changing
+  a schema is absent or an explicit reset is requested; normal Core, Assets, Market, World and
+  Quest Pods validate their schemas without modifying data. For a schema-changing
   archive, explicit reset-aware promotion verifies the full archive and E2E
   result, refuses unfinished Expeditions, stops admission and application traffic, drains all writers, refuses unresolved
-  asset workflows, then recreates Core, Assets and Market from matching seeds,
-  bootstraps all three databases using their exact archived images, restores all
+  asset workflows, then recreates Core, Assets, Market, World and Quest from matching seeds,
+  bootstraps all five databases using their exact archived images, restores all
   services and HPAs, then runs the normal
   Pod-image, browser, and k6 gates. Keycloak and Redis data remain untouched. Because a data reset is not reversible by restoring an
   older image, failures after reset do not automatically roll back images.
@@ -451,8 +418,8 @@ IDs must not be added for entities or exposed through the API.
   onboarding tests. Dawnwatch Agency has six members and six heroes;
   Ironridge Exchange has four members and open market orders; Silverkeep Guild
   has three members. The seed also contains three globally available recruits,
-  Broken Pass Party and its in-progress quest and initial Troll combat snapshot,
-  Lost Courier, rune inventory, Magic Crystals, Iron Ingots, equipped runes,
+  Broken Pass Party at the agency, World Map/Creature catalogs, four optional
+  Quest definitions, rune inventory, Magic Crystals, Iron Ingots, equipped runes,
   and two feed posts. See [TEST_DATA.md](TEST_DATA.md) for all credentials and
   memberships. Seeded Managers normally have zero personal gold; User 2 has
   100,000 gold for local testing, Soren and Manager 2 have 25 gold, Manager 3
@@ -461,7 +428,7 @@ IDs must not be added for entities or exposed through the API.
   item and rune inventories except Manager 3's Magic Crystals and Manager 4's
   Iron Ingots, and a distinct personal starter
   Warrior, Mage, and Archer. These 39 heroes are not agency assets or global
-  recruits. Manager-owned parties, personal hero quest participation, and personal
+  recruits. Manager-owned parties, personal Hero Expedition participation, and personal
   recruitment and leader-only agency recruitment are implemented.
   Personal market orders are implemented; agency-change workflows remain
   planned in [GAME.md](GAME.md).
@@ -472,9 +439,9 @@ IDs must not be added for entities or exposed through the API.
   they do not require backwards compatibility before Flyway is introduced.
 - The active local environment is the k3d cluster. Envoy Gateway serves
   `heroassociation.test` and `auth.heroassociation.test` in full k3d and
-  hybrid mode; there is no separate daily Traefik gateway. Core and Keycloak
-  PostgreSQL, Market PostgreSQL, BFF/Core/Expedition Redis, RabbitMQ, Keycloak,
-  and observability stay in k3d. Core, BFF, Expedition, Market, Assets, and frontend can independently use
+  hybrid mode; there is no separate daily Traefik gateway. Core, Assets, Market, World, Quest and Keycloak
+  PostgreSQL, BFF/Expedition Redis, RabbitMQ, Keycloak,
+  and observability stay in k3d. Core, BFF, Expedition, Market, Assets, World, Quest, and frontend can independently use
   k3d Pods or private WSL hot-reload processes behind their stable Services.
   A selected service's k3d Pods stop before its host process starts, and its
   previous replica count, route, and HPA are restored on exit. The first
@@ -498,7 +465,7 @@ IDs must not be added for entities or exposed through the API.
   Only labeled E2E namespaces may attach Routes to them. The test leaf
   certificate uses the ignored local CA; hostnames resolve only inside test
   runners. A disposable full-stack runner creates independent databases,
-  Redis, RabbitMQ, Keycloak, and application Pods. It runs sixteen browser/API
+  Redis, RabbitMQ, Keycloak, and application Pods. It runs browser/API
   cases and k6 market thresholds with 30-second test tokens and a
   two-second BFF refresh skew. A saved session survives replacement of both
   disposable BFF replicas. An outage of only the disposable BFF Redis
@@ -554,9 +521,10 @@ IDs must not be added for entities or exposed through the API.
   seeded Manager names are `User 1` and `User 2`, so local sessions and game
   data are immediately distinguishable. They must never be used outside local
   development.
-- Standalone Docker Compose runs Core and Keycloak PostgreSQL, separate Core
-  cache and BFF session Redis, Game Core, and BFF using JVM packages by
-  default. Core remains on the private Compose network; BFF and Keycloak
+- Standalone Docker Compose runs Core, BFF, Market, Assets, World and Quest,
+  their PostgreSQL databases, BFF session Redis and Keycloak. The optional
+  Expedition override supplies Redis and RabbitMQ infrastructure; the integrated
+  Map workflow uses Expedition in k3d or hybrid mode. Core remains on the private Compose network; BFF and Keycloak
   publish development HTTP ports `17080` and `17180`. It has no public HTTPS
   gateway. Integrated browser development uses the k3d Envoy Gateway.
 - Each service has an independent Maven fast-jar build. Native compilation is
@@ -589,8 +557,8 @@ IDs must not be added for entities or exposed through the API.
 - The frontend refreshes agency state and the recruitment board every five
   seconds while its browser tab is visible, and immediately when the tab becomes
   visible again. This keeps agency recovery, feed posts, market orders, and
-  background quest progress current without requiring WebSocket or server-sent
-  event connections. This remains the normal Quest behavior. An opt-in browser-to-BFF
+  agency values current without requiring WebSocket or server-sent
+  event connections. The separate Quest board also polls its owner service. An opt-in browser-to-BFF
   WebSocket now carries Expedition fight snapshots from the shared combat-engine
   path; Start, Continue, and Return remain CSRF-protected HTTP commands. There
   is no temporary Core WebSocket or SSE. See the
@@ -618,8 +586,7 @@ IDs must not be added for entities or exposed through the API.
   Expedition API without per-frame Core reads. The frontend has a feature-flagged Map page
   for the first Troll Field, active-run recovery, live visuals, and explicit
   Continue/Return. It is enabled in the isolated k3d frontend build; both settlement consumers
-  are enabled by k3d integration. Core Quest combat remains available for
-  players. The disposable k3d Playwright gate verifies Map entry, live and
+  are enabled by k3d integration. The optional Quest board replaces Core Quest combat. The disposable k3d Playwright gate verifies Map entry, live and
   reconnected WebSocket visuals, explicit Continue, deferred Return with no
   viewer, and Core settlement without changing daily game data. See
   [Expedition settlement](EXPEDITION_SETTLEMENT.md).
@@ -629,9 +596,9 @@ IDs must not be added for entities or exposed through the API.
   Private k3d Redis, RabbitMQ, and Expedition are staged. An explicit
   integration command enables Core admission/settlement, Expedition APIs, and
   the BFF WebSocket; an authenticated k3d journey passed, with the frontend Map now enabled.
-  The six-image local pipeline promotes Core, BFF, Expedition, Market, Assets, and
-  Map-enabled frontend together; the Expedition-only lane verifies the other
-  four running images before promotion. Both paths passed archive-backed,
+  The eight-image local pipeline promotes Core, BFF, Expedition, Market, Assets,
+  World, Quest and Map-enabled frontend together; a single-service lane verifies
+  the other seven running images before promotion. Both paths passed archive-backed,
   authenticated k3d Map, Expedition, and market gates.
 - The Map screen is the player-facing battle view in k3d. It reuses the
   Phaser battle renderer for the party and three Trolls, including health,
@@ -659,41 +626,17 @@ IDs must not be added for entities or exposed through the API.
   the browser, while the server enforces idempotency and state versions. The
   browser never decides attacks or outcomes. See
   [the fight timeline](COMBAT_TIMELINE.md).
-- The Quests screen shows available objectives and active or resolved progress.
-  It no longer embeds the legacy Phaser scene or polls the combat-sync API.
-  Existing Core quest combat can continue server-side, but Map encounters do
-  not advance Quest objectives yet; that integration is deferred.
-- The Heroes screen shows the signed-in Manager's personal starter roster
-  and gold separately from the agency roster. The Manager can create a party,
-  assign or remove their personal heroes or available agency heroes, and send
-  an eligible prepared party on a quest. The agency leader can set a per-hero
-  borrowing fee. The
-  screen also loads the global recruitment board and lets an onboarded Manager
-  claim a free initial NPC for their personal roster by default, or explicitly
-  for their agency if they are its leader. The roster refreshes immediately;
-  a claimed NPC disappears from the board for everyone. The screen also
-  separates active quest parties, prepared parties, and unassigned heroes at
-  the agency. Agency heroes can persistently switch between Training and
-  Resting, without numeric training stats. Prepared parties can be named,
-  filled, and changed through the backend; their members retain their agency
-  activity until a quest starts.
-- The Quests screen reads available, active, and resolved quests from the API.
-  A Manager can select their own prepared party and see its total agency-hero
-  borrowing fee alongside their personal gold. A quest start submits that exact
-  quote, then refreshes agency and account balances; a stale quote is rejected
-  and the UI refreshes both. Every quest start creates a server combat snapshot using each party member's
-  current resources, class combat values, and equipped Critical Chance and
-  Critical Damage Rune effects, plus one creature for every required objective.
-  Until per-creature difficulty is designed, new creatures use a shared
-  provisional profile: 120 health, 10 damage, a 1.6-second attack
-  interval, 100 mana, no recovery, and no critical chance. The planned
-  Creature catalog will start with one Troll definition at 2,000 health;
-  other stat values remain provisional and data-driven. Seeded Trolls
-  already have 2,000 health, while newly started quests still use 120.
-  Phaser renders any active quest snapshot. `HERO_VICTORY` completes a quest and
-  `CREATURE_VICTORY` fails it. Either result sets `finishedAt`, releases the
-  party, and returns its heroes to Training. Economic rewards and the planned
-  non-permanent defeat penalty remain unimplemented.
+- The Quests screen reads its own service, offers one optional assignment, shows
+  saved progress and recent completion/cancellation, and retries stable command
+  IDs after lost responses and reloads. Acceptance never selects a Party.
+- The Map selector reads World. A catalog outage prevents new entry while an
+  admitted run continues from pinned data. The view names its destination, floor,
+  fight result, carried assets and optional Quest progress. Clearing a dungeon
+  disables auto-continue and requires Return. Entry retries reuse their IDs.
+- The Heroes screen shows personal and agency Heroes, prepared Parties and away
+  Parties. Rune and activity controls are locked while Heroes are on Expedition;
+  the server also blocks adding Heroes to an away Party. Agency borrowing price
+  remains future configuration; current Map entry accepts personal Heroes only.
 - A background worker restores agency hero health and mana every five seconds
   from elapsed full seconds. Training uses the base class rate and Resting uses
   twice that rate. The worker also recovers agency stamina at the documented rates.
@@ -724,7 +667,7 @@ IDs must not be added for entities or exposed through the API.
   other rune stat effects do not yet change gameplay. Combat displays five
   read-only rune slots for each hero so their equipped loadout is visible;
   creatures do not display rune slots.
-- The initial quest party equips a Critical Chance Rune on every hero, and
+- The seeded agency party equips a Critical Chance Rune on every hero, and
   Elara also equips a Critical Damage Rune. Each initial troll has a 10%
   critical-hit chance.
 - The Agency screen shows API-loaded stackable items and runes with quantities
@@ -732,7 +675,7 @@ IDs must not be added for entities or exposed through the API.
   drawer with the caller's personal and agency rune inventories. Each equip,
   replace, or unequip request persists immediately; the frontend updates
   optimistically without a page-wide loading state and reconciles on failure.
-  Item stacks can be reserved by market orders; item equipment, quest loot,
+  Item stacks can be reserved by market orders; item equipment and additional Creature loot balance,
   and compatibility rules are not implemented yet.
 - The Market screen loads the live global order book, creates buy or sell
   orders from personal or agency assets, and cancels orders owned by the
@@ -830,11 +773,11 @@ when the observability Pod is replaced.
 A build-once local delivery lane packages tested Core, BFF, Expedition, Market and Assets
 JVM images plus the frontend image in a checksummed archive. The disposable
 k3d archive gate records a matching passing result before promotion is
-allowed. Normal promotion imports those exact images, updates the six k3d
+allowed. Normal promotion imports those exact images, updates the eight k3d
 application Deployments, waits for rollouts, and runs k3d browser tests. A
 failed normal rollout or test restores prior image references. An explicit
 `--reset-game-db` promotion requires a complete verified archive, refuses
 unfinished Expeditions and asset workflows, stops all application services, and
-resets Core, Assets and Market using
+resets Core, Assets, Market, World and Quest using
 their archived images before running the same gates. `--reset-core-db` is an
 alias. A reset cannot safely roll back to older images after replacing data.

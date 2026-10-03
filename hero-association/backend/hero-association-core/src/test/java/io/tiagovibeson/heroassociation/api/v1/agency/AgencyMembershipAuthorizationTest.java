@@ -59,7 +59,7 @@ class AgencyMembershipAuthorizationTest {
                 .body("parties.size()", is(1))
                 .body("parties[0].name", is("Main Party"))
                 .body("parties[0].heroIds.size()", is(3))
-                .body("quests.size()", is(0))
+                .body("quests", org.hamcrest.Matchers.nullValue())
                 .body("runeInventory.size()", is(0))
                 .body("itemInventory.size()", is(0))
                 .body("feedPosts.size()", is(0))

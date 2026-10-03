@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -ne 2 ]]; then
-  printf 'Usage: %s <core|bff|expedition|market|assets|frontend> <artifact-id>\n' "$0" >&2
+  printf 'Usage: %s <core|bff|expedition|market|assets|world|quest|frontend> <artifact-id>\n' "$0" >&2
   exit 2
 fi
 component="$1"

@@ -24,7 +24,7 @@ fi
 
 umask 077
 mkdir -p "$secret_dir"
-for key in CORE_DATABASE_PASSWORD MARKET_DATABASE_PASSWORD ASSETS_DATABASE_PASSWORD HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY HERO_ASSOCIATION_ASSETS_MARKET_SERVICE_KEY KEYCLOAK_DATABASE_PASSWORD \
+for key in CORE_DATABASE_PASSWORD MARKET_DATABASE_PASSWORD ASSETS_DATABASE_PASSWORD WORLD_DATABASE_PASSWORD QUEST_DATABASE_PASSWORD HERO_ASSOCIATION_WORLD_SERVICE_KEY HERO_ASSOCIATION_QUEST_CORE_SERVICE_KEY HERO_ASSOCIATION_QUEST_EXPEDITION_SERVICE_KEY HERO_ASSOCIATION_ASSETS_QUEST_SERVICE_KEY HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY HERO_ASSOCIATION_ASSETS_MARKET_SERVICE_KEY KEYCLOAK_DATABASE_PASSWORD \
   KEYCLOAK_ADMIN_PASSWORD HERO_ASSOCIATION_BFF_OIDC_CLIENT_SECRET \
   HERO_ASSOCIATION_BFF_OIDC_STATE_SECRET \
   HERO_ASSOCIATION_BFF_CSRF_TOKEN_SIGNATURE_KEY; do
@@ -54,6 +54,13 @@ kubectl -n "$namespace" create secret generic hero-association-assets-credential
   --from-file="$secret_dir/ASSETS_DATABASE_PASSWORD" \
   --from-file="$secret_dir/HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY" \
   --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n "$namespace" create secret generic hero-association-world-credentials \
+  --from-file="$secret_dir/WORLD_DATABASE_PASSWORD" --from-file="$secret_dir/HERO_ASSOCIATION_WORLD_SERVICE_KEY" \
+  --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n "$namespace" create secret generic hero-association-quest-credentials \
+  --from-file="$secret_dir/QUEST_DATABASE_PASSWORD" --from-file="$secret_dir/HERO_ASSOCIATION_QUEST_CORE_SERVICE_KEY" \
+  --from-file="$secret_dir/HERO_ASSOCIATION_QUEST_EXPEDITION_SERVICE_KEY" --from-file="$secret_dir/HERO_ASSOCIATION_ASSETS_QUEST_SERVICE_KEY" \
+  --dry-run=client -o yaml | kubectl apply -f -
 kubectl -n "$namespace" create configmap hero-association-k3d-realm \
   --from-file="$secret_dir/hero-association-realm.json" \
   --dry-run=client -o yaml | kubectl apply -f -
@@ -62,10 +69,10 @@ kubectl -n "$namespace" create configmap hero-association-k3d-theme \
   --from-file=hero-association.css="$script_dir/../../backend/keycloak/theme/hero-association/login/resources/css/hero-association.css" \
   --dry-run=client -o yaml | kubectl apply -f -
 
-for dependency in postgres-core postgres-market postgres-assets postgres-keycloak redis-bff redis-core; do
+for dependency in postgres-core postgres-market postgres-assets postgres-world postgres-quest postgres-keycloak redis-bff; do
   kubectl apply -f "$script_dir/../k8s/backend/$dependency.yaml"
 done
-for dependency in postgres-core postgres-market postgres-assets postgres-keycloak redis-bff redis-core; do
+for dependency in postgres-core postgres-market postgres-assets postgres-world postgres-quest postgres-keycloak redis-bff; do
   kubectl -n "$namespace" rollout status "deployment/$dependency" --timeout=5m
 done
 
@@ -78,24 +85,39 @@ if [[ "$core_schema_exists" != "t" && "$core_schema_exists" != "f" ]]; then
 fi
 
 if [[ "$core_schema_exists" == t && "$reset_core_db" == --reset-core-db ]]; then
-  printf 'Existing game data requires a verified six-image archive. Use pipeline/deploy-k3d.mjs --reset-game-db ARCHIVE.\n' >&2
+  printf 'Existing game data requires a verified eight-image archive. Use pipeline/deploy-k3d.mjs --reset-game-db ARCHIVE.\n' >&2
   exit 1
 fi
 core_bootstrapped=false
 if [[ "$core_schema_exists" == f ]]; then
-  for service in core assets market; do
+  for service in core assets market world quest; do
+    database="hero_association_$service"
+    if [[ "$service" == core ]]; then database=hero_association; fi
+    empty="$(kubectl -n "$namespace" exec "deployment/postgres-$service" -c postgres -- \
+      psql -U "$database" -d "$database" -At \
+      -c "SELECT NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public')")"
+    if [[ "$empty" != t ]]; then
+      printf 'Refusing fresh bootstrap over existing %s data. Use a verified coordinated reset.\n' "$service" >&2
+      exit 1
+    fi
+  done
+  for service in world assets quest core market; do
     job="$(kubectl create -f "$script_dir/../k8s/backend/$service-db-bootstrap.yaml" -o jsonpath='{.metadata.name}')"
     kubectl -n "$namespace" wait --for=condition=complete "job/$job" --timeout=5m
   done
   core_bootstrapped=true
 else
-  assets_schema_exists="$(kubectl -n "$namespace" exec deployment/postgres-assets -c postgres -- \
-    psql -U hero_association_assets -d hero_association_assets -At \
-    -c "SELECT to_regclass('public.asset_wallet') IS NOT NULL")"
-  if [[ "$assets_schema_exists" != t ]]; then
-    printf 'Assets extraction requires verified staging and coordinated archive promotion. See deploy/k3d/stage-assets.sh.\n' >&2
-    exit 1
-  fi
+  for entry in assets:asset_wallet market:market_order world:map_definition quest:quest_definition; do
+    service="${entry%%:*}"; table="${entry#*:}"
+    database="hero_association_$service"
+    schema_exists="$(kubectl -n "$namespace" exec "deployment/postgres-$service" -c postgres -- \
+      psql -U "$database" -d "$database" -At \
+      -c "SELECT to_regclass('public.$table') IS NOT NULL")"
+    if [[ "$schema_exists" != t ]]; then
+      printf '%s extraction requires verified staging and coordinated archive promotion. See the pipeline guide.\n' "$service" >&2
+      exit 1
+    fi
+  done
   printf 'Game schemas exist; skipping destructive bootstrap.\n'
 fi
 
@@ -106,7 +128,7 @@ kubectl apply -k "$script_dir/../k8s/backend"
 if [[ "$core_bootstrapped" == true ]]; then
   kubectl -n "$namespace" scale deployment/core --replicas=2
 fi
-for service in core assets market bff; do
+for service in world assets quest core market bff; do
   kubectl -n "$namespace" rollout status "deployment/$service" --timeout=5m
 done
 

@@ -43,8 +43,7 @@ public class CoreAssetCommands {
         balances.lockOwners(owners);
         CommandReceipt result = switch (command.kind()) {
             case "RUNE_EQUIP", "RUNE_UNEQUIP" -> equipment(command, request);
-            case "QUEST_START" -> quest(command, request);
-            case "EXPEDITION_CREDIT" -> reward(command, request);
+            case "EXPEDITION_CREDIT", "QUEST_REWARD" -> reward(command, request);
             case "HERO_LOADOUT_SNAPSHOT" -> applied(command, request, snapshots.loadouts(command.heroIds()));
             default -> throw new AssetOperationRejectedException(400, "Unsupported Core asset command.");
         };
@@ -98,19 +97,6 @@ public class CoreAssetCommands {
         }
         em.flush();
         return applied(command, request, snapshots.loadouts(List.of(command.heroId())));
-    }
-    private CommandReceipt quest(Command command, JsonNode request) {
-        if (command.agencyId() == null || command.feeGold() == null || command.feeGold() < 0 || command.heroIds() == null || command.heroIds().isEmpty())
-            return rejected(command, request, 400, "Quest payment and Hero snapshot are required.");
-        AssetWallet manager = balances.wallet(AssetOwnerType.MANAGER, command.managerId());
-        AssetWallet agency = balances.wallet(AssetOwnerType.AGENCY, command.agencyId());
-        long fee = command.feeGold();
-        if (manager.gold < fee) return rejected(command, request, 409, "The Manager does not have enough gold for the borrowing fee.");
-        if (agency.gold > Long.MAX_VALUE - fee) return rejected(command, request, 409, "Agency gold balance would overflow.");
-        var loadouts = snapshots.loadouts(command.heroIds());
-        balances.gold(manager, -fee, command.operationKey());
-        balances.gold(agency, fee, command.operationKey());
-        return applied(command, request, loadouts);
     }
     private CommandReceipt reward(Command command, JsonNode request) {
         if (command.gold() == null || command.gold() < 0 || !validInventory(command.items()) || !validInventory(command.runes()))

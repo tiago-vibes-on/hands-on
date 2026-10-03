@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url'
 import { inspectArchive, prepareArchive, requirePassingK3dE2EVerification } from '../e2e/archive-images.js'
 import { restorePreviousImages } from './rollback-k3d.mjs'
 import { assertAssetsDatabaseIdentity, prepareAssetsBootstrapJob } from './assets-bootstrap-job.mjs'
+import { assertWorldDatabaseIdentity, prepareWorldBootstrapJob } from './world-bootstrap-job.mjs'
+import { assertQuestDatabaseIdentity, prepareQuestBootstrapJob } from './quest-bootstrap-job.mjs'
 import { prepareSchemaReset } from './schema-reset.mjs'
 import { assertMarketDatabaseIdentity, prepareMarketBootstrapJob } from './market-bootstrap-job.mjs'
 import { assertCoreDatabaseIdentity, prepareCoreBootstrapJob, assertNoActiveExpeditions } from './core-bootstrap-job.mjs'
@@ -17,7 +19,7 @@ const kubeconfig = process.env.HERO_ASSOCIATION_K3D_KUBECONFIG || path.join(proj
 const cachedK3d = path.join(projectDirectory, 'deploy/k3d/.tools/k3d')
 const k3d = process.env.K3D_BIN || (existsSync(cachedK3d) ? cachedK3d : 'k3d')
 const namespace = 'hero-association'
-const components = ['core', 'bff', 'expedition', 'market', 'assets', 'frontend']
+const components = ['core', 'bff', 'expedition', 'market', 'assets', 'world', 'quest', 'frontend']
 const kubectl = ['--kubeconfig', kubeconfig]
 const clusterEnvironment = { ...process.env, KUBECONFIG: kubeconfig }
 const hpaManifest = path.join(projectDirectory, 'deploy/k8s/backend/hpa.yaml')
@@ -71,6 +73,8 @@ async function resetCoreDatabaseFromArchive(archive, onResetStarted) {
     { name: 'core', database: 'hero_association', prepare: prepareCoreBootstrapJob, assert: assertCoreDatabaseIdentity },
     { name: 'assets', database: 'hero_association_assets', prepare: prepareAssetsBootstrapJob, assert: assertAssetsDatabaseIdentity },
     { name: 'market', database: 'hero_association_market', prepare: prepareMarketBootstrapJob, assert: assertMarketDatabaseIdentity },
+    { name: 'world', database: 'hero_association_world', prepare: prepareWorldBootstrapJob, assert: assertWorldDatabaseIdentity },
+    { name: 'quest', database: 'hero_association_quest', prepare: prepareQuestBootstrapJob, assert: assertQuestDatabaseIdentity },
   ]
   // Validate all targets before stopping any writer or resetting any data.
   for (const entry of definitions) {
@@ -89,8 +93,8 @@ async function resetCoreDatabaseFromArchive(archive, onResetStarted) {
   for (const component of components) previousReplicas[component] = (await getDeployment(component)).deployment.spec.replicas ?? 0
   try {
     await run('kubectl', [...kubectl, '-n', namespace, 'delete', 'hpa/core', 'hpa/bff', '--ignore-not-found=true'])
-    // Stop admission and browser traffic first, then drain the three asset writers.
-    for (const component of ['bff', 'expedition', 'frontend', 'market', 'core', 'assets']) {
+    // Stop admission and browser traffic before stopping every permanent-data owner.
+    for (const component of ['bff', 'expedition', 'frontend', 'market', 'core', 'quest', 'assets', 'world']) {
       await run('kubectl', [...kubectl, '-n', namespace, 'scale', 'deployment/' + component, '--replicas=0'])
       await run('kubectl', [...kubectl, '-n', namespace, 'wait', '--for=delete', 'pod', '-l', 'app=' + component, '--timeout=5m'])
     }
@@ -102,6 +106,10 @@ async function resetCoreDatabaseFromArchive(archive, onResetStarted) {
       'statefulset/redis-expedition', '-c', 'redis', '--', 'redis-cli', '--scan',
       '--pattern', 'ha:expedition:v1:*:active'], { capture: true })
     assertNoActiveExpeditions(unfinished, activeRuns)
+    const questPending = await run('kubectl', [...kubectl, '-n', namespace, 'exec',
+      'deployment/postgres-quest', '-c', 'postgres', '--', 'psql', '-U', 'hero_association_quest',
+      '-d', 'hero_association_quest', '-At', '-c',
+      "SELECT count(*) FROM quest_admission WHERE status IN ('ACTIVE','REWARD_PENDING','CONFLICT')"], { capture: true })
     const corePending = await run('kubectl', [...kubectl, '-n', namespace, 'exec',
       'deployment/postgres-core', '-c', 'postgres', '--', 'psql', '-U', 'hero_association',
       '-d', 'hero_association', '-At', '-c',
@@ -114,15 +122,15 @@ async function resetCoreDatabaseFromArchive(archive, onResetStarted) {
       'deployment/postgres-market', '-c', 'postgres', '--', 'psql', '-U', 'hero_association_market',
       '-d', 'hero_association_market', '-At', '-c',
       "SELECT count(*) FROM market_order WHERE state IN ('PENDING_CANCEL','CONFLICT') OR EXISTS (SELECT 1 FROM market_trade WHERE state IN ('PENDING_SETTLEMENT','CONFLICT'))"], { capture: true })
-    if (corePending !== 'DO' || marketPending !== '0' || marketRecoveries !== '0') {
-      throw new Error('Finish Core and Market asset operations before resetting the coupled lab databases')
+    if (corePending !== 'DO' || marketPending !== '0' || marketRecoveries !== '0' || questPending !== '0') {
+      throw new Error('Finish Core, Market and Quest operations before resetting the coupled lab databases')
     }
   } catch (error) {
     for (const component of components) await run('kubectl', [...kubectl, '-n', namespace, 'scale', 'deployment/' + component, '--replicas=' + previousReplicas[component]])
     await run('kubectl', [...kubectl, 'apply', '-f', hpaManifest])
     throw error
   }
-  console.log('Resetting the coupled Core, Assets and Market lab databases from the verified archive')
+  console.log('Resetting the coupled Core, Assets, Market, World and Quest lab databases from the verified archive')
   onResetStarted()
   await run('kubectl', [...kubectl, '-n', namespace, 'delete', 'hpa/core', '--ignore-not-found=true'])
   const coreAssetsEnvironment = { spec: { template: { spec: { containers: [{ name: 'core', env: [
@@ -131,11 +139,25 @@ async function resetCoreDatabaseFromArchive(archive, onResetStarted) {
       name: 'hero-association-assets-credentials', key: 'HERO_ASSOCIATION_ASSETS_CORE_SERVICE_KEY',
     } } },
     { name: 'HERO_ASSOCIATION_ASSETS_MARKET_SERVICE_KEY', $patch: 'delete' },
+    { name: 'HERO_ASSOCIATION_CORE_REDIS_URL', $patch: 'delete' },
+    { name: 'HERO_ASSOCIATION_WORLD_BASE_URL', value: 'http://world:8086' },
+    { name: 'HERO_ASSOCIATION_WORLD_SERVICE_KEY', valueFrom: { secretKeyRef: { name: 'hero-association-world-credentials', key: 'HERO_ASSOCIATION_WORLD_SERVICE_KEY' } } },
+    { name: 'HERO_ASSOCIATION_QUEST_BASE_URL', value: 'http://quest:8087' },
+    { name: 'HERO_ASSOCIATION_QUEST_CORE_SERVICE_KEY', valueFrom: { secretKeyRef: { name: 'hero-association-quest-credentials', key: 'HERO_ASSOCIATION_QUEST_CORE_SERVICE_KEY' } } },
   ] }] } } } }
   await run('kubectl', [...kubectl, '-n', namespace, 'patch', 'deployment/core', '--type=strategic', '-p', JSON.stringify(coreAssetsEnvironment)])
   await run('kubectl', [...kubectl, '-n', namespace, 'set', 'env', 'deployment/market', 'HERO_ASSOCIATION_ASSETS_BASE_URL=http://assets:8085', 'HERO_ASSOCIATION_CORE_BASE_URL-'])
   await run('kubectl', [...kubectl, '-n', namespace, 'set', 'env', 'deployment/bff', 'HERO_ASSOCIATION_ASSETS_BASE_URL=http://assets:8085'])
+  await run('kubectl', [...kubectl, '-n', namespace, 'set', 'env', 'deployment/bff', 'HERO_ASSOCIATION_WORLD_BASE_URL=http://world:8086', 'HERO_ASSOCIATION_QUEST_BASE_URL=http://quest:8087'])
+  await run('kubectl', [...kubectl, '-n', namespace, 'patch', 'deployment/expedition', '--type=strategic', '-p', JSON.stringify({ spec: { template: { spec: { containers: [{ name: 'expedition', env: [
+    { name: 'HERO_ASSOCIATION_QUEST_BASE_URL', value: 'http://quest:8087' },
+    { name: 'HERO_ASSOCIATION_QUEST_EXPEDITION_SERVICE_KEY', valueFrom: { secretKeyRef: { name: 'hero-association-quest-credentials', key: 'HERO_ASSOCIATION_QUEST_EXPEDITION_SERVICE_KEY' } } },
+  ] }] } } } })])
+  await run('kubectl', [...kubectl, '-n', namespace, 'patch', 'deployment/assets', '--type=strategic', '-p', JSON.stringify({ spec: { template: { spec: { containers: [{ name: 'assets', env: [
+    { name: 'HERO_ASSOCIATION_ASSETS_QUEST_SERVICE_KEY', valueFrom: { secretKeyRef: { name: 'hero-association-quest-credentials', key: 'HERO_ASSOCIATION_ASSETS_QUEST_SERVICE_KEY' } } },
+  ] }] } } } })])
   await run('kubectl', [...kubectl, 'apply', '-f', path.join(projectDirectory, 'deploy/k8s/mesh/assets-authorization.yaml')])
+  await run('kubectl', [...kubectl, 'apply', '-f', path.join(projectDirectory, 'deploy/k8s/mesh/world-quest-authorization.yaml')])
   await run('kubectl', [...kubectl, 'apply', '-f', path.join(projectDirectory, 'deploy/k8s/mesh/core-market-authorization.yaml')])
   await run('kubectl', [...kubectl, '-n', namespace, 'delete', 'authorizationpolicy/core-from-market', '--ignore-not-found=true'])
   // Hibernate drops only mapped tables; explicitly remove retired Core asset tables too.
@@ -154,15 +176,16 @@ async function resetCoreDatabaseFromArchive(archive, onResetStarted) {
       await run('kubectl', [...kubectl, '-n', namespace, 'wait', '--for=condition=complete', 'job/' + jobName, '--timeout=5m'])
     } catch (error) {
       await run('kubectl', [...kubectl, '-n', namespace, 'logs', 'job/' + jobName, '--all-containers=true']).catch(() => {})
-      throw new Error('Coupled database reset failed; Core, Assets and Market remain stopped', { cause: error })
+      throw new Error('Coupled database reset failed; all permanent-data writers remain stopped', { cause: error })
     }
     completed[entry.name] = jobName
   }
   for (const component of components) await run('kubectl', [...kubectl, '-n', namespace, 'set', 'image', 'deployment/' + component, component + '=' + archive.images[component].ref])
-  for (const component of ['assets', 'core', 'market', 'expedition', 'bff', 'frontend']) {
+  for (const component of ['world', 'assets', 'quest', 'core', 'market', 'expedition', 'bff', 'frontend']) {
     await run('kubectl', [...kubectl, '-n', namespace, 'scale', 'deployment/' + component, '--replicas=' + previousReplicas[component]])
     await run('kubectl', [...kubectl, '-n', namespace, 'rollout', 'status', 'deployment/' + component, '--timeout=5m'])
   }
+  await run('kubectl', [...kubectl, '-n', namespace, 'delete', 'deployment/redis-core', 'service/redis-core', '--ignore-not-found=true'])
   await run('kubectl', [...kubectl, 'apply', '-f', hpaManifest])
   return completed
 }
@@ -274,6 +297,10 @@ async function recordPromotion(archive, observedPods, coreBootstrapJob) {
     coreDatabaseReset: coreBootstrapJob !== null,
     marketDatabaseReset: coreBootstrapJob !== null,
     assetsDatabaseReset: coreBootstrapJob !== null,
+    worldDatabaseReset: coreBootstrapJob !== null,
+    questDatabaseReset: coreBootstrapJob !== null,
+    worldBootstrapJob: coreBootstrapJob?.world ?? null,
+    questBootstrapJob: coreBootstrapJob?.quest ?? null,
     assetsBootstrapJob: coreBootstrapJob?.assets ?? null,
     coreBootstrapJob: coreBootstrapJob?.core ?? null,
     marketBootstrapJob: coreBootstrapJob?.market ?? null,
@@ -282,7 +309,7 @@ async function recordPromotion(archive, observedPods, coreBootstrapJob) {
       id: archive.images[component].id,
       pods: observedPods[component],
     }])),
-    checks: { archiveK3dE2E: 'passed', podImages: 'passed', browserE2E: 'passed', expeditionApiE2E: 'passed', mapE2E: 'passed', marketK6: 'passed' },
+    checks: { archiveK3dE2E: 'passed', podImages: 'passed', browserE2E: 'passed', expeditionApiE2E: 'passed', mapE2E: 'passed', questDungeonE2E: 'passed', marketK6: 'passed' },
     recordedAt: new Date().toISOString(),
   }
   const destination = path.join(archive.archiveDirectory, 'k3d-promotion.json')
@@ -329,7 +356,7 @@ async function main() {
 
   const archive = await inspectArchive(process.argv[mode === 'promote' ? 2 : 3])
   if (mode === 'reset-core-db' && archive.promoteComponent) {
-    throw new Error('A coupled database reset requires a complete six-service archive')
+    throw new Error('A coupled database reset requires a complete eight-service archive')
   }
   if (archive.promoteComponent) {
     const baselineComponents = components.filter((component) => component !== archive.promoteComponent)
@@ -374,6 +401,7 @@ async function main() {
     await run('npm', ['run', 'test:k3d'], { cwd: path.join(projectDirectory, 'e2e') })
     await run('npm', ['run', 'test:k3d:expedition'], { cwd: path.join(projectDirectory, 'e2e') })
     await run('npm', ['run', 'test:k3d:map'], { cwd: path.join(projectDirectory, 'e2e') })
+    await run('npm', ['run', 'test:k3d:quest'], { cwd: path.join(projectDirectory, 'e2e') })
     await run('npm', ['run', 'test:market:k6'], { cwd: path.join(projectDirectory, 'e2e') })
     for (const component of promotedComponents) {
       await run('kubectl', [...kubectl, '-n', namespace, 'rollout', 'status', 'deployment/' + component, '--timeout=5m'])
@@ -383,7 +411,7 @@ async function main() {
   } catch (error) {
     console.error('Promotion failed: ' + error.message)
     if (resetStarted) {
-      throw new Error('Core, Assets and Market reset began; automatic image rollback is unsafe. Inspect the k3d deployments and bootstrap Job before retrying.', { cause: error })
+      throw new Error('Core, Assets, Market, World and Quest reset began; automatic image rollback is unsafe. Inspect the k3d deployments and bootstrap Job before retrying.', { cause: error })
     }
     const rollbackErrors = await restorePreviousImages(
       changed, previous, targetImages,

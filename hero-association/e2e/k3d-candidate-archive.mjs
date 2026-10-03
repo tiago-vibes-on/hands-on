@@ -7,7 +7,7 @@ import { promisify } from 'node:util'
 import { inspectArchive, prepareArchive } from './archive-images.js'
 
 const executeFile = promisify(execFile)
-const components = ['core', 'bff', 'expedition', 'market', 'assets', 'frontend']
+const components = ['core', 'bff', 'expedition', 'market', 'assets', 'world', 'quest', 'frontend']
 const [action, metadataFile, archiveDirectory, kubeconfig, namespace] = process.argv.slice(2)
 async function recordK3dVerification(archive, status) {
   if (archive.component !== 'all' || !['pending', 'passed'].includes(status)) {
@@ -90,7 +90,7 @@ async function verifyRunningPods(archive) {
     const deployment = JSON.parse(await kubectl('-n', namespace,
       'get', `deployment/${component}`, '-o', 'json'))
     const selector = deployment.spec.selector.matchLabels
-    const expectedReplicas = ['bff', 'market', 'assets'].includes(component) ? 2 : 1
+    const expectedReplicas = ['bff', 'market', 'assets', 'world', 'quest'].includes(component) ? 2 : 1
     if (Object.keys(selector).length !== 1 || selector.app !== component ||
         deployment.spec.replicas !== expectedReplicas) {
       throw new Error(`Isolated ${component} Deployment has an unexpected selector or replica count`)
@@ -123,7 +123,7 @@ if (action === 'prepare') {
   }
   const archive = await prepareArchive(archiveDirectory)
   if (archive.component !== 'all') {
-    throw new Error('Candidate E2E requires a complete six-image archive')
+    throw new Error('Candidate E2E requires a complete eight-image archive')
   }
   await recordK3dVerification(archive, 'pending')
   await writeFile(metadataFile, `${JSON.stringify(archive)}\n`, { mode: 0o600 })

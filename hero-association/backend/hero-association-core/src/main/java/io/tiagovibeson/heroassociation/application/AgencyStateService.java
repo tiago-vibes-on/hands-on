@@ -16,12 +16,10 @@ import io.tiagovibeson.heroassociation.domain.FeedPost;
 import io.tiagovibeson.heroassociation.domain.Hero;
 import io.tiagovibeson.heroassociation.domain.Manager;
 import io.tiagovibeson.heroassociation.domain.Party;
-import io.tiagovibeson.heroassociation.domain.Quest;
 import io.tiagovibeson.heroassociation.repository.AgencyRepository;
 import io.tiagovibeson.heroassociation.repository.FeedPostRepository;
 import io.tiagovibeson.heroassociation.repository.HeroRepository;
 import io.tiagovibeson.heroassociation.repository.PartyRepository;
-import io.tiagovibeson.heroassociation.repository.QuestRepository;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.transaction.Transactional;
@@ -39,9 +37,6 @@ public class AgencyStateService {
 
     @Inject
     PartyRepository partyRepository;
-
-    @Inject
-    QuestRepository questRepository;
 
     @Inject
     FeedPostRepository feedPostRepository;
@@ -67,7 +62,6 @@ public class AgencyStateService {
         List<Hero> personalHeroes = new ArrayList<>(personalHeroesById.values());
         personalHeroes.sort(Comparator.comparing(Hero::getId));
         List<Party> parties = partyRepository.list("agency.id = ?1 order by id", agencyId);
-        List<Quest> quests = questRepository.list("agency.id = ?1 order by id", agencyId);
         var allHeroes = java.util.stream.Stream.concat(heroes.stream(), personalHeroes.stream()).toList();
         var snapshot = assets.snapshot(java.util.List.of(
                 new io.tiagovibeson.heroassociation.application.assets.AssetsClient.OwnerRequest("AGENCY", agencyId),
@@ -82,6 +76,6 @@ public class AgencyStateService {
         List<AgencyItem> itemInventory = agencyAssets.items().stream().map(entry -> new AgencyItem(agency, entry.item().value(), entry.quantity())).toList();
         List<FeedPost> feedPosts = feedPostRepository.list("agency.id = ?1 order by publishedAt desc, id desc", agencyId);
         return AgencyStateResponse.from(
-                agency, heroes, personalHeroes, parties, quests, runeInventory, personalRuneInventory, itemInventory, feedPosts);
+                agency, heroes, personalHeroes, parties, runeInventory, personalRuneInventory, itemInventory, feedPosts);
     }
 }

@@ -11,6 +11,8 @@
 
     <modules>
         <module>hero-association-lib</module>
+        <module>hero-association-world</module>
+        <module>hero-association-quest</module>
         <module>hero-association-assets</module>
         <module>hero-association-core</module>
         <module>hero-association-expedition</module>

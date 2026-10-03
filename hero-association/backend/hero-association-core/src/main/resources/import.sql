@@ -294,65 +294,6 @@ WHERE manager.id NOT IN (
     '019c4c00-0000-7000-8000-000000000001',
     '019c4c00-0000-7000-8000-000000000002');
 
-INSERT INTO creature_definition (
-    id, name, version, base_experience, max_health, max_mana, attack_damage,
-    attack_interval_milliseconds, health_recovery_per_second,
-    mana_recovery_per_second, critical_chance, critical_damage_multiplier)
-VALUES
-    ('019c4c00-0005-7000-8000-000000000001', 'Troll', 1, 100, 2000, 100, 4,
-     1600, 0, 0, 0.1, 2),
-    ('019c4c00-0005-7000-8000-000000000002', 'Forest Wolf', 1, 100, 120, 100, 10,
-     1600, 0, 0, 0, 2);
-
-INSERT INTO quest (
-    id,
-    title,
-    description,
-    status,
-    creature_name,
-    creatures_defeated,
-    creatures_required,
-    minimum_heroes,
-    maximum_heroes,
-    duration_minutes,
-    gold_reward,
-    started_at,
-    expected_completion_at,
-    agency_id,
-    party_id)
-VALUES (
-    '019c4c00-0003-7000-8000-000000000001',
-    'Trolls at Broken Pass',
-    'Defeat the trolls blocking Broken Pass.',
-    'IN_PROGRESS',
-    'Troll',
-    0,
-    3,
-    1,
-    4,
-    60,
-    120,
-    CURRENT_TIMESTAMP,
-    CURRENT_TIMESTAMP + INTERVAL '60 minutes',
-    '019c4c00-0001-7000-8000-000000000001',
-    '019c4c00-0002-7000-8000-000000000001'),
-    (
-    '019c4c00-0004-7000-8000-000000000001',
-    'Lost Courier',
-    'Find the missing courier in the old forest.',
-    'AVAILABLE',
-    'Forest Wolf',
-    0,
-    4,
-    1,
-    2,
-    30,
-    85,
-    NULL,
-    NULL,
-    '019c4c00-0001-7000-8000-000000000001',
-    NULL);
-
 INSERT INTO hero (
     id,
     name,
@@ -384,7 +325,7 @@ VALUES
         300,
         50,
         100224000,
-        'ON_QUEST',
+        'RESTING',
         CURRENT_TIMESTAMP,
         '019c4c00-0001-7000-8000-000000000001',
         '019c4c00-0002-7000-8000-000000000001'),
@@ -401,7 +342,7 @@ VALUES
         100,
         500,
         41472000,
-        'ON_QUEST',
+        'RESTING',
         CURRENT_TIMESTAMP,
         '019c4c00-0001-7000-8000-000000000001',
         '019c4c00-0002-7000-8000-000000000001'),
@@ -418,7 +359,7 @@ VALUES
         200,
         200,
         157248000,
-        'ON_QUEST',
+        'RESTING',
         CURRENT_TIMESTAMP,
         '019c4c00-0001-7000-8000-000000000001',
         '019c4c00-0002-7000-8000-000000000001'),
@@ -529,223 +470,12 @@ VALUES
 UPDATE hero SET borrowing_fee_gold = 25 WHERE id = '019c4c00-0010-7000-8000-000000000005';
 UPDATE hero SET borrowing_fee_gold = 100 WHERE id = '019c4c00-0010-7000-8000-000000000006';
 
-INSERT INTO quest_combat (
-    id,
-    quest_id,
-    status,
-    current_time_milliseconds,
-    next_recovery_at,
-    last_synchronized_at,
-    next_event_sequence)
-VALUES
-    (
-        '019c4c00-0050-7000-8000-000000000001',
-        '019c4c00-0003-7000-8000-000000000001',
-        'IN_PROGRESS',
-        0,
-        1000,
-        CURRENT_TIMESTAMP,
-        0);
-
-INSERT INTO quest_combatant (
-    id,
-    combat_id,
-    hero_id,
-    team,
-    formation_index,
-    name,
-    hero_class,
-    magic_level,
-    base_experience,
-    max_health,
-    current_health,
-    max_mana,
-    current_mana,
-    attack_damage,
-    attack_interval_milliseconds,
-    health_recovery_per_second,
-    mana_recovery_per_second,
-    critical_chance,
-    critical_damage_multiplier,
-    next_basic_attack_at,
-    fire_ball_next_cast_at,
-    lightning_rail_next_cast_at)
-VALUES
-    (
-        '019c4c00-0051-7000-8000-000000000001',
-        '019c4c00-0050-7000-8000-000000000001',
-        '019c4c00-0010-7000-8000-000000000001',
-        'HEROES',
-        0,
-        'Ironwall',
-        'WARRIOR',
-        0,
-        0,
-        300,
-        300,
-        50,
-        50,
-        22,
-        1300,
-        10,
-        2,
-        0.01,
-        2,
-        480,
-        NULL,
-        NULL),
-    (
-        '019c4c00-0051-7000-8000-000000000002',
-        '019c4c00-0050-7000-8000-000000000001',
-        '019c4c00-0010-7000-8000-000000000002',
-        'HEROES',
-        1,
-        'Moonweaver',
-        'MAGE',
-        15,
-        0,
-        100,
-        100,
-        500,
-        500,
-        32,
-        1700,
-        2,
-        10,
-        0.01,
-        2.1,
-        650,
-        900,
-        1350),
-    (
-        '019c4c00-0051-7000-8000-000000000003',
-        '019c4c00-0050-7000-8000-000000000001',
-        '019c4c00-0010-7000-8000-000000000003',
-        'HEROES',
-        2,
-        'Swiftarrow',
-        'ARCHER',
-        0,
-        0,
-        200,
-        200,
-        200,
-        200,
-        26,
-        1100,
-        6,
-        6,
-        0.01,
-        2,
-        820,
-        NULL,
-        NULL),
-    (
-        '019c4c00-0051-7000-8000-000000000004',
-        '019c4c00-0050-7000-8000-000000000001',
-        NULL,
-        'CREATURES',
-        0,
-        'Troll',
-        NULL,
-        0,
-        100,
-        2000,
-        2000,
-        100,
-        100,
-        1,
-        1850,
-        0,
-        0,
-        0.1,
-        2,
-        760,
-        NULL,
-        NULL),
-    (
-        '019c4c00-0051-7000-8000-000000000005',
-        '019c4c00-0050-7000-8000-000000000001',
-        NULL,
-        'CREATURES',
-        1,
-        'Troll',
-        NULL,
-        0,
-        100,
-        2000,
-        2000,
-        100,
-        100,
-        1,
-        1950,
-        0,
-        0,
-        0.1,
-        2,
-        920,
-        NULL,
-        NULL),
-    (
-        '019c4c00-0051-7000-8000-000000000006',
-        '019c4c00-0050-7000-8000-000000000001',
-        NULL,
-        'CREATURES',
-        2,
-        'Troll',
-        NULL,
-        0,
-        100,
-        2000,
-        2000,
-        100,
-        100,
-        1,
-        2050,
-        0,
-        0,
-        0.1,
-        2,
-        1080,
-        NULL,
-        NULL);
-
-UPDATE quest_combatant AS combatant
-SET hero_level = 1,
-    melee_level = 1,
-    distance_level = 1,
-    shield_level = 1,
-    starting_stamina_milliseconds = hero.stamina_milliseconds,
-    basic_attack_mana_cost = CASE WHEN combatant.hero_class = 'MAGE' THEN 20 ELSE 0 END
-FROM hero
-WHERE combatant.hero_id = hero.id;
-
-
-
-
-
-
-
-
-
 -- Economic seed state is now in Assets; reset Core, Assets and Market together.
 
 
 
 
 
-
-
-INSERT INTO quest_combatant_rune (id, combatant_id, rune_id, slot_index, rune_code, effect, effect_value) VALUES
-    ('019c4c00-0052-7000-8000-000000000001', '019c4c00-0051-7000-8000-000000000001', '019c4c00-0020-7000-8000-000000000001', 0, 'attack-rune', 'ATTACK', 8),
-    ('019c4c00-0052-7000-8000-000000000002', '019c4c00-0051-7000-8000-000000000001', '019c4c00-0020-7000-8000-000000000002', 1, 'guard-rune', 'ARMOR', 6),
-    ('019c4c00-0052-7000-8000-000000000003', '019c4c00-0051-7000-8000-000000000001', '019c4c00-0020-7000-8000-000000000006', 2, 'critical-chance-rune', 'CRITICAL_CHANCE', 0.01),
-    ('019c4c00-0052-7000-8000-000000000004', '019c4c00-0051-7000-8000-000000000002', '019c4c00-0020-7000-8000-000000000005', 0, 'mana-rune', 'MANA', 30),
-    ('019c4c00-0052-7000-8000-000000000005', '019c4c00-0051-7000-8000-000000000002', '019c4c00-0020-7000-8000-000000000006', 1, 'critical-chance-rune', 'CRITICAL_CHANCE', 0.01),
-    ('019c4c00-0052-7000-8000-000000000006', '019c4c00-0051-7000-8000-000000000002', '019c4c00-0020-7000-8000-000000000007', 2, 'critical-damage-rune', 'CRITICAL_DAMAGE', 0.1),
-    ('019c4c00-0052-7000-8000-000000000007', '019c4c00-0051-7000-8000-000000000003', '019c4c00-0020-7000-8000-000000000003', 0, 'vitality-rune', 'HEALTH', 20),
-    ('019c4c00-0052-7000-8000-000000000008', '019c4c00-0051-7000-8000-000000000003', '019c4c00-0020-7000-8000-000000000004', 1, 'haste-rune', 'ATTACK_SPEED', 0.04),
-    ('019c4c00-0052-7000-8000-000000000009', '019c4c00-0051-7000-8000-000000000003', '019c4c00-0020-7000-8000-000000000006', 2, 'critical-chance-rune', 'CRITICAL_CHANCE', 0.01);
 
 
 INSERT INTO feed_post (

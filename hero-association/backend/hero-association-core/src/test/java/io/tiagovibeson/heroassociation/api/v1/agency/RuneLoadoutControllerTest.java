@@ -101,8 +101,10 @@ class RuneLoadoutControllerTest {
     }
 
     @Test
-    void shouldRejectLoadoutChangesForAHeroOnAQuest() {
-        String message = "Hero with id %s is on a quest and is not available for this action.".formatted(IRONWALL_ID);
+    void shouldRejectLoadoutChangesForAHeroOnAnExpedition() {
+        setAway(IRONWALL_ID, true);
+        try {
+        String message = "Hero with id %s is on an expedition and is not available for this action.".formatted(IRONWALL_ID);
 
         equip(IRONWALL_ID, 0, VITALITY_RUNE_ID)
                 .then()
@@ -113,6 +115,7 @@ class RuneLoadoutControllerTest {
                 .then()
                 .statusCode(409)
                 .body("message", is(message));
+        } finally { setAway(IRONWALL_ID, false); }
     }
 
     @Test
@@ -163,4 +166,10 @@ class RuneLoadoutControllerTest {
     private String slotPath(String agencyId, String heroId, int slotIndex) {
         return "/api/v1/agencies/%s/heroes/%s/rune-slots/%d".formatted(agencyId, heroId, slotIndex);
     }
+    @jakarta.inject.Inject jakarta.persistence.EntityManager em;
+    private void setAway(String hero, boolean away) {
+        io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> em.createNativeQuery("update hero set activity=:activity where id=:id")
+            .setParameter("activity", away ? "ON_EXPEDITION" : "RESTING").setParameter("id", java.util.UUID.fromString(hero)).executeUpdate());
+    }
+
 }

@@ -21,13 +21,16 @@ spec:
       app: core
   action: ALLOW
   rules:
-    - from:
-        - source:
-            principals: [cluster.local/ns/hero-association/sa/hero-association-assets]
-      to:
-        - operation:
-            methods: [POST]
-            paths: [/internal/v1/asset-authority/*]
+  - from:
+    - source:
+        principals:
+        - cluster.local/ns/hero-association/sa/hero-association-assets
+    to:
+    - operation:
+        methods:
+        - POST
+        paths:
+        - /internal/v1/asset-authority/*
 ---
 apiVersion: security.istio.io/v1
 kind: AuthorizationPolicy
@@ -40,24 +43,50 @@ spec:
       app: assets
   action: ALLOW
   rules:
-    - from:
-        - source:
-            principals: [cluster.local/ns/hero-association/sa/hero-association-core]
-      to:
-        - operation:
-            methods: [GET, POST]
-            paths: [/internal/v1/assets/core/*]
-    - from:
-        - source:
-            principals: [cluster.local/ns/hero-association/sa/hero-association-market]
-      to:
-        - operation:
-            methods: [GET, POST]
-            paths: [/internal/v1/assets/context, /internal/v1/assets/reservations, /internal/v1/assets/reservations/*, /internal/v1/assets/operations/*, /internal/v1/assets/releases, /internal/v1/assets/settlements]
-    - from:
-        - source:
-            principals: [cluster.local/ns/hero-association/sa/hero-association-bff]
-      to:
-        - operation:
-            methods: [POST]
-            paths: [/api/v1/gold-transfers]
+  - from:
+    - source:
+        principals:
+        - cluster.local/ns/hero-association/sa/hero-association-core
+    to:
+    - operation:
+        methods:
+        - GET
+        - POST
+        paths:
+        - /internal/v1/assets/core/*
+  - from:
+    - source:
+        principals:
+        - cluster.local/ns/hero-association/sa/hero-association-market
+    to:
+    - operation:
+        methods:
+        - GET
+        - POST
+        paths:
+        - /internal/v1/assets/context
+        - /internal/v1/assets/reservations
+        - /internal/v1/assets/reservations/*
+        - /internal/v1/assets/operations/*
+        - /internal/v1/assets/releases
+        - /internal/v1/assets/settlements
+  - from:
+    - source:
+        principals:
+        - cluster.local/ns/hero-association/sa/hero-association-bff
+    to:
+    - operation:
+        methods:
+        - POST
+        paths:
+        - /api/v1/gold-transfers
+  - from:
+    - source:
+        principals:
+        - cluster.local/ns/hero-association/sa/hero-association-quest
+    to:
+    - operation:
+        methods:
+        - POST
+        paths:
+        - /internal/v1/assets/quest/rewards

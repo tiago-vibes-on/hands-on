@@ -30,19 +30,22 @@ class HeroActivityControllerTest {
     }
 
     @Test
-    void shouldRejectChangingTheActivityOfAHeroOnAQuest() {
+    void shouldRejectChangingTheActivityOfAHeroOnAnExpedition() {
+        setAway(IRONWALL_ID, true);
+        try {
         changeActivity(IRONWALL_ID, "RESTING")
                 .then()
                 .statusCode(409)
-                .body("message", is("Hero with id %s is on a quest and is not available for this action.".formatted(IRONWALL_ID)));
+                .body("message", is("Hero with id %s is on an expedition and is not available for this action.".formatted(IRONWALL_ID)));
+        } finally { setAway(IRONWALL_ID, false); }
     }
 
     @Test
-    void shouldRejectAssigningQuestActivityWithoutAParty() {
-        changeActivity(OAKSHIELD_ID, "ON_QUEST")
+    void shouldRejectAssigningExpeditionActivityWithoutAParty() {
+        changeActivity(OAKSHIELD_ID, "ON_EXPEDITION")
                 .then()
                 .statusCode(400)
-                .body("message", is("A hero activity can only be TRAINING or RESTING outside a quest."));
+                .body("message", is("A hero activity can only be TRAINING or RESTING outside an expedition."));
     }
 
     private io.restassured.response.Response changeActivity(String heroId, String activity) {
@@ -52,4 +55,10 @@ class HeroActivityControllerTest {
                 .when()
                 .put("/api/v1/agencies/%s/heroes/%s/activity".formatted(AGENCY_ID, heroId));
     }
+    @jakarta.inject.Inject jakarta.persistence.EntityManager em;
+    private void setAway(String hero, boolean away) {
+        io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> em.createNativeQuery("update hero set activity=:activity where id=:id")
+            .setParameter("activity", away ? "ON_EXPEDITION" : "RESTING").setParameter("id", java.util.UUID.fromString(hero)).executeUpdate());
+    }
+
 }

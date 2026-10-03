@@ -12,6 +12,7 @@ export default defineConfig({
     'k3d-isolated-market-rate-limit.spec.js',
     'expedition.spec.js',
     'k3d-expedition-api.spec.js',
+    'quest.spec.js',
   ],
   fullyParallel: false,
   workers: 1,

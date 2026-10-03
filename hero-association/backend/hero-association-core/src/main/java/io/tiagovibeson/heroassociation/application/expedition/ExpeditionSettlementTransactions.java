@@ -45,7 +45,7 @@ public class ExpeditionSettlementTransactions {
             throw new IllegalArgumentException("Expedition settlement must be bounded JSON.");
         }
         JsonNode root = parse(body);
-        if (!root.isObject() || root.path("schemaVersion").asInt(-1) != 1) {
+        if (!root.isObject() || !root.path("schemaVersion").isIntegralNumber() || root.path("schemaVersion").asInt(-1) != 2) {
             throw new IllegalArgumentException("Unsupported Expedition settlement schema.");
         }
         UUID expeditionId = uuid(root.path("expeditionId"));
@@ -64,6 +64,13 @@ public class ExpeditionSettlementTransactions {
             throw new IllegalStateException("No matching Core Expedition reservation.");
         }
         if (!reservation.isAssetsSnapshotConfirmed()) throw new IllegalStateException("Admission loadout is not confirmed.");
+        var questReturn = questReturn(root);
+        if (reservation.getWorldPlanJson() == null) throw new IllegalStateException("Admission Map plan is not pinned.");
+        try {
+            var world = mapper.readValue(reservation.getWorldPlanJson(), io.tiagovibeson.heroassociation.contract.WorldContract.Plan.class);
+            if (!questReturn.mapId().equals(world.map().definitionId()) || questReturn.mapVersion() != world.map().version())
+                throw new IllegalArgumentException("Settlement Map differs from admission.");
+        } catch (IOException invalid) { throw new IllegalStateException("Pinned admission Map is invalid.", invalid); }
         if (reservation.getAppliedAt() != null) {
             if (digest.equals(reservation.getSettlementDigest())) {
                 return Result.DUPLICATE;
@@ -146,6 +153,20 @@ public class ExpeditionSettlementTransactions {
         process(workflow.contextJson.getBytes(java.nio.charset.StandardCharsets.UTF_8), workflow.expeditionId.toString(), "application/json", true);
     }
     public record Stage(UUID operationKey, boolean duplicate) { }
+
+    /** Validate every permanent-owner input before any remote Quest payout is requested. */
+    @Transactional(jakarta.transaction.Transactional.TxType.REQUIRES_NEW)
+    public io.tiagovibeson.heroassociation.contract.QuestContract.ReturnRequest validate(byte[] body, String messageId, String contentType) {
+        process(body, messageId, contentType, false);
+        return questReturn(parse(body));
+    }
+    private io.tiagovibeson.heroassociation.contract.QuestContract.ReturnRequest questReturn(JsonNode root) {
+        if (!root.path("mapVersion").isIntegralNumber() || !root.path("mapVersion").canConvertToInt() || !root.has("quest"))
+            throw new IllegalArgumentException("Settlement Map version and optional Quest pin are required.");
+        var progress = root.path("quest").isNull() ? null : mapper.convertValue(root.path("quest"), io.tiagovibeson.heroassociation.contract.QuestContract.Progress.class);
+        return new io.tiagovibeson.heroassociation.contract.QuestContract.ReturnRequest(uuid(root.path("expeditionId")), uuid(root.path("ownerManagerId")),
+                uuid(root.path("agencyId")), uuid(root.path("mapId")), root.path("mapVersion").intValue(), progress);
+    }
 
     private boolean sameBaseline(Hero hero, ExpeditionBaseline.Hero expected) {
         if (hero.getHeroClass() != expected.heroClass() || hero.getExperience() != expected.experience()

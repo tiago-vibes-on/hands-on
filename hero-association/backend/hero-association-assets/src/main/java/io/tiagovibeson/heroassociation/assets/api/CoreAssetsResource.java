@@ -16,7 +16,9 @@ public class CoreAssetsResource {
         authentication.core(key); return snapshots.read(request);
     }
     @POST @Path("/commands") public CoreAssetCommands.CommandReceipt execute(@HeaderParam("X-Hero-Association-Assets-Core-Service-Key") String key, CoreAssetCommands.Command request) {
-        authentication.core(key); return commands.execute(request);
+        authentication.core(key);
+        if (request != null && "QUEST_REWARD".equals(request.kind())) throw new ForbiddenException();
+        return commands.execute(request);
     }
     @GET @Path("/commands/{id}") public CoreAssetCommands.CommandReceipt receipt(@HeaderParam("X-Hero-Association-Assets-Core-Service-Key") String key, @PathParam("id") UUID id) {
         authentication.core(key); return commands.receipt(id);

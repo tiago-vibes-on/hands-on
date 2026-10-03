@@ -75,7 +75,7 @@ test('lets the agency leader edit a hero borrowing fee', async ({ page }) => {
   })
   await oakshieldCard.locator('.hero-card__fee-editor input').fill('7')
   await oakshieldCard.getByRole('button', { name: 'Save fee' }).click()
-  await expect(oakshieldCard).toContainText('7 gold per quest')
+  await expect(oakshieldCard).toContainText('7 gold future borrowing fee')
 
   const stateResponse = await page.request.get(`/api/v1/agencies/${dawnwatchAgencyId}/state`)
   expect(stateResponse.status()).toBe(200)

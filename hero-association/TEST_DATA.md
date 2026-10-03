@@ -45,9 +45,10 @@ tests still cover that path.
 | Silverkeep Guild | Manager 8 | Manager 9–10 | 3 |
 
 The seeded Broken Pass Party belongs to User 1. Its agency heroes remain
-assigned for the existing in-progress quest fixture. Available agency-owned
+assigned at the agency; no SQL Quest battle is seeded. Available agency-owned
 heroes can now join a Manager's prepared party without changing ownership.
-Borrowing is free at assignment and charged only when the quest starts.
+Assignment is free. The current Map path accepts personal Heroes only, so
+agency borrowing fees are future configuration.
 The seeded Troll used by the first Map field has 2,000 HP, 4 attack damage,
 and 100 base XP; this balances the three-creature starter encounter.
 Every other seeded Manager has a Main Party containing their personal Warrior,
@@ -68,12 +69,11 @@ Party at Manager onboarding.
 | All others | 0 | None | Default zero-balance case |
 
 Dawnwatch agency heroes Oakshield, Emberveil, and Hawkeye have borrowing fees
-of 0, 25, and 100 gold per quest respectively. A stale fee quote or
-insufficient personal gold rejects quest start without moving gold. Manager 3
+of 0, 25, and 100 gold as future borrowing configuration. Manager 3
 can place a personal Magic Crystal sell order; Manager 4 can place personal
-Iron Ingot sell orders or buy orders using their own wallet. Schema-changing local data is reset through a complete verified six-image
+Iron Ingot sell orders or buy orders using their own wallet. Schema-changing local data is reset through a complete verified eight-image
 archive and `pipeline/deploy-k3d.mjs --reset-game-db ARCHIVE`. It recreates Core,
-Assets and Market together; Keycloak users and Redis are retained. Ordinary
+Assets, Market, World and Quest together; Keycloak users and Redis are retained. Ordinary
 hybrid reloads validate the current schema and preserve shared data.
 
 The fixture IDs are deterministic UUIDv7 values. The Keycloak users are in
@@ -90,15 +90,24 @@ Direct local Maven test profiles can recreate the schema and load
 not reseed it. Keycloak imports its realm only when it does not already exist:
 editing the versioned JSON does **not** add users to the existing k3d realm.
 Use the disposable k3d E2E namespace to validate new fixtures without touching
-daily accounts. To change daily Core game data, use the explicit coupled Core/Assets/Market
+daily accounts. To change daily Core game data, use the explicit coupled Core/Assets/Market/World/Quest
 reset/reseed workflow in [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md); this
 does not reset Keycloak. Recreating the daily Keycloak realm requires a
 separately planned, backed-up k3d lab reset or an explicit account update.
 A normal Pod restart will not reimport the realm.
 
 Assets extraction preserves these owner IDs and balances. Core's seed now owns
-identity, memberships, Heroes, Parties, Quests and pinned combat snapshots.
+identity, memberships, Heroes and Parties. World owns Creature/Map definitions;
+Quest owns objective/reward definitions and assignments.
 `backend/hero-association-assets/src/main/resources/import.sql` owns wallets,
 item/rune catalogs, loose inventories, equipped slots and the standing Market
-reservations. Market's seed references those reservations. Reset all three
+reservations. Market's seed references those reservations. Reset all five
 matching development schemas together before Flyway; Keycloak users are retained.
+
+World seeds Troll Field plus the two-floor Broken Pass Cavern (Forest Wolves,
+then a Troll boss). Quest seeds four optional definitions: three Troll kills,
+four Forest Wolf kills in the cavern, the cavern boss, and cavern completion.
+No assignments are pre-accepted. Rewards are respectively 120, 85, 120 and
+160 gold; cavern completion also gives one Iron Ingot to the Manager. Creature
+seeds retain empty economic drops. Both catalogs and reward definitions are
+versioned; the run pins them at admission.

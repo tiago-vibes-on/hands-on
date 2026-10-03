@@ -56,6 +56,10 @@ class ExpeditionSettlementServiceTest {
         });
         io.tiagovibeson.heroassociation.testsupport.AssetsStubResource.reset();
     }
+    private ExpeditionBaseline reserve(UUID expedition, UUID manager, UUID agency, UUID party) {
+        admission.pinWorld(expedition, manager, agency, party, UUID.fromString("019c4c00-0006-7000-8000-000000000001"));
+        return admission.reserve(expedition, manager, agency, party);
+    }
     private Hero currentHero(Fixture fixture) { return io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().call(() -> em.find(Hero.class,fixture.hero().getId())); }
     private ExpeditionReservation reservation(UUID id) { return io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().call(() -> em.find(ExpeditionReservation.class,id)); }
     private long gold() { return io.tiagovibeson.heroassociation.testsupport.AssetsStubResource.gold(MANAGER_ID); }
@@ -65,8 +69,8 @@ class ExpeditionSettlementServiceTest {
     void appliesAggregateOnceAcrossDuplicateDelivery() throws Exception {
         Fixture fixture = fixture();
         UUID expeditionId = UuidV7.next();
-        ExpeditionBaseline baseline = admission.reserve(expeditionId, MANAGER_ID, AGENCY_ID, fixture.party().getId());
-        assertEquals(baseline, admission.reserve(expeditionId, MANAGER_ID, AGENCY_ID, fixture.party().getId()));
+        ExpeditionBaseline baseline = reserve(expeditionId, MANAGER_ID, AGENCY_ID, fixture.party().getId());
+        assertEquals(baseline, reserve(expeditionId, MANAGER_ID, AGENCY_ID, fixture.party().getId()));
         assertEquals(HeroActivity.ON_EXPEDITION, currentHero(fixture).getActivity());
         long goldBefore = gold();
         int itemBefore = itemQuantity();
@@ -92,7 +96,7 @@ class ExpeditionSettlementServiceTest {
         assertEquals(itemBefore + 2, itemQuantity());
         assertEquals(runeBefore + 1, runeQuantity());
         assertThrows(IllegalStateException.class,
-                () -> admission.reserve(expeditionId, MANAGER_ID, AGENCY_ID, fixture.party().getId()));
+                () -> reserve(expeditionId, MANAGER_ID, AGENCY_ID, fixture.party().getId()));
         assertThrows(IllegalArgumentException.class,
                 () -> settlement.apply(payload(expeditionId, fixture, 101, "1.500000", 2, 1),
                         expeditionId.toString(), "application/json"));
@@ -112,7 +116,7 @@ class ExpeditionSettlementServiceTest {
     void refusesSettlementWhenTheReservedHeroWasChangedInCore() throws Exception {
         Fixture fixture = fixture();
         UUID expeditionId = UuidV7.next();
-        admission.reserve(expeditionId, MANAGER_ID, AGENCY_ID, fixture.party().getId());
+        reserve(expeditionId, MANAGER_ID, AGENCY_ID, fixture.party().getId());
         long goldBefore = gold();
         io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> em.find(Hero.class,fixture.hero().getId()).addExperience(1));
         assertThrows(IllegalStateException.class,
@@ -128,7 +132,7 @@ class ExpeditionSettlementServiceTest {
         Fixture fixture = fixture();
         io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> em.find(Hero.class,fixture.hero().getId()).changeActivity(HeroActivity.RESTING));
         UUID expeditionId = UuidV7.next();
-        ExpeditionBaseline baseline = admission.reserve(expeditionId, MANAGER_ID, AGENCY_ID, fixture.party().getId());
+        ExpeditionBaseline baseline = reserve(expeditionId, MANAGER_ID, AGENCY_ID, fixture.party().getId());
         assertEquals(HeroActivity.RESTING, baseline.heroes().getFirst().previousActivity());
         assertEquals(currentHero(fixture).getName(), baseline.heroes().getFirst().name());
         assertEquals(2.0, baseline.heroes().getFirst().criticalDamageMultiplier());
@@ -141,14 +145,14 @@ class ExpeditionSettlementServiceTest {
         assertEquals(HeroActivity.RESTING, currentHero(fixture).getActivity());
         assertNotNull(reservation(expeditionId).getReleasedAt());
         assertThrows(IllegalStateException.class,
-                () -> admission.reserve(expeditionId, MANAGER_ID, AGENCY_ID, fixture.party().getId()));
+                () -> reserve(expeditionId, MANAGER_ID, AGENCY_ID, fixture.party().getId()));
     }
 
     @Test
     void refusesToReleaseAChangedReservedHero() {
         Fixture fixture = fixture();
         UUID expeditionId = UuidV7.next();
-        admission.reserve(expeditionId, MANAGER_ID, AGENCY_ID, fixture.party().getId());
+        reserve(expeditionId, MANAGER_ID, AGENCY_ID, fixture.party().getId());
         io.quarkus.narayana.jta.QuarkusTransaction.requiringNew().run(() -> em.find(Hero.class,fixture.hero().getId()).addExperience(1));
         assertThrows(IllegalStateException.class,
                 () -> admission.releaseProvenAbsent(expeditionId, MANAGER_ID));
@@ -175,7 +179,10 @@ class ExpeditionSettlementServiceTest {
     private byte[] payload(UUID expeditionId, Fixture fixture, long experience,
                            String melee, int items, int runes) throws Exception {
         ObjectNode root = mapper.createObjectNode();
-        root.put("schemaVersion", 1);
+        root.put("schemaVersion", 2);
+        root.put("mapId", "019c4c00-0006-7000-8000-000000000001");
+        root.put("mapVersion", 1);
+        root.putNull("quest");
         root.put("expeditionId", expeditionId.toString());
         root.put("ownerManagerId", MANAGER_ID.toString());
         root.put("agencyId", AGENCY_ID.toString());
@@ -206,7 +213,7 @@ class ExpeditionSettlementServiceTest {
         return assets.snapshot(java.util.List.of(new io.tiagovibeson.heroassociation.application.assets.AssetsClient.OwnerRequest("MANAGER",MANAGER_ID)),java.util.List.of()).owner(MANAGER_ID).runes().stream().filter(row -> row.rune().id().equals(RUNE_ID)).mapToInt(row -> row.quantity()).sum();
     }
     @Test void settlementWaitsForBothAssetCreditAndHeroProgressBeforeAcknowledgement() throws Exception {
-        Fixture fixture=fixture();UUID expeditionId=UuidV7.next();admission.reserve(expeditionId,MANAGER_ID,AGENCY_ID,fixture.party().getId());
+        Fixture fixture=fixture();UUID expeditionId=UuidV7.next();reserve(expeditionId,MANAGER_ID,AGENCY_ID,fixture.party().getId());
         byte[] body=payload(expeditionId,fixture,100,"1.500000",2,1);
         io.tiagovibeson.heroassociation.testsupport.AssetsStubResource.loseNextResponse=true;
         assertThrows(jakarta.ws.rs.WebApplicationException.class,()->settlement.apply(body,expeditionId.toString(),"application/json"));
@@ -217,9 +224,9 @@ class ExpeditionSettlementServiceTest {
     }
     @Test void admissionCanRecoverALostPinnedLoadoutResponseUsingTheSameReservation() {
         Fixture fixture=fixture();UUID expeditionId=UuidV7.next();io.tiagovibeson.heroassociation.testsupport.AssetsStubResource.loseNextResponse=true;
-        assertThrows(jakarta.ws.rs.WebApplicationException.class,()->admission.reserve(expeditionId,MANAGER_ID,AGENCY_ID,fixture.party().getId()));
+        assertThrows(jakarta.ws.rs.WebApplicationException.class,()->reserve(expeditionId,MANAGER_ID,AGENCY_ID,fixture.party().getId()));
         assertEquals(HeroActivity.ON_EXPEDITION,currentHero(fixture).getActivity());assertFalse(reservation(expeditionId).isAssetsSnapshotConfirmed());
-        admission.reserve(expeditionId,MANAGER_ID,AGENCY_ID,fixture.party().getId());assertTrue(reservation(expeditionId).isAssetsSnapshotConfirmed());assertEquals(1,io.tiagovibeson.heroassociation.testsupport.AssetsStubResource.appliedCommands);
+        reserve(expeditionId,MANAGER_ID,AGENCY_ID,fixture.party().getId());assertTrue(reservation(expeditionId).isAssetsSnapshotConfirmed());assertEquals(1,io.tiagovibeson.heroassociation.testsupport.AssetsStubResource.appliedCommands);
     }
     private record Fixture(Manager manager, Party party, Hero hero) { }
 }

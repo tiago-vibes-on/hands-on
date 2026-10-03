@@ -12,9 +12,17 @@ import io.tiagovibeson.heroassociation.domain.HeroSkill;
 /** One immutable, aggregate owner update for an entire Expedition. */
 public record SettlementEnvelope(int schemaVersion, UUID expeditionId, UUID ownerManagerId,
                                  UUID agencyId, UUID partyId, List<HeroFinal> heroes,
-                                 long gold, Map<UUID, Integer> items, Map<UUID, Integer> runes) {
+                                 long gold, Map<UUID, Integer> items, Map<UUID, Integer> runes,
+                                 UUID mapId, int mapVersion,
+                                 io.tiagovibeson.heroassociation.contract.QuestContract.Progress quest) {
 
-    public static final int SCHEMA_VERSION = 1;
+    public static final int SCHEMA_VERSION = 2;
+
+    public SettlementEnvelope(int schemaVersion, UUID expeditionId, UUID ownerManagerId, UUID agencyId, UUID partyId,
+                              List<HeroFinal> heroes, long gold, Map<UUID, Integer> items, Map<UUID, Integer> runes) {
+        this(schemaVersion, expeditionId, ownerManagerId, agencyId, partyId, heroes, gold, items, runes,
+                UUID.fromString("019c4c00-0006-7000-8000-000000000001"), 1, null);
+    }
 
     public SettlementEnvelope {
         if (schemaVersion != SCHEMA_VERSION || expeditionId == null || expeditionId.version() != 7
@@ -24,6 +32,8 @@ public record SettlementEnvelope(int schemaVersion, UUID expeditionId, UUID owne
             throw new IllegalArgumentException("Invalid Expedition settlement identity or gold.");
         }
         heroes = List.copyOf(heroes);
+        io.tiagovibeson.heroassociation.contract.WorldContract.id(mapId);
+        new io.tiagovibeson.heroassociation.contract.QuestContract.ReturnRequest(expeditionId, ownerManagerId, agencyId, mapId, mapVersion, quest);
         items = Map.copyOf(items);
         runes = Map.copyOf(runes);
         if (heroes.isEmpty() || heroes.stream().map(HeroFinal::heroId).distinct().count() != heroes.size()
@@ -39,7 +49,7 @@ public record SettlementEnvelope(int schemaVersion, UUID expeditionId, UUID owne
         }
         return new SettlementEnvelope(SCHEMA_VERSION, run.expeditionId(), run.ownerManagerId(),
                 run.agencyId(), run.partyId(), run.heroes().stream().map(HeroFinal::from).toList(),
-                run.carried().gold(), run.carried().items(), run.carried().runes());
+                run.carried().gold(), run.carried().items(), run.carried().runes(), run.mapId(), run.mapVersion(), run.quest());
     }
 
     public record HeroFinal(UUID heroId, HeroClass heroClass, long experience,

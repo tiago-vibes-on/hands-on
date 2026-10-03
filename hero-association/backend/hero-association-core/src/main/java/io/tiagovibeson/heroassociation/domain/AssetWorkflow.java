@@ -13,8 +13,6 @@ public class AssetWorkflow {
     @Column(nullable = false, updatable = false) public UUID managerId;
     @Column(updatable = false) public UUID agencyId;
     @Column(updatable = false) public UUID heroId;
-    @Column(updatable = false) public UUID questId;
-    @Column(updatable = false) public UUID partyId;
     @Column(updatable = false) public UUID expeditionId;
     @Column(nullable = false, updatable = false, columnDefinition = "text") public String requestJson;
     @Column(nullable = false, updatable = false, columnDefinition = "text") public String commandJson;

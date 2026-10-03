@@ -31,9 +31,28 @@ public record RunState(
         CreatureProfile creature,
         CarriedAssets carried,
         FightState fight,
-        Outcome lastOutcome) {
+        Outcome lastOutcome,
+        io.tiagovibeson.heroassociation.contract.WorldContract.Plan world,
+        io.tiagovibeson.heroassociation.contract.QuestContract.Progress quest) {
 
-    public static final int SCHEMA_VERSION = 1;
+    public static final int SCHEMA_VERSION = 2;
+
+    public RunState(int schemaVersion, long stateVersion, UUID expeditionId, UUID ownerManagerId, UUID agencyId,
+                    UUID partyId, UUID mapId, int mapVersion, int encounterIndex, Phase phase, boolean returnRequested,
+                    Instant startedAt, List<HeroState> heroes, CreatureProfile creature, CarriedAssets carried,
+                    FightState fight, Outcome lastOutcome, io.tiagovibeson.heroassociation.contract.WorldContract.Plan world) {
+        this(schemaVersion, stateVersion, expeditionId, ownerManagerId, agencyId, partyId, mapId, mapVersion,
+                encounterIndex, phase, returnRequested, startedAt, heroes, creature, carried, fight, lastOutcome, world, null);
+    }
+
+    public RunState(int schemaVersion, long stateVersion, UUID expeditionId, UUID ownerManagerId, UUID agencyId,
+                    UUID partyId, UUID mapId, int mapVersion, int encounterIndex, Phase phase, boolean returnRequested,
+                    Instant startedAt, List<HeroState> heroes, CreatureProfile creature, CarriedAssets carried,
+                    FightState fight, Outcome lastOutcome) {
+        this(schemaVersion, stateVersion, expeditionId, ownerManagerId, agencyId, partyId, mapId, mapVersion,
+                encounterIndex, phase, returnRequested, startedAt, heroes, creature, carried, fight, lastOutcome,
+                WorldPlans.field(mapId, mapVersion, creature));
+    }
 
     public RunState {
         if (schemaVersion != SCHEMA_VERSION || stateVersion < 1 || mapVersion < 1 || encounterIndex < 1) {
@@ -48,6 +67,13 @@ public record RunState(
         Objects.requireNonNull(startedAt);
         Objects.requireNonNull(creature);
         Objects.requireNonNull(carried);
+        Objects.requireNonNull(world);
+        if (!mapId.equals(world.map().definitionId()) || mapVersion != world.map().version())
+            throw new IllegalArgumentException("Run Map identity differs from its pinned plan.");
+        world.map().encounter(encounterIndex);
+        if (quest != null && (!expeditionId.equals(quest.pin().expeditionId()) || !ownerManagerId.equals(quest.pin().ownerManagerId())
+                || !agencyId.equals(quest.pin().agencyId()) || !mapId.equals(quest.pin().mapId()) || mapVersion != quest.pin().mapVersion()))
+            throw new IllegalArgumentException("Run Quest identity differs from admission.");
         heroes = List.copyOf(heroes);
         if (heroes.isEmpty() || heroes.stream().map(HeroState::heroId).distinct().count() != heroes.size()) {
             throw new IllegalArgumentException("An expedition needs distinct heroes.");
@@ -63,36 +89,42 @@ public record RunState(
         }
         return new RunState(schemaVersion, stateVersion + 1, expeditionId, ownerManagerId, agencyId,
                 partyId, mapId, mapVersion, encounterIndex, phase, true, startedAt, heroes,
-                creature, carried, fight, lastOutcome);
+                creature, carried, fight, lastOutcome, world, quest);
     }
 
     public RunState beginNext(FightState nextFight) {
         return new RunState(schemaVersion, stateVersion + 1, expeditionId, ownerManagerId, agencyId,
                 partyId, mapId, mapVersion, encounterIndex + 1, Phase.FIGHTING, false, startedAt,
-                heroes, creature, carried, nextFight, null);
+                heroes, WorldPlans.profile(world.creature(world.map().encounter(encounterIndex + 1).spawns().getFirst())), carried, nextFight, null, world, quest);
     }
 
     public RunState finish(List<HeroState> updatedHeroes, Outcome outcome) {
         Phase next = returnRequested ? Phase.SETTLEMENT_PENDING
-                : outcome.status() == CombatStatus.HERO_VICTORY ? Phase.AWAITING_CONTINUE : Phase.WIPED;
+                : outcome.status() == CombatStatus.HERO_VICTORY
+                    ? world.map().completedAfter(encounterIndex) ? Phase.DUNGEON_COMPLETED : Phase.AWAITING_CONTINUE
+                    : Phase.WIPED;
         return new RunState(schemaVersion, stateVersion + 1, expeditionId, ownerManagerId, agencyId,
                 partyId, mapId, mapVersion, encounterIndex, next, false, startedAt,
-                updatedHeroes, creature, carried, null, outcome);
+                updatedHeroes, creature, carried.plus(outcome.loot()), null, outcome, world,
+                quest == null ? null : quest.advance(outcome.kills(),
+                        outcome.status() == CombatStatus.HERO_VICTORY && world.map().encounter(encounterIndex).boss(),
+                        outcome.status() == CombatStatus.HERO_VICTORY && world.map().completedAfter(encounterIndex)));
     }
 
     public RunState returnBetweenFights() {
-        if (phase != Phase.AWAITING_CONTINUE && phase != Phase.WIPED) {
+        if (phase != Phase.AWAITING_CONTINUE && phase != Phase.WIPED && phase != Phase.DUNGEON_COMPLETED) {
             throw new IllegalStateException("Return must wait for the current fight.");
         }
         return new RunState(schemaVersion, stateVersion + 1, expeditionId, ownerManagerId, agencyId,
                 partyId, mapId, mapVersion, encounterIndex, Phase.SETTLEMENT_PENDING, false,
-                startedAt, heroes, creature, carried, null, lastOutcome);
+                startedAt, heroes, creature, carried, null, lastOutcome, world, quest);
     }
 
     public enum Phase {
         FIGHTING,
         AWAITING_CONTINUE,
         WIPED,
+        DUNGEON_COMPLETED,
         SETTLEMENT_PENDING
     }
 
@@ -197,18 +229,37 @@ public record RunState(
         public static CarriedAssets empty() {
             return new CarriedAssets(0, Map.of(), Map.of());
         }
+
+        public CarriedAssets plus(CarriedAssets reward) {
+            return new CarriedAssets(Math.addExact(gold, reward.gold()), merge(items, reward.items()), merge(runes, reward.runes()));
+        }
+        private static Map<UUID, Integer> merge(Map<UUID, Integer> first, Map<UUID, Integer> second) {
+            Map<UUID, Integer> result = new java.util.TreeMap<>(first);
+            second.forEach((id, amount) -> result.merge(id, amount, Math::addExact));
+            if (result.size() > 128) throw new IllegalArgumentException("Carried inventory has too many resource kinds.");
+            return result;
+        }
     }
 
     public record FightState(UUID fightId, Instant startedAt, long randomSeed,
                              String rulesetVersion, String rngVersion, BigDecimal xpRate,
                              BigDecimal skillRate, BigDecimal dropRate,
-                             CombatBattleSnapshot openingSnapshot) {
+                             CombatBattleSnapshot openingSnapshot,
+                             Map<String, io.tiagovibeson.heroassociation.contract.WorldContract.Creature> creatures) {
+        public FightState(UUID fightId, Instant startedAt, long randomSeed, String rulesetVersion, String rngVersion,
+                          BigDecimal xpRate, BigDecimal skillRate, BigDecimal dropRate, CombatBattleSnapshot openingSnapshot) {
+            this(fightId, startedAt, randomSeed, rulesetVersion, rngVersion, xpRate, skillRate, dropRate, openingSnapshot, Map.of());
+        }
         public FightState {
             Objects.requireNonNull(fightId);
             Objects.requireNonNull(startedAt);
             Objects.requireNonNull(rulesetVersion);
             Objects.requireNonNull(rngVersion);
             Objects.requireNonNull(openingSnapshot);
+            creatures = Map.copyOf(creatures);
+            if (!creatures.isEmpty() && !creatures.keySet().equals(openingSnapshot.creatures().stream()
+                    .map(io.tiagovibeson.heroassociation.domain.combat.CombatantSnapshot::id).collect(java.util.stream.Collectors.toSet())))
+                throw new IllegalArgumentException("Fight Creature versions do not match its combatants.");
             if (xpRate == null || skillRate == null || dropRate == null
                     || xpRate.signum() <= 0 || skillRate.signum() <= 0 || dropRate.signum() <= 0) {
                 throw new IllegalArgumentException("Pinned event rates must be positive.");
@@ -216,10 +267,18 @@ public record RunState(
         }
     }
 
-    public record Outcome(UUID fightId, CombatStatus status, long durationMilliseconds) {
+    public record Outcome(UUID fightId, CombatStatus status, long durationMilliseconds,
+                          Map<UUID, Integer> kills, CarriedAssets loot) {
+        public Outcome(UUID fightId, CombatStatus status, long durationMilliseconds) {
+            this(fightId, status, durationMilliseconds, Map.of(), CarriedAssets.empty());
+        }
         public Outcome {
             Objects.requireNonNull(fightId);
             Objects.requireNonNull(status);
+            kills = Map.copyOf(kills);
+            Objects.requireNonNull(loot);
+            if (kills.size() > 8 || kills.values().stream().anyMatch(count -> count == null || count < 0 || count > 8))
+                throw new IllegalArgumentException("Invalid encounter kill totals.");
             if (status == CombatStatus.IN_PROGRESS || durationMilliseconds < 0) {
                 throw new IllegalArgumentException("A fight outcome must be terminal.");
             }

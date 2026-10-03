@@ -1,8 +1,9 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - core-market-authorization.yaml
-  - assets-authorization.yaml
-  - core-mtls.yaml
-  - core-bff-authorization.yaml
-  - core-expedition-authorization.yaml
+- core-market-authorization.yaml
+- assets-authorization.yaml
+- core-mtls.yaml
+- core-bff-authorization.yaml
+- core-expedition-authorization.yaml
+- world-quest-authorization.yaml

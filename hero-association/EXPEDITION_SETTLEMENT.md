@@ -1,5 +1,11 @@
 # Expedition settlement handoff
 
+Current World/Quest cutover: [WORLD_QUEST_ARCHITECTURE.md](WORLD_QUEST_ARCHITECTURE.md)
+is authoritative for versioned Map admission, optional objectives and return
+rewards. Core's earlier Quest combat, borrowing payment and Creature cache
+workflows described below are retired. Return aggregates now use schema version
+2 with pinned Map metadata and nullable Quest progress.
+
 Status: implemented in the local six-service stack. The opt-in Map entry calls
 Core admission and accepts its pinned Hero baseline. Core owns Hero eligibility
 and progression; Assets owns loadouts and carried resource credit.
@@ -24,7 +30,8 @@ and progression; Assets owns loadouts and carried resource credit.
    broker confirmation in Redis. It retries until owner application is
    acknowledged. A broker confirmation is **not** an owner acknowledgment.
 4. Core validates the entire aggregate against the unchanged reservation
-   baseline before staging an asset workflow. Assets credits carried gold, items
+   baseline before confirming optional Quest progress and reward through Quest.
+   It then stages an asset workflow. Assets credits carried gold, items
    and runes atomically with a stable command receipt. Core validates that receipt,
    then applies Hero progression and stores the payload digest and `appliedAt`
    together with workflow completion in one Core transaction. Uncertain delivery

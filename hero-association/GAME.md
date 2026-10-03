@@ -240,97 +240,68 @@ meaningful without becoming excessively grindy.
 
 ## Maps and Expeditions
 
-A Map is a reusable location independent of any quest. The first planned
-types are `FIELD` and `DUNGEON`; cities can be added later. A field does not
-require floors. A dungeon owns its reusable floor or room layout. Maps may
-reference Creature types by ID, but Creature owns their stats. The first
-encounter can be a fixed Troll fight; procedural generation and travel wait.
+World owns immutable, versioned `FIELD` and `DUNGEON` definitions. Each Map
+contains ordered floors, layouts and encounters that reference exact Creature
+versions. A field repeats its encounters; a dungeon finishes after its final
+encounter. Troll Field and the two-floor Broken Pass Cavern are seeded. Cities,
+procedural generation and travel remain future work.
 
-Each Manager will have one persistent Party, initially containing their three
-personal starter heroes. The Party must retain at least one Hero. The Manager
-must belong to an agency to edit it or enter a Map; editing happens only while
-the Party is at the agency. The first Map run accepts personal heroes only.
-Agency-owned hero borrowing and its Map fee are deferred.
+Each Manager has a prepared Party and at most one active Expedition. New
+Managers start with three personal Heroes. A Party must retain at least one
+Hero; editing and entry require agency membership. Current Map entry accepts
+personal Heroes; agency borrowing and pricing remain deferred. Core persists
+Party membership and reserves Heroes, while Expedition owns the active run.
 
-Expedition owns the Party and at most one active Map run per Manager. A run has
-no time limit and pins its Map version. The Manager may return immediately
-between fights, or request return while fighting and leave after that fight.
-A party wipe ends the battle and stops new encounters but leaves the Party on
-the Map until the Manager explicitly chooses to return. A win leaves the Party
-waiting on the Map; only an explicit Continue command starts another fight.
-The combat-engine library resolves each fight inside Expedition. A Quest can
-later add optional objectives and rewards,
-but is never required to enter a Map. No Map or Expedition API exists yet;
-current Core quests still describe locations in text.
+Admission pins the complete World plan, Hero resources, Assets loadouts and any
+optional Quest assignment. Changing a catalog version affects later admissions.
+Admitted fights and Continue need no World lookup. A run has no time limit.
+Winning a field encounter leaves it waiting for Continue. Clearing a dungeon
+or wiping the Party prevents further encounters and waits for explicit Return.
+Return during a fight takes effect after that fight. Permanent changes settle
+through their owners before Heroes become available again.
 
 ## Quests
 
-The current Core flow requires a prepared Party to start a Quest and returns
-it after the Quest resolves. The future Map flow above does not require a Quest
-and does not automatically return a wiped Party.
+Quest owns optional objective definitions, Manager assignments, return receipts
+and reward recovery. Acceptance is independent of Party selection and starts no
+combat. A Manager can accept one assignment or cancel it at the agency. Both
+commands are free, and unavailable while away. A completed or cancelled
+assignment may be replaced with a fresh one.
 
-- The current Quest flow sends a Party of one or more heroes.
-- A future Quest may be location-independent, allow several eligible Maps,
-  or target a dungeon. It never owns a copy of Map layout. Quest tracks
-  optional objective progress; Expedition owns the Party and Map run.
-- A manager can prepare a party at the agency before choosing a quest. Its
-  members remain at the agency and keep training or resting until the quest
-  begins.
-- The first available quest is Lost Courier: find the missing courier in the
-  old forest. It requires one to two heroes, has an estimated duration of 30
-  minutes, and offers 85 gold. Starting it moves every selected party member
-  from their agency activity to the quest. The game records the start and
-  expected completion time and creates a combat snapshot with the party's
-  current resources and one creature for every required objective.
-- All heroes assigned to a quest belong to that quest's party and are
-  unavailable at the agency until the quest is complete. Other heroes remain
-  at the agency, where they are either training or resting before they can join
-  another party.
-- In the seeded Troll encounter, defeating every creature completes the quest;
-  defeating every hero fails it. Either outcome records a completion time,
-  releases the party, and returns its heroes to Training. Reward allocation,
-  stamina costs, and experience/skill losses on defeat are not yet applied.
-- Newly started quests use the latest seeded versioned Creature definition
-  and copy its stats into the combat snapshot. The canonical Troll has 2,000
-  health, 10 damage, a 1.6-second attack interval, 100 mana, and 10% critical
-  chance. Forest Wolf retains 120 health and no critical chance. Other values
-  remain provisional balancing data. New versions affect future battles,
-  not active ones.
-- Quest outcomes depend on the heroes' abilities and stamina.
-- A poorly matched or exhausted hero can fail a quest.
-- Quests can have different objectives: defeat a specified number of a
-  Creature (for example, 1,000 Trolls), defeat a particular boss, or complete
-  a named dungeon. They may require multiple encounters and time to finish;
-  winning one battle does not automatically complete every quest.
-- Only authoritative combat and quest outcomes advance an active party's
-  objective. The browser cannot report its own kills or dungeon completion.
-- Quest rewards can eventually include gold, chests, and items dropped by
-  creatures. Economic rewards and payout rules are deferred until the game
-  domains are separated; creature defeats can drive XP and skill tests now
-  without granting gold or items.
-- Under the planned reward model, items carried by the party belong to the
-  party's Manager, including drops collected by borrowed agency heroes.
-- Each defeated creature has a base XP value. The current provisional Troll
-  base is 100 XP; other provisional creatures also use 100 until balanced.
-  Each living party hero gets their own stamina-adjusted award from that same
-  full base, without dividing it by party size or damage dealt. A fallen hero
-  gets no XP from later kills. Heroes level up independently.
-- Valid attacks and mana spending advance skills even if the creature survives;
-  planned shield blocks will do the same. Only a creature defeat triggers XP.
-- The party will have a shared Capacity that determines how many resources it
-  can carry. Once economic rewards are implemented, items will be collected as
-  soon as creatures are defeated.
-- A defeated hero is not permanently lost and there is no death fee. It leaves
-  combat and returns to its owner's roster after the quest resolves. PvE defeat
-  removes a level-scaled share of total XP and each skill's cumulative points,
-  possibly lowering hero and skill levels. See the proposed formula in
-  [`PROGRESSION.md`](PROGRESSION.md). Return resources remain to be defined.
+Objectives count Creature kills, boss defeats or dungeon completion, with
+optional eligible Map restrictions. Entry without a Quest is allowed. An
+ineligible Map can be explored without advancing the assignment. Expedition
+pins the assignment and saved progress at entry, and derives new progress from
+server combat outcomes. Kills before a wipe still count. Return banks progress
+once; an incomplete assignment remains active for another run. Meeting the
+objective earns the pinned reward on return even after a later wipe.
+
+Assets pays gold, item or rune rewards once under the assignment ID. Unknown
+delivery retains the Quest and Expedition fences until receipt recovery after
+restart or outage. Cancellation pays nothing and resets no other game owner.
+
+Initial rewards are 120 gold for three Troll kills, 85 gold for four Forest
+Wolf kills in the cavern, 120 gold for its Troll boss, and 160 gold plus one
+Iron Ingot for clearing the cavern. Creature seeds retain empty economic drop
+tables. Drop evaluation uses a pinned table and deterministic random stream;
+balanced amounts, shared Capacity and the mixed-stamina loot rule remain future
+work. Carried loot belongs to the Party's Manager.
+
+The seeded Troll has 2,000 health, 4 damage, a 1.6-second attack interval,
+100 mana and 10% critical chance. Forest Wolf has 120 health, 10 damage and no
+critical chance. Both grant a provisional base of 100 XP. Each living Hero gets
+an individual stamina-adjusted award without dividing it by Party size or
+damage dealt. Fallen Heroes get no XP from later kills. Valid attacks and mana
+spending advance skills even without a kill. Heroes are not permanently lost
+and there is no death fee; further defeat penalties and return-resource rules
+remain separate design work in [PROGRESSION.md](PROGRESSION.md).
+
+See [the service contracts](WORLD_QUEST_ARCHITECTURE.md).
 
 ## Combat
 
-- Combat is automatic; managers prepare heroes before entering a Map in the
-  planned flow, or before starting a Quest in the current Core flow, rather
-  than directly controlling each attack.
+- Combat is automatic; Managers prepare Heroes before entering a Map.
+  The server resolves each attack through the shared combat-engine library.
 - Planned combat may also allow optional, timed manager interactions while
   the fight runs, such as using a consumable item to buff the party. These
   commands supplement automatic combat; they do not make basic attacks

@@ -5,6 +5,8 @@ WORKDIR /workspace
 COPY --chown=quarkus:quarkus mvnw ./mvnw
 COPY --chown=quarkus:quarkus .mvn .mvn
 COPY --chown=quarkus:quarkus pom.xml ./
+COPY --chown=quarkus:quarkus hero-association-world/pom.xml ./hero-association-world/pom.xml
+COPY --chown=quarkus:quarkus hero-association-quest/pom.xml ./hero-association-quest/pom.xml
 COPY --chown=quarkus:quarkus hero-association-bff/pom.xml ./hero-association-bff/pom.xml
 COPY --chown=quarkus:quarkus hero-association-expedition/pom.xml ./hero-association-expedition/pom.xml
 COPY --chown=quarkus:quarkus hero-association-market/pom.xml ./hero-association-market/pom.xml

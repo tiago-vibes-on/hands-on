@@ -1,12 +1,13 @@
 import { assetAttempts, pendingAssetOperation, finishAssetOperation } from './api/assets'
 import { marketAttempts, pendingPlacement, pendingCancellation, finishMarketAttempt, isMarketAttemptTerminal } from './api/market'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { addHeroToParty, ApiRequestError, fetchAssetOperation, beginLogin, beginRegistration, cancelMarketOrder, changeHeroActivity, createAgency, createFeedPost, createManager, createMarketOrder, createParty, equipHeroRune, fetchAccount, fetchAgencyState, fetchMarketOrders, fetchMarketPlacement, fetchMarketOrder, fetchRecruits, fetchSession, logout, recruitHero, recruitHeroForAgency, removeHeroFromParty, setHeroBorrowingFee, startQuest, transferGold, unequipHeroRune } from './api/agency'
+import { addHeroToParty, ApiRequestError, fetchAssetOperation, beginLogin, beginRegistration, cancelMarketOrder, changeHeroActivity, createAgency, createFeedPost, createManager, createMarketOrder, createParty, equipHeroRune, fetchAccount, fetchAgencyState, fetchMarketOrders, fetchMarketPlacement, fetchMarketOrder, fetchRecruits, fetchSession, logout, recruitHero, recruitHeroForAgency, removeHeroFromParty, setHeroBorrowingFee, transferGold, unequipHeroRune } from './api/agency'
 import { initialEquippedRunes, initialRunes } from './data/inventory'
 import { mageSpells } from './data/spells'
 import { pendingGoldTransfer } from './api/goldTransfer'
 import './App.css'
 
+const QuestPage = lazy(() => import('./quest/QuestPage'))
 const MapPage = lazy(() => import('./expedition/MapPage'))
 const expeditionEnabled = import.meta.env.VITE_EXPEDITION_ENABLED === 'true'
 
@@ -109,14 +110,6 @@ const heroColors = {
   ARCHER: 'teal',
 }
 
-const combatHeroColors = {
-  WARRIOR: 0xa67434,
-  MAGE: 0x835d9a,
-  ARCHER: 0x357c79,
-}
-
-const creatureColors = [0x7c6047, 0x8d6c4d, 0x74583e, 0x876747]
-
 const runeEffects = {
   CRITICAL_CHANCE: 'criticalChance',
   CRITICAL_DAMAGE: 'criticalDamage',
@@ -131,52 +124,6 @@ function mapRune(rune) {
   return {
     ...rune,
     effects: effect ? { [effect]: rune.effectValue } : undefined,
-  }
-}
-
-function mapCombatSnapshot(combat, heroesById) {
-  if (!combat) {
-    return null
-  }
-
-  const combatants = combat.combatants.map((combatant) => {
-    const hero = combatant.heroId ? heroesById.get(combatant.heroId) : null
-    return {
-      id: combatant.id,
-      name: combatant.name,
-      team: combatant.team,
-      role: hero?.role,
-      level: hero?.level,
-      magicLevel: combatant.magicLevel,
-      maxHealth: combatant.maxHealth,
-      currentHealth: combatant.currentHealth,
-      maxMana: combatant.maxMana,
-      currentMana: combatant.currentMana,
-      alive: combatant.currentHealth > 0,
-      color: hero ? combatHeroColors[combatant.heroClass] : creatureColors[combatant.formationIndex % creatureColors.length],
-      runes: hero?.runeSlots ?? [],
-      spells: hero?.spells,
-      nextSpellCastAt: {
-        'fire-ball': combatant.fireBallNextCastAt,
-        'lightning-rail': combatant.lightningRailNextCastAt,
-      },
-      formationIndex: combatant.formationIndex,
-    }
-  })
-  const status = {
-    IN_PROGRESS: 'in-progress',
-    HERO_VICTORY: 'victory',
-    CREATURE_VICTORY: 'defeat',
-  }[combat.status] ?? 'in-progress'
-
-  return {
-    version: combat.lastSynchronizedAt ?? `${combat.currentTimeMilliseconds}`,
-    status,
-    currentTimeMilliseconds: combat.currentTimeMilliseconds,
-    lastSynchronizedAt: combat.lastSynchronizedAt,
-    events: [...(combat.events ?? [])].sort((left, right) => left.sequenceNumber - right.sequenceNumber),
-    heroes: combatants.filter((combatant) => combatant.team === 'HEROES').sort((left, right) => left.formationIndex - right.formationIndex),
-    creatures: combatants.filter((combatant) => combatant.team === 'CREATURES').sort((left, right) => left.formationIndex - right.formationIndex),
   }
 }
 
@@ -202,24 +149,16 @@ function mapAgencyState(state) {
     stamina: hero.stamina,
     color: heroColors[hero.heroClass],
     partyId: hero.partyId,
-    status: ['ON_QUEST', 'ON_EXPEDITION'].includes(hero.activity) ? 'quest' : hero.ownerManagerId ? 'personal' : 'agency',
+    status: hero.activity === 'ON_EXPEDITION' ? 'expedition' : hero.ownerManagerId ? 'personal' : 'agency',
     activity: titleCase(hero.activity),
     spells: hero.heroClass === 'MAGE' && hero.magicLevel >= 10 ? mageSpells : undefined,
     runeSlots: hero.runeSlots.map((slot) => slot.rune ? mapRune(slot.rune) : null),
   }))
-  const heroesById = new Map(heroes.map((hero) => [hero.id, hero]))
-  const quests = state.quests.map((quest) => ({ ...quest, combat: mapCombatSnapshot(quest.combat, heroesById) }))
-  const questsById = new Map(quests.map((quest) => [quest.id, quest]))
-  const parties = state.parties.map((party) => {
-    const quest = party.quest ? questsById.get(party.quest.id) : null
-    return { ...party, quest: quest?.title, questState: quest }
-  })
-  const activeParties = parties.filter((party) => party.questState?.status === 'IN_PROGRESS')
+  const parties = state.parties
+  const activeParties = parties.filter((party) => heroes.some((hero) => hero.partyId === party.id && hero.status === 'expedition'))
   const activeParty = activeParties[0] ?? null
   const questHeroes = heroes.filter((hero) => hero.partyId === activeParty?.id)
-  const preparedParties = parties.filter((party) => !party.questState || party.questState.status !== 'IN_PROGRESS')
-  const availableQuests = state.quests.filter((quest) => quest.status === 'AVAILABLE')
-  const resolvedQuests = state.quests.filter((quest) => quest.status === 'COMPLETED' || quest.status === 'FAILED')
+  const preparedParties = parties.filter((party) => !activeParties.includes(party))
   const agencyHeroes = heroes.filter((hero) => hero.status === 'agency' && !hero.partyId)
   const runeInventory = state.runeInventory.map(({ rune, quantity }) => ({ ...mapRune(rune), quantity }))
   const personalRuneInventory = (state.personalRuneInventory ?? []).map(({ rune, quantity }) => ({ ...mapRune(rune), quantity }))
@@ -237,13 +176,10 @@ function mapAgencyState(state) {
     agency: state.agency,
     heroes,
     parties,
-    quests,
     activeParty,
     activeParties,
     questHeroes,
     preparedParties,
-    availableQuests,
-    resolvedQuests,
     agencyHeroes,
     runeInventory,
     personalRuneInventory,
@@ -254,7 +190,7 @@ function mapAgencyState(state) {
     metrics: [
       { label: 'Gold', value: state.agency.gold.toLocaleString(), detail: 'Agency funds', icon: 'G' },
       { label: 'Reputation', value: state.agency.reputation.toLocaleString(), detail: 'Agency standing', icon: 'R' },
-      { label: 'Active parties', value: `${activeParties.length}`, detail: activeParties.length === 1 ? '1 party on a quest' : `${activeParties.length} parties on quests`, icon: 'P' },
+      { label: 'Active parties', value: `${activeParties.length}`, detail: activeParties.length === 1 ? '1 party on an expedition' : `${activeParties.length} parties on expeditions`, icon: 'P' },
     ],
   }
 }
@@ -309,7 +245,7 @@ function StaminaBar({ value }) {
 
 function HeroLoadoutSlots({ hero, runes, onSelectRuneSlot }) {
   const runeSlots = runes[hero.alias] ?? Array(5).fill(null)
-  const isLoadoutLocked = hero.status === 'quest'
+  const isLoadoutLocked = hero.status === 'expedition'
 
   return (
     <div className="hero-loadout" role="group" aria-label={`${hero.alias} rune slots`}>
@@ -317,7 +253,7 @@ function HeroLoadoutSlots({ hero, runes, onSelectRuneSlot }) {
         <span>Runes</span>
         <div className="hero-loadout__slots" role="group" aria-label="Five rune slots">
           {runeSlots.map((rune, index) => (
-            <button className={`hero-loadout__slot hero-loadout__slot--rune ${rune ? 'hero-loadout__slot--equipped' : ''}`} type="button" key={index} disabled={isLoadoutLocked} title={isLoadoutLocked ? 'Rune loadout is locked while this hero is on a quest.' : undefined} aria-label={`${hero.alias} rune slot ${index + 1}${rune ? `: ${rune.name}` : ', empty'}${isLoadoutLocked ? '. Locked while on quest.' : ''}`} onClick={() => onSelectRuneSlot(hero, index)}>
+            <button className={`hero-loadout__slot hero-loadout__slot--rune ${rune ? 'hero-loadout__slot--equipped' : ''}`} type="button" key={index} disabled={isLoadoutLocked} title={isLoadoutLocked ? 'Rune loadout is locked while this hero is on an expedition.' : undefined} aria-label={`${hero.alias} rune slot ${index + 1}${rune ? `: ${rune.name}` : ', empty'}${isLoadoutLocked ? '. Locked while on expedition.' : ''}`} onClick={() => onSelectRuneSlot(hero, index)}>
               {rune?.symbol}
             </button>
           ))}
@@ -389,15 +325,13 @@ function PageHeading({ eyebrow, title, description, action }) {
 }
 
 function Overview({ agency, metrics, activeParty, questHeroes, onNavigate }) {
-  const quest = activeParty?.questState
-  const progress = quest ? (quest.creaturesDefeated / quest.creaturesRequired) * 100 : 0
 
   return (
     <>
       <PageHeading
         eyebrow={agency.name}
         title="Your agency is ready"
-        description={quest ? 'Prepare your heroes, send a party on a quest, and grow your name.' : 'Your new agency is ready for its first heroes.'}
+        description="Prepare your heroes, explore the Map, and take optional Quests."
         action={<button className="button button--primary" type="button" onClick={() => onNavigate('heroes')}>View heroes</button>}
       />
       <section className="metrics" aria-label="Agency summary">
@@ -412,26 +346,23 @@ function Overview({ agency, metrics, activeParty, questHeroes, onNavigate }) {
         {activeParty ? (
           <article className="panel active-quest">
             <div className="panel__header">
-              <div><p className="eyebrow">Active quest</p><h2>{activeParty.quest}</h2></div>
+              <div><p className="eyebrow">Active expedition</p><h2>{activeParty.name}</h2></div>
               <span className="status status--progress">In progress</span>
             </div>
-            <p className="active-quest__description">Defeat {quest.creaturesRequired} {quest.creatureName.toLowerCase()} to complete this quest.</p>
-            <div className="quest-progress">
-              <div className="quest-progress__labels"><span>Creatures defeated</span><strong>{quest.creaturesDefeated} / {quest.creaturesRequired}</strong></div>
-              <div className="quest-progress__track"><span style={{ width: `${progress}%` }} /></div>
-            </div>
+            <p className="active-quest__description">Your party is exploring. Open the Map to view the battle and return to the agency.</p>
+            <button className="button button--primary" onClick={() => onNavigate('map')}>Open Map</button>
             <div className="active-quest__footer">
-              <div className="party-avatars" aria-label="Quest party">
+              <div className="party-avatars" aria-label="Expedition party">
                 {questHeroes.map((hero) => <HeroAvatar hero={hero} size="small" key={hero.alias} />)}
                 <span>{questHeroes.length} heroes</span>
               </div>
-              <div className="quest-time"><span>Quest status</span><strong>In progress</strong></div>
+              <div className="quest-time"><span>Expedition status</span><strong>In progress</strong></div>
             </div>
           </article>
         ) : (
           <article className="panel active-quest empty-state">
-            <div className="panel__header"><div><p className="eyebrow">Next step</p><h2>No heroes yet</h2></div></div>
-            <p className="active-quest__description">Hero recruiting is the next gameplay feature. Your agency starts empty by design.</p>
+            <div className="panel__header"><div><p className="eyebrow">Next step</p><h2>Prepare your party</h2></div></div>
+            <p className="active-quest__description">Recruit personal heroes, create a party, and choose a destination on the Map.</p>
           </article>
         )}
         <article className="panel agency-level">
@@ -447,7 +378,7 @@ function Overview({ agency, metrics, activeParty, questHeroes, onNavigate }) {
       </section>
       <section className="panel roster-panel">
         <div className="panel__header">
-          <div><p className="eyebrow">{activeParty ? 'Active quest' : 'Agency roster'}</p><h2>{activeParty ? 'Party' : 'Heroes'}</h2></div>
+          <div><p className="eyebrow">{activeParty ? 'Active expedition' : 'Agency roster'}</p><h2>{activeParty ? 'Party' : 'Heroes'}</h2></div>
           <button className="text-button" type="button" onClick={() => onNavigate('heroes')}>View all</button>
         </div>
         <div className="hero-list">
@@ -476,7 +407,7 @@ function BorrowingFeeEditor({ hero, onSetBorrowingFee, isUpdatingBorrowingFee })
     }
   }
 
-  return <form className="hero-card__fee-editor" onSubmit={handleSubmit}><label><span>Fee per quest (gold)</span><input type="number" min="0" step="1" value={feeGold} disabled={isUpdatingBorrowingFee} onChange={(event) => setFeeGold(event.target.value)} /></label><button className="button button--secondary" type="submit" disabled={isUpdatingBorrowingFee || feeGold.trim() === '' || !Number.isSafeInteger(Number(feeGold)) || Number(feeGold) < 0 || Number(feeGold) === hero.borrowingFeeGold}>Save fee</button></form>
+  return <form className="hero-card__fee-editor" onSubmit={handleSubmit}><label><span>Future borrowing fee (gold)</span><input type="number" min="0" step="1" value={feeGold} disabled={isUpdatingBorrowingFee} onChange={(event) => setFeeGold(event.target.value)} /></label><button className="button button--secondary" type="submit" disabled={isUpdatingBorrowingFee || feeGold.trim() === '' || !Number.isSafeInteger(Number(feeGold)) || Number(feeGold) < 0 || Number(feeGold) === hero.borrowingFeeGold}>Save fee</button></form>
 }
 
 function HeroCards({ roster, runes, onSelectRuneSlot, onChangeActivity, isUpdatingActivity, preparedParties, onAddToParty, onRemoveFromParty, partyId, isUpdatingParty, onSetBorrowingFee, isUpdatingBorrowingFee }) {
@@ -484,9 +415,9 @@ function HeroCards({ roster, runes, onSelectRuneSlot, onChangeActivity, isUpdati
     <div className="hero-cards">
       {roster.map((hero) => (
         <article className="panel hero-card" key={hero.alias}>
-          <div className="hero-card__topline"><HeroAvatar hero={hero} size="large" /><span className={`status ${hero.status === 'quest' ? 'status--progress' : ''}`}>{hero.status === 'quest' ? 'On quest' : hero.activity}</span></div>
+          <div className="hero-card__topline"><HeroAvatar hero={hero} size="large" /><span className={`status ${hero.status === 'expedition' ? 'status--progress' : ''}`}>{hero.status === 'expedition' ? 'On expedition' : hero.activity}</span></div>
           <div><p className="eyebrow">{hero.role}</p><h2>{hero.alias}</h2><p className="hero-card__name">{hero.name} · Level {hero.level}</p>{hero.magicLevel && <p className="hero-card__magic-level">Magic Level {hero.magicLevel}</p>}<p className="hero-card__resources">Health {hero.currentHealth} / {hero.maxHealth} · Mana {hero.currentMana} / {hero.maxMana}</p><p className="hero-card__recovery">Recovery: +{hero.healthRecovery} health/s · +{hero.manaRecovery} mana/s</p></div>
-          {hero.status === 'quest' ? (
+          {hero.status === 'expedition' ? (
             <>
               <div className="hero-card__details"><span>Experience</span><strong>{experienceGain(hero.stamina)}% XP gain from creatures</strong></div>
               <StaminaBar value={hero.stamina} />
@@ -498,7 +429,7 @@ function HeroCards({ roster, runes, onSelectRuneSlot, onChangeActivity, isUpdati
               {partyId && <button className="text-button hero-card__party-action" type="button" disabled={isUpdatingParty} onClick={() => onRemoveFromParty(hero, partyId)}>Remove from party</button>}
             </div>
           ) : <div className="hero-card__agency-activity"><span>At the agency</span><strong>{hero.activity}</strong><p>{hero.activity === 'Training' ? 'Recovering health and mana at the base class rate.' : 'Recovering health and mana at 2× the base class rate. Stamina recovery is not implemented yet.'}</p><div className="hero-card__activity-actions" role="group" aria-label={`${hero.alias} agency activity`}><button className={`activity-button ${hero.activity === 'Training' ? 'activity-button--active' : ''}`} type="button" disabled={isUpdatingActivity || hero.activity === 'Training'} onClick={() => onChangeActivity(hero, 'TRAINING')}>Training</button><button className={`activity-button ${hero.activity === 'Resting' ? 'activity-button--active' : ''}`} type="button" disabled={isUpdatingActivity || hero.activity === 'Resting'} onClick={() => onChangeActivity(hero, 'RESTING')}>Resting</button></div>{partyId ? <button className="text-button hero-card__party-action" type="button" disabled={isUpdatingParty} onClick={() => onRemoveFromParty(hero, partyId)}>Remove from party</button> : preparedParties?.length > 0 && <label className="hero-card__party-select"><span>Assign to party</span><select defaultValue="" disabled={isUpdatingParty} onChange={(event) => { const selectedPartyId = event.target.value; event.target.value = ''; if (selectedPartyId) { onAddToParty(hero, selectedPartyId) } }}><option value="" disabled>Select a party</option>{preparedParties.map((party) => <option value={party.id} key={party.id}>{party.name}</option>)}</select></label>}</div>}
-          {!hero.ownerManagerId && <div className="hero-card__fee"><span>Borrowing fee</span><strong>{hero.borrowingFeeGold ?? 0} gold per quest</strong>{onSetBorrowingFee && <BorrowingFeeEditor key={`${hero.id}:${hero.borrowingFeeGold}`} hero={hero} onSetBorrowingFee={onSetBorrowingFee} isUpdatingBorrowingFee={isUpdatingBorrowingFee} />}</div>}
+          {!hero.ownerManagerId && <div className="hero-card__fee"><span>Borrowing fee</span><strong>{hero.borrowingFeeGold ?? 0} gold future borrowing fee</strong>{onSetBorrowingFee && <BorrowingFeeEditor key={`${hero.id}:${hero.borrowingFeeGold}`} hero={hero} onSetBorrowingFee={onSetBorrowingFee} isUpdatingBorrowingFee={isUpdatingBorrowingFee} />}</div>}
           {!hero.ownerManagerId && <HeroLoadoutSlots hero={hero} runes={runes} onSelectRuneSlot={onSelectRuneSlot} />}
         </article>
       ))}
@@ -511,9 +442,9 @@ function Heroes({ agency, manager, heroes, activeParties, agencyHeroes, prepared
 
   return (
     <>
-      <PageHeading eyebrow={agency.name} title="Heroes" description="Recruit heroes, prepare parties at the agency, then send one on a quest." action={<button className="button button--primary" type="button" disabled={heroes.length === 0} onClick={onStartCreateParty}>Create party</button>} />
+      <PageHeading eyebrow={agency.name} title="Heroes" description="Recruit heroes, prepare parties at the agency, then send one on an expedition." action={<button className="button button--primary" type="button" disabled={heroes.length === 0} onClick={onStartCreateParty}>Create party</button>} />
       <section className="hero-group personal-roster" aria-labelledby="personal-roster-heading">
-        <div className="hero-group__header"><div><p className="eyebrow">Your assets</p><h2 id="personal-roster-heading">Personal heroes</h2><p>These heroes belong to you, separately from the agency. Assign them to your prepared party to send them on a quest.</p></div><span className="status">{manager?.gold ?? 0} personal gold</span></div>
+        <div className="hero-group__header"><div><p className="eyebrow">Your assets</p><h2 id="personal-roster-heading">Personal heroes</h2><p>These heroes belong to you, separately from the agency. Assign them to your prepared party to send them on an expedition.</p></div><span className="status">{manager?.gold ?? 0} personal gold</span></div>
         <div className="personal-roster__list">
           {personalHeroes.map((hero) => (
             <article className="panel personal-roster__hero" key={hero.id}>
@@ -523,7 +454,7 @@ function Heroes({ agency, manager, heroes, activeParties, agencyHeroes, prepared
                 <h3>{hero.name}</h3>
                 <p>Health {hero.currentHealth} / {hero.maxHealth} · Mana {hero.currentMana} / {hero.maxMana} · Stamina {hero.stamina}%</p>
                 <small>Melee {hero.meleeLevel} · Distance {hero.distanceLevel} · Magic {hero.magicLevel} · Shield {hero.shieldLevel}</small>
-                {hero.status === 'quest' ? <span className="status status--progress">On quest</span>
+                {hero.status === 'expedition' ? <span className="status status--progress">On expedition</span>
                   : hero.partyId ? <button className="text-button personal-roster__action" type="button" disabled={isUpdatingParty} onClick={() => onRemoveFromParty(hero, hero.partyId)}>Remove from party</button>
                   : preparedParties.length > 0 ? <label className="personal-roster__assign"><span>Assign to party</span><select defaultValue="" disabled={isUpdatingParty} onChange={(event) => { const partyId = event.target.value; event.target.value = ''; if (partyId) { onAddToParty(hero, partyId) } }}><option value="" disabled>Select a party</option>{preparedParties.map((party) => <option key={party.id} value={party.id}>{party.name}</option>)}</select></label>
                   : <small className="personal-roster__hint">Create a party to assign this hero.</small>}
@@ -541,7 +472,7 @@ function Heroes({ agency, manager, heroes, activeParties, agencyHeroes, prepared
       </section>
       {activeParties.map((party) => {
         const partyHeroes = heroes.filter((hero) => hero.partyId === party.id)
-        return <section className="hero-group" aria-labelledby={`party-${party.id}`} key={party.id}><div className="hero-group__header party-card"><div><p className="eyebrow">Active party</p><h2 id={`party-${party.id}`}>{party.name}</h2><p>On quest: {party.quest} · {partyHeroes.length} heroes.</p></div><span className="status status--progress">{partyHeroes.length} in party</span></div><HeroCards roster={partyHeroes} runes={runes} onSelectRuneSlot={onSelectRuneSlot} /></section>
+        return <section className="hero-group" aria-labelledby={`party-${party.id}`} key={party.id}><div className="hero-group__header party-card"><div><p className="eyebrow">Active party</p><h2 id={`party-${party.id}`}>{party.name}</h2><p>On expedition: {party.name} · {partyHeroes.length} heroes.</p></div><span className="status status--progress">{partyHeroes.length} in party</span></div><HeroCards roster={partyHeroes} runes={runes} onSelectRuneSlot={onSelectRuneSlot} /></section>
       })}
       {isCreatingParty && <form className="party-form" onSubmit={onCreateParty}><label><span>Party name</span><input value={partyName} maxLength="100" autoFocus disabled={isUpdatingParty} onChange={(event) => onPartyNameChange(event.target.value)} placeholder="Forest Scouts" /></label><div className="party-form__actions"><button className="button button--primary" type="submit" disabled={isUpdatingParty}>{isUpdatingParty ? 'Creating…' : 'Create party'}</button><button className="text-button" type="button" disabled={isUpdatingParty} onClick={onCancelCreateParty}>Cancel</button></div></form>}
       {partyError && <p className="inline-error" role="alert">{partyError}</p>}
@@ -555,65 +486,6 @@ function Heroes({ agency, manager, heroes, activeParties, agencyHeroes, prepared
         <div className="hero-group__header"><div><p className="eyebrow">Agency roster</p><h2 id="agency-heroes-heading">Unassigned heroes</h2><p>Heroes can train or rest while they wait for a prepared party.</p></div><span className="status">{agencyHeroes.length} unassigned</span></div>
         {activityError && <p className="inline-error" role="alert">{activityError}</p>}
         <HeroCards roster={agencyHeroes} runes={runes} onSelectRuneSlot={onSelectRuneSlot} onChangeActivity={onChangeActivity} isUpdatingActivity={isUpdatingActivity} isUpdatingParty={isUpdatingParty} preparedParties={preparedParties} onAddToParty={onAddToParty} onSetBorrowingFee={agency.leaderId === manager?.id ? onSetBorrowingFee : undefined} isUpdatingBorrowingFee={isUpdatingBorrowingFee} />
-      </section>
-    </>
-  )
-}
-
-function AvailableQuestCard({ quest, preparedParties, heroes, managerGold, isStartingQuest, onStartQuest }) {
-  const [partyId, setPartyId] = useState('')
-  const hasPreparedParty = preparedParties.length > 0
-  const selectedParty = preparedParties.find((party) => party.id === partyId)
-  const borrowingFeeGold = (selectedParty?.heroIds ?? []).reduce((total, heroId) => {
-    const hero = heroes.find((candidate) => candidate.id === heroId)
-    return total + (hero && !hero.ownerManagerId ? hero.borrowingFeeGold ?? 0 : 0)
-  }, 0)
-  const canAfford = managerGold >= borrowingFeeGold
-
-  return (
-    <article className="panel quest-card">
-      <div className="quest-card__content">
-        <div><span className="status">Available</span><h2>{quest.title}</h2><p>{quest.description}</p></div>
-        <div className="quest-card__facts"><span className="quest-card__fact"><b>{quest.minimumHeroes}–{quest.maximumHeroes}</b><small>heroes</small></span><span className="quest-card__fact"><b>{quest.durationMinutes}m</b><small>estimated</small></span><span className="quest-card__fact"><b>{quest.goldReward}</b><small>gold reward</small></span></div>
-      </div>
-      <div className="quest-card__start">
-        {hasPreparedParty ? <><label><span>Prepared party</span><select value={partyId} disabled={isStartingQuest} onChange={(event) => setPartyId(event.target.value)}><option value="" disabled>Select a party</option>{preparedParties.map((party) => <option value={party.id} key={party.id}>{party.name} · {party.heroIds.length} heroes</option>)}</select></label>{selectedParty && <p className="quest-card__borrowing-fee">Agency hero fee: <strong>{borrowingFeeGold} gold</strong> at quest start · Your gold: {managerGold}{!canAfford && <span className="inline-error"> · Insufficient personal gold</span>}</p>}<button className="button button--primary" type="button" disabled={isStartingQuest || !partyId || !canAfford} onClick={() => onStartQuest(quest.id, partyId, borrowingFeeGold)}>{isStartingQuest ? 'Starting…' : 'Start quest'}</button></> : <p>Create a prepared party before starting this quest.</p>}
-      </div>
-    </article>
-  )
-}
-
-function ResolvedQuestCard({ quest }) {
-  const completed = quest.status === 'COMPLETED'
-
-  return (
-    <article className="panel quest-card quest-card--resolved">
-      <div className="quest-card__content">
-        <div><span className="status">{completed ? 'Completed' : 'Failed'}</span><h2>{quest.title}</h2><p>{completed ? 'The party completed this quest and returned to the agency.' : 'The party was defeated and returned to the agency to recover.'}</p></div>
-        <div className="quest-card__facts"><span className="quest-card__fact"><b>{quest.creaturesDefeated} / {quest.creaturesRequired}</b><small>defeated</small></span><span className="quest-card__fact"><b>{quest.goldReward}</b><small>gold pending</small></span></div>
-      </div>
-    </article>
-  )
-}
-
-function Quests({ activeParty, activeParties, availableQuests, resolvedQuests, preparedParties, heroes, managerGold, isStartingQuest, questError, onStartQuest }) {
-  const quest = activeParty?.questState
-  return (
-    <>
-      <PageHeading eyebrow="Quest board" title="Quests" description={expeditionEnabled ? "Quest objectives and progress live here. Visit Map to watch battles." : "Quest objectives and progress live here."} />
-      {questError && <p className="inline-error" role="alert">{questError}</p>}
-      <section className="quest-list">
-        {activeParty ? (
-          <article className="panel quest-card quest-card--active">
-            <div className="quest-card__content">
-              <div><span className="status status--progress">In progress</span><h2>{quest.title}</h2><p>{quest.description}</p><p>Objective: Defeat {quest.creaturesRequired} {quest.creatureName.toLowerCase()}.</p></div>
-              <div className="quest-card__facts"><span className="quest-card__fact"><b>{quest.creaturesDefeated} / {quest.creaturesRequired}</b><small>defeated</small></span><span className="quest-card__fact"><b>{activeParty.heroIds?.length ?? 0}</b><small>heroes</small></span><span className="quest-card__fact"><b>Active</b><small>quest</small></span></div>
-            </div>
-          </article>
-        ) : <article className="panel quest-card empty-state"><div><p className="eyebrow">No active quest</p><h2>No quest in progress</h2><p>{expeditionEnabled ? "Choose an available quest below, or visit Map to battle without a quest." : "Choose an available quest below."}</p></div></article>}
-        {activeParties.slice(1).map((party) => <article className="panel quest-card" key={party.id}><div className="quest-card__content"><div><span className="status status--progress">In progress</span><h2>{party.quest}</h2><p>{party.questState.description}</p></div><div className="quest-card__facts"><span className="quest-card__fact"><b>{party.questState.creaturesDefeated} / {party.questState.creaturesRequired}</b><small>defeated</small></span><span className="quest-card__fact"><b>{party.heroIds.length}</b><small>heroes</small></span></div></div></article>)}
-        {availableQuests.map((availableQuest) => <AvailableQuestCard quest={availableQuest} preparedParties={preparedParties} heroes={heroes} managerGold={managerGold} isStartingQuest={isStartingQuest} onStartQuest={onStartQuest} key={availableQuest.id} />)}
-        {resolvedQuests.map((resolvedQuest) => <ResolvedQuestCard quest={resolvedQuest} key={resolvedQuest.id} />)}
       </section>
     </>
   )
@@ -874,8 +746,6 @@ function App() {
   const [borrowingFeeError, setBorrowingFeeError] = useState(null)
   const [isCreatingParty, setIsCreatingParty] = useState(false)
   const [partyName, setPartyName] = useState('')
-  const [isStartingQuest, setIsStartingQuest] = useState(false)
-  const [questError, setQuestError] = useState(null)
   const [isPostingFeed, setIsPostingFeed] = useState(false)
   const [feedError, setFeedError] = useState(null)
   const [marketOrders, setMarketOrders] = useState(fallbackMarketOrders)
@@ -1177,7 +1047,7 @@ function App() {
     setPendingAssets(assetAttempts(managerId))
     setError(null)
     setBusy(true)
-    runeMutationInFlight.current = kind !== 'QUEST_START'
+    runeMutationInFlight.current = true
     try {
       const result = await submit({ ...payload, operationKey: attempt.operationKey })
       if (result.status === 'PENDING') {
@@ -1188,7 +1058,7 @@ function App() {
       setAccount(await fetchAccount())
       finishAssetOperation(managerId, attempt.operationKey)
       setAssetNotice(null)
-      if (kind !== 'QUEST_START') setSelectedSlot(null)
+      setSelectedSlot(null)
     } catch (error) {
       if (error.operation?.status === 'REJECTED' || [400, 403, 404].includes(error.status) && !error.operation?.operationKey) {
         finishAssetOperation(managerId, attempt.operationKey)
@@ -1364,16 +1234,6 @@ function App() {
     } finally {
       setIsUpdatingBorrowingFee(false)
     }
-  }
-
-  async function handleStartQuest(questId, partyId, expectedBorrowingFeeGold) {
-    if (apiStatus !== 'ready') {
-      setQuestError('Starting a quest requires the backend connection.')
-      return
-    }
-
-    await submitAssetOperation('QUEST_START', { agencyId: gameState.agency.id, questId, partyId, expectedBorrowingFeeGold },
-      startQuest, setQuestError, setIsStartingQuest)
   }
 
   async function handleCreateFeedPost(post) {
@@ -1593,7 +1453,7 @@ function App() {
   const pages = {
     overview: <Overview agency={gameState.agency} metrics={gameState.metrics} activeParty={gameState.activeParty} questHeroes={gameState.questHeroes} onNavigate={setActivePage} />,
     heroes: <Heroes agency={gameState.agency} manager={account?.manager} heroes={gameState.heroes} activeParties={gameState.activeParties} agencyHeroes={gameState.agencyHeroes} preparedParties={gameState.preparedParties.filter((party) => party.ownerManagerId === account?.manager?.id)} runes={equippedRunes} personalRuneInventory={personalRuneInventory} availableRecruits={availableRecruits} isRecruitingHero={isRecruitingHero} recruitmentError={recruitmentError} isUpdatingActivity={isUpdatingActivity} activityError={activityError} isUpdatingParty={isUpdatingParty} partyError={partyError} isCreatingParty={isCreatingParty} partyName={partyName} onPartyNameChange={setPartyName} onCreateParty={handleCreateParty} onCancelCreateParty={cancelCreatingParty} onStartCreateParty={startCreatingParty} onRecruitHero={handleRecruitHero} onSelectRuneSlot={(hero, slotIndex) => { if (isUpdatingLoadout) return; setLoadoutError(null); setSelectedSlot({ hero, slotIndex }) }} onChangeActivity={updateHeroActivity} onAddToParty={assignHeroToParty} onRemoveFromParty={removeHeroFromPreparedParty} onSetBorrowingFee={updateHeroBorrowingFee} isUpdatingBorrowingFee={isUpdatingBorrowingFee} borrowingFeeError={borrowingFeeError} />,
-    quests: <Quests activeParty={gameState.activeParty} activeParties={gameState.activeParties} availableQuests={gameState.availableQuests} resolvedQuests={gameState.resolvedQuests} preparedParties={gameState.preparedParties.filter((party) => party.ownerManagerId === account?.manager?.id)} heroes={gameState.heroes} managerGold={account?.manager?.gold ?? 0} isStartingQuest={isStartingQuest} questError={questError} onStartQuest={handleStartQuest} />,
+    quests: <Suspense fallback={<p role="status">Loading Quests…</p>}><QuestPage key={account?.manager?.id} managerId={account?.manager?.id} itemInventory={gameState.itemInventory} runeInventory={runeInventory} /></Suspense>,
     ...(expeditionEnabled ? { map: <Suspense fallback={<p role="status">Loading Map…</p>}><MapPage key={gameState.agency.id} agencyId={gameState.agency.id} managerId={account?.manager?.id} heroes={gameState.heroes} preparedParties={gameState.preparedParties} itemInventory={gameState.itemInventory} runeInventory={runeInventory} /></Suspense> } : {}),
     agency: <Agency agency={gameState.agency} manager={account?.manager} canTransferAgencyGold={account?.agencyMemberships?.some((membership) => membership.agencyId === gameState.agency.id && membership.role === 'LEADER')} upgrades={gameState.upgrades} runeInventory={runeInventory} itemInventory={gameState.itemInventory} isTransferringGold={isTransferringGold} transferError={transferError} transferNotice={transferNotice} onTransferGold={handleTransferGold} />,
     market: <Market agency={gameState.agency} manager={account?.manager} canTradeAgency={account?.agencyMemberships?.some((membership) => membership.agencyId === gameState.agency.id && membership.role === 'LEADER')} itemInventory={gameState.itemInventory} marketOrders={marketOrders} isSubmittingOrder={isSubmittingMarketOrder} marketError={marketError} pendingAttempts={pendingMarketAttempts} onCreateOrder={handleCreateMarketOrder} onCancelOrder={handleCancelMarketOrder} />,

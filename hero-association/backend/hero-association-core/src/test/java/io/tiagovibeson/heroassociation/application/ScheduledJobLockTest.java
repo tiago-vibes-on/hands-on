@@ -29,7 +29,6 @@ import org.junit.jupiter.api.Timeout;
 class ScheduledJobLockTest {
 
     private static final UUID RECOVERING_HERO_ID = UUID.fromString("019c4c00-0010-7000-8000-000000000004");
-    private static final UUID ACTIVE_COMBAT_ID = UUID.fromString("019c4c00-0050-7000-8000-000000000001");
 
     @Inject
     ScheduledJobLock scheduledJobLock;
@@ -37,8 +36,6 @@ class ScheduledJobLockTest {
     @Inject
     AgencyRecoveryScheduler agencyRecoveryScheduler;
 
-    @Inject
-    QuestCombatScheduler questCombatScheduler;
 
     @Inject
     HeroRepository heroRepository;
@@ -52,8 +49,6 @@ class ScheduledJobLockTest {
         for (Job job : Job.values()) {
             whileLocked(job, () -> {
                 assertFalse(QuarkusTransaction.requiringNew().call(() -> scheduledJobLock.tryAcquire(job)));
-                Job otherJob = job == Job.AGENCY_RECOVERY ? Job.QUEST_COMBAT : Job.AGENCY_RECOVERY;
-                assertTrue(QuarkusTransaction.requiringNew().call(() -> scheduledJobLock.tryAcquire(otherJob)));
             });
             assertTrue(QuarkusTransaction.requiringNew().call(() -> scheduledJobLock.tryAcquire(job)));
         }
@@ -103,42 +98,6 @@ class ScheduledJobLockTest {
         assertTrue(hero.getCurrentHealth() > 10);
         assertTrue(hero.getStaminaMilliseconds() > 100000);
         assertTrue(hero.getCurrentMana() > 10);
-    }
-
-    @Test
-    @TestTransaction
-    @Timeout(30)
-    void shouldSkipCombatWhenAnotherTransactionOwnsTheCombatJob() throws Exception {
-        entityManager.createNativeQuery("""
-                UPDATE quest_combat
-                SET current_time_milliseconds = 0,
-                    last_synchronized_at = :synchronizedAt
-                WHERE id = :combatId
-                """)
-                .setParameter("synchronizedAt", Timestamp.from(Instant.now().minusSeconds(2)))
-                .setParameter("combatId", ACTIVE_COMBAT_ID)
-                .executeUpdate();
-        entityManager.clear();
-
-        whileLocked(Job.QUEST_COMBAT, () -> {
-            questCombatScheduler.synchronizeActiveCombats();
-            assertEquals(0, combatTimeMilliseconds());
-        });
-
-        questCombatScheduler.synchronizeActiveCombats();
-        entityManager.flush();
-        assertTrue(combatTimeMilliseconds() > 0);
-    }
-
-    private long combatTimeMilliseconds() {
-        Number value = (Number) entityManager.createNativeQuery("""
-                SELECT current_time_milliseconds
-                FROM quest_combat
-                WHERE id = :combatId
-                """)
-                .setParameter("combatId", ACTIVE_COMBAT_ID)
-                .getSingleResult();
-        return value.longValue();
     }
 
     private void whileLocked(Job job, CheckedRunnable assertion) throws Exception {

@@ -3,7 +3,6 @@ package io.tiagovibeson.heroassociation.api.internal;
 import java.util.UUID;
 
 import io.tiagovibeson.heroassociation.application.expedition.ExpeditionBaseline;
-import io.tiagovibeson.heroassociation.domain.CreatureCombatProfile;
 
 /** Trusted Core baseline consumed server-to-server by Expedition. */
 public record ExpeditionAdmissionResponse(
@@ -14,4 +13,4 @@ public record ExpeditionAdmissionResponse(
         UUID mapId,
         int mapVersion,
         ExpeditionBaseline baseline,
-        CreatureCombatProfile creature) { }
+        io.tiagovibeson.heroassociation.contract.WorldContract.Plan world) { }

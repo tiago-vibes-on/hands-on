@@ -39,10 +39,10 @@ fi
 HERO_ASSOCIATION_K3D_KUBECONFIG="$kubeconfig" "$project_dir/deploy/k3d/require-full-k3d.sh"
 
 stage='k3d rollback regression tests'
-node --test "$script_dir/rollback-k3d.test.mjs" "$script_dir/core-bootstrap-job.test.mjs" "$script_dir/market-bootstrap-job.test.mjs" "$script_dir/assets-bootstrap-job.test.mjs"
+node --test "$script_dir/rollback-k3d.test.mjs" "$script_dir/core-bootstrap-job.test.mjs" "$script_dir/market-bootstrap-job.test.mjs" "$script_dir/assets-bootstrap-job.test.mjs" "$script_dir/world-bootstrap-job.test.mjs" "$script_dir/quest-bootstrap-job.test.mjs" "$script_dir/schema-reset.test.mjs"
 
 stage='build and archive'
-printf 'Building Core, BFF, Expedition, and frontend as %s\n' "$build_id"
+printf 'Building all eight services as %s\n' "$build_id"
 "$script_dir/build-local.sh" all "$build_id"
 
 stage='disposable k3d archive E2E'

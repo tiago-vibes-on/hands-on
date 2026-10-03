@@ -40,7 +40,9 @@ public class ExpeditionService {
                 entry.ownerManagerId(), entry.agencyId(), entry.partyId(), entry.mapId(),
                 entry.mapVersion(), 1, Phase.FIGHTING, false, now, entry.heroes(),
                 entry.creature(), RunState.CarriedAssets.empty(),
-                fightFactory.start(entry.heroes(), entry.creature(), now), null);
+                fightFactory.start(entry.heroes(), entry.world(), 1, now), null, entry.world(),
+                entry.quest() == null || entry.quest().assignment() == null ? null
+                        : new io.tiagovibeson.heroassociation.contract.QuestContract.Progress(entry.quest(), entry.quest().assignment().progress()));
         Result result = store.start(run, commandId, digest);
         if (result == Result.CREATED) {
             store.schedule(run, now);
@@ -75,7 +77,7 @@ public class ExpeditionService {
                 || current.returnRequested() || current.heroes().stream().noneMatch(hero -> hero.health() > 0)) {
             throw new RunConflictException("Expedition cannot continue from this version or phase.");
         }
-        RunState updated = current.beginNext(fightFactory.start(current.heroes(), current.creature(), Instant.now()));
+        RunState updated = current.beginNext(fightFactory.start(current.heroes(), current.world(), current.encounterIndex() + 1, Instant.now()));
         Result result = store.command(current, updated, commandId, digest);
         if (result == Result.UPDATED) {
             store.schedule(updated, updated.fight().startedAt());
@@ -102,7 +104,7 @@ public class ExpeditionService {
         }
         RunState updated = switch (current.phase()) {
             case FIGHTING -> current.requestReturn();
-            case AWAITING_CONTINUE, WIPED -> current.returnBetweenFights();
+            case AWAITING_CONTINUE, WIPED, DUNGEON_COMPLETED -> current.returnBetweenFights();
             case SETTLEMENT_PENDING -> throw new RunConflictException("Expedition is already returning.");
         };
         Result result = store.command(current, updated, commandId, digest);

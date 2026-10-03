@@ -1,5 +1,11 @@
 # Expedition run contract and Redis state
 
+Current World/Quest cutover: [WORLD_QUEST_ARCHITECTURE.md](WORLD_QUEST_ARCHITECTURE.md)
+is authoritative for versioned Map admission, optional objectives and return
+rewards. Core's earlier Quest combat, borrowing payment and Creature cache
+workflows described below are retired. Return aggregates now use schema version
+2 with pinned Map metadata and nullable Quest progress.
+
 Status: steps 1-6 of the [implementation plan](COMBAT_EXPEDITION_PLAN.md)
 are implemented; step 7 is in progress. The isolated local browser journey
 passes, but k3d validation and player-path cutover remain pending. Core exposes authenticated internal
@@ -7,7 +13,7 @@ admission and idempotent settlement. Expedition has a server-side Core client,
 entry coordinator, orphan fence, and owner-scoped HTTP commands. BFF routes
 those commands, but the Expedition player API is disabled by default. There
 is a feature-flagged frontend Map page, but no switched-over player path;
-Core Quest combat remains live. The BFF has a
+Core Quest combat is retired. The BFF has a
 disabled-by-default socket that validates session, exact Origin, and run
 ownership before sending a reconnect snapshot. A local scheduler sends changed
 visual snapshots to subscribed sockets from Expedition's private Redis-only
@@ -34,7 +40,7 @@ only that Manager's personal heroes, even if the current Core Party model also
 permits agency-owned heroes and multiple Parties. Party editing is allowed
 only at the agency, never during an active run. Map entry requires current
 agency membership, ownership of the selected Party, at least one living
-personal hero in it, and no live Core Quest or other use of those heroes.
+personal hero in it, and no active Expedition or asset workflow using those Heroes.
 Agency leadership does not grant access to another Manager's Party or run.
 The private service validates a token intended for Expedition and resolves
 `managerId` from the authenticated subject through a trusted Account mapping;
@@ -149,7 +155,7 @@ object serialization:
 
 | Field | Type and invariant |
 | --- | --- |
-| `schemaVersion` | Integer `1`; reject unknown versions rather than silently dropping fields. |
+| `schemaVersion` | Integer `2`; reject unknown versions rather than silently dropping fields. |
 | `stateVersion` | Positive, monotonically increasing integer for atomic compare-and-set. |
 | `expeditionId`, `ownerManagerId`, `agencyId`, `partyId` | UUIDv7 strings; immutable for the run. |
 | `map` | Pinned Map ID, version, kind (`FIELD` or `DUNGEON`), floor and encounter position. A provisional seeded field may supply the first Troll. |

@@ -54,7 +54,7 @@ KUBECONFIG="$PWD/.kubeconfig" kubectl -n hero-association get deploy,svc,httprou
 ```
 
 Starting an existing cluster does not rebuild images or reset data. After
-first setup, all six application Deployments should be ready. To pause the
+first setup, all eight application Deployments should be ready. To pause the
 whole environment, restore any hybrid services first, then run
 `k3d cluster stop hero-association`; this keeps the cluster data. The `status`
 command reads only the isolated k3d context; it does not change another
@@ -141,7 +141,7 @@ npm run test:market:k6
 The Expedition and Map tests change the seeded test Managers' game progress.
 The market k6 test sends intentionally incomplete orders; HTTP 400 from Market
 only means Envoy allowed the request, while HTTP 429 means the per-user limit
-was enforced. The full candidate gate now runs an exact six-image archive
+was enforced. The full candidate gate now runs an exact eight-image archive
 in a disposable k3d namespace, including browser, session, Redis, and k6
 checks. See [K3D_ISOLATION.md](e2e/K3D_ISOLATION.md); the seeded-user smoke
 commands above are not a substitute for that isolated gate.
@@ -150,3 +150,21 @@ Jenkins builds and deploys are explicit separate actions; a Git push alone
 does not promote an image. See the [Jenkins](ci/jenkins/README.md) and
 [pipeline](pipeline/README.md) runbooks for candidate verification and
 promotion. Use full k3d mode for final promotion, not a hybrid bridge.
+
+## World and Quest cutover
+
+World (`8086`, dev `17086`) and Quest (`8087`, dev `17087`) have separate
+PostgreSQL databases and credentials. Core's Creature Redis cache and SQL Quest
+combat are retired. `hybrid.sh run world` and `hybrid.sh run quest` use their
+own database ports (`15436`, `15437`) and validate current schemas.
+
+Build `pipeline/build-local.sh all BUILD_ID`, verify the eight-image archive
+with `deploy/k3d/test-isolated-stack.sh ARCHIVE`, stage new owners once with
+`deploy/k3d/stage-world-quest.sh ARCHIVE`, restore the frontend to full k3d mode,
+and promote `node pipeline/deploy-k3d.mjs --reset-game-db ARCHIVE`. The reset
+recreates all five game schemas after draining writers and checking that runs
+and Core/Quest/Market recovery are finished. It preserves Keycloak and the
+session/run Redis stores. The gate includes pinned dungeon continuation during
+World outage and Quest reward recovery after Quest/Core restart and Assets outage.
+After promotion, `hybrid.sh run frontend` restores hot reload through the gateway.
+See [World and Quest contracts](WORLD_QUEST_ARCHITECTURE.md).

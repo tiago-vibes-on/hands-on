@@ -1,7 +1,7 @@
 # k3d-backed local development
 
 This cluster is the active local development environment. Shared infrastructure and
-Envoy Gateway stay in k3d; Core, BFF, Expedition, Market, Assets, and frontend can each run
+Envoy Gateway stay in k3d; Core, BFF, Expedition, Market, Assets, World, Quest, and frontend can each run
 either in k3d or on WSL with hot reload. See the
 [local development guide](../../LOCAL_DEVELOPMENT.md) for switching and
 recovery. The versioned cluster and Istio control-plane configurations are
@@ -248,15 +248,15 @@ default; see the backend README for opt-in instructions.
 
 Hot reload uses this same cluster. Follow the
 [local development guide](../../LOCAL_DEVELOPMENT.md) for the reversible
-Core, BFF, Expedition, Market, Assets, and Vite switches. To test and create production-style
+Core, BFF, Expedition, Market, Assets, World, Quest, and Vite switches. To test and create production-style
 build artifacts locally, run the service-specific Maven or npm checks without
 switching the browser gateway. Docker is required for Testcontainers checks.
 
 ## Promote a verified archive
 
-For independent Core, BFF, Expedition, Market, Assets or frontend updates, use the eighteen jobs in the
+For independent Core, BFF, Expedition, Market, Assets, World, Quest or frontend updates, use the twenty-four jobs in the
 [local Jenkins runbook](../../ci/jenkins/README.md). A service build verifies
-its candidate together with the other five images currently running here; its
+its candidate together with the other seven images currently running here; its
 separate deploy job promotes only that service and rejects a changed baseline.
 The manual commands below remain the complete-stack archive workflow.
 
@@ -271,7 +271,7 @@ have passed, deploy those exact JVM and frontend images without rebuilding:
 ```bash
 cd ../../pipeline
 node deploy-k3d.mjs artifacts/<build-id>/all
-# For a deliberate coupled Core/Assets/Market schema and seed reset:
+# For a deliberate coupled Core/Assets/Market/World/Quest schema and seed reset:
 node deploy-k3d.mjs --reset-game-db artifacts/<build-id>/all
 ```
 
@@ -280,7 +280,7 @@ and the running k3d cluster available. The command uses only
 `deploy/k3d/.kubeconfig`, requires context `k3d-hero-association`, and
 uses the cached `.tools/k3d` or `K3D_BIN`. It checks the archive checksum,
 manifest image IDs, and matching `result: passed` k3d E2E record before loading
-images into local Docker or importing them into k3d. It updates the six
+images into local Docker or importing them into k3d. It updates the eight
 application Deployment image fields,
 waits for each rollout, and compares every running application Pod's image ID
 with the verified archive's platform image before running `npm run test:k3d`
@@ -288,11 +288,11 @@ and `npm run test:market:k6`. If rollout or either suite fails, it restores the
 previous image references and reports any rollback failure. The default
 command does not reset Core or Keycloak databases, alter HPAs or the Gateway,
 or touch the candidate E2E namespace. The explicit `--reset-game-db` command
-requires a complete E2E-verified archive. It verifies all three database identities,
+requires a complete E2E-verified archive. It verifies all five database identities,
 stops the application services and HPAs, and audits unfinished Expeditions and
-Core/Market workflows before recreating matching Core, Assets and Market seeds.
-It resumes all six archived applications, restores HPAs, and runs the usual
-Pod-image, browser, Expedition, Map and k6 gates. `--reset-core-db` remains an alias.
+Core/Market/Quest workflows before recreating matching Core, Assets, Market, World and Quest seeds.
+It resumes all eight archived applications, restores HPAs, and runs the usual
+Pod-image, browser, Expedition, Map, Quest dungeon and k6 gates. `--reset-core-db` remains an alias.
 Keycloak and Redis are preserved. A reset cannot be undone by switching to old images:
 if any later gate fails, promotion reports failure without automatic image
 rollback. Inspect the Job and Pods before retrying. Both suites create temporary login sessions in the lab;
@@ -327,7 +327,7 @@ node deploy-k3d.mjs --verify-only artifacts/<build-id>/all
 ```
 
 This read-only audit requires the same passing archive E2E record and checks
-the Deployment references and every running Core, BFF, Expedition, Market, Assets, and frontend Pod image
+the Deployment references and every running Core, BFF, Expedition, Market, Assets, World, Quest, and frontend Pod image
 digest against the archive. It does not rerun browser or k6 tests.
 
 The direct-build commands below still use fixed `:k3d` tags. Reapplying
@@ -640,13 +640,11 @@ the namespace and database PVCs, so it would remove more than the backend
 Pods and could discard all lab data. The generated credentials in `secrets/`
 are kept on disk unless you intentionally remove them.
 
-Market and Assets are included in the backend stack, each with its own PostgreSQL
-instance, account and credential secret. Their hybrid commands forward their
-own database and private service dependencies and validate the current schema.
-Initial Assets cutover uses a verified full six-image archive: run
-`stage-assets.sh <archive-directory>`, then
-`pipeline/deploy-k3d.mjs --reset-game-db <archive-directory>` from the project
-root. The coupled reset recreates Core, Assets and Market with application
-writers stopped and no pending operations. Their deterministic seeds share
-owner IDs and Market reservation keys. `--reset-core-db` remains an alias.
-Keycloak users are retained.
+Market, Assets, World and Quest each own a PostgreSQL database, role and
+credential secret. Their hybrid commands forward their own database and
+private dependencies and preserve the current schema. To introduce World and
+Quest into the existing lab, run `stage-world-quest.sh <archive-directory>` with
+a verified full eight-image archive, restore full k3d mode, then promote the
+same archive with `node pipeline/deploy-k3d.mjs --reset-game-db ARCHIVE` from
+`hero-association`. This resets all five game schemas after auditing active
+runs and unresolved workflows. See [the pipeline guide](../../pipeline/README.md).

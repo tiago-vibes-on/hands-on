@@ -55,6 +55,7 @@ public class FightResolver {
         }
         Set<String> creatureIds = fight.openingSnapshot().creatures().stream()
                 .map(CombatantSnapshot::id).collect(java.util.stream.Collectors.toSet());
+        Set<String> defeated = new java.util.LinkedHashSet<>();
         long processedAt = 0;
         int eventCount = 0;
         long terminalAt = -1;
@@ -82,11 +83,13 @@ public class FightResolver {
                     if (!hit.defeated()) {
                         continue;
                     }
-                    if (creatureIds.contains(hit.targetId())) {
+                    if (creatureIds.contains(hit.targetId()) && defeated.add(hit.targetId())) {
+                        var definition = fight.creatures().get(hit.targetId());
+                        int baseExperience = definition == null ? run.creature().baseExperience() : definition.baseExperience();
                         for (MutableHero hero : heroes.values()) {
                             if (hero.alive) {
                                 hero.experience = Math.addExact(hero.experience,
-                                        experienceAward(run.creature().baseExperience(), hero.stamina, fight.xpRate()));
+                                        experienceAward(baseExperience, hero.stamina, fight.xpRate()));
                             }
                         }
                     } else {
@@ -127,8 +130,26 @@ public class FightResolver {
                     resources.currentMana(), progress.stamina, previous.runeIds(),
                     previous.criticalChance(), previous.criticalDamageMultiplier()));
         }
+        Map<java.util.UUID, Integer> kills = new java.util.TreeMap<>();
+        long gold = 0;
+        Map<java.util.UUID, Integer> items = new java.util.TreeMap<>();
+        Map<java.util.UUID, Integer> runes = new java.util.TreeMap<>();
+        Random dropRandom = new Random(fight.randomSeed() ^ 0x776f726c642d7631L);
+        for (String id : defeated) {
+            var definition = fight.creatures().get(id);
+            if (definition == null) {
+                kills.merge(run.creature().definitionId(), 1, Math::addExact);
+                continue;
+            }
+            kills.merge(definition.definitionId(), 1, Math::addExact);
+            gold = Math.addExact(gold, BigDecimal.valueOf(definition.goldDrop()).multiply(fight.dropRate()).setScale(0, RoundingMode.DOWN).longValueExact());
+            for (var drop : definition.drops()) {
+                double chance = Math.min(1, drop.chance() * fight.dropRate().doubleValue());
+                if (dropRandom.nextDouble() < chance) ("ITEM".equals(drop.resourceType()) ? items : runes).merge(drop.resourceId(), drop.quantity(), Math::addExact);
+            }
+        }
         return new FightTimeline(fight.fightId(),
-                new Outcome(fight.fightId(), battle.getStatus(), terminalAt), List.copyOf(updated), windows);
+                new Outcome(fight.fightId(), battle.getStatus(), terminalAt, kills, new RunState.CarriedAssets(gold, items, runes)), List.copyOf(updated), windows);
     }
 
     static long experienceAward(int baseExperience, long stamina, BigDecimal xpRate) {

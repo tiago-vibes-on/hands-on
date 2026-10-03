@@ -11,6 +11,7 @@
 
     <modules>
         <module>combat-engine</module>
+        <module>game-contracts</module>
     </modules>
 
     <properties>

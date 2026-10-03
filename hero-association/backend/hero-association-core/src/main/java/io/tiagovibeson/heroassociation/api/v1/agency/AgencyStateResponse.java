@@ -18,17 +18,11 @@ import io.tiagovibeson.heroassociation.domain.HeroSkill;
 import io.tiagovibeson.heroassociation.domain.Item;
 import io.tiagovibeson.heroassociation.domain.ManagerRune;
 import io.tiagovibeson.heroassociation.domain.Party;
-import io.tiagovibeson.heroassociation.domain.Quest;
-import io.tiagovibeson.heroassociation.domain.QuestCombat;
-import io.tiagovibeson.heroassociation.domain.QuestCombatant;
-import io.tiagovibeson.heroassociation.domain.QuestCombatEvent;
-import io.tiagovibeson.heroassociation.domain.QuestCombatHit;
 import io.tiagovibeson.heroassociation.domain.Rune;
 
 public record AgencyStateResponse(
         AgencyResponse agency,
         List<PartyResponse> parties,
-        List<QuestResponse> quests,
         List<HeroResponse> heroes,
         List<HeroResponse> personalHeroes,
         List<InventoryRuneResponse> runeInventory,
@@ -41,7 +35,6 @@ public record AgencyStateResponse(
             List<Hero> heroes,
             List<Hero> personalHeroes,
             List<Party> parties,
-            List<Quest> quests,
             List<AgencyRune> runeInventory,
             List<ManagerRune> personalRuneInventory,
             List<AgencyItem> itemInventory,
@@ -55,7 +48,6 @@ public record AgencyStateResponse(
         return new AgencyStateResponse(
                 AgencyResponse.from(agency),
                 parties.stream().map(party -> PartyResponse.from(party, heroIdsByParty.getOrDefault(party.getId(), List.of()))).toList(),
-                quests.stream().map(QuestResponse::from).toList(),
                 heroes.stream().map(HeroResponse::from).toList(),
                 personalHeroes.stream().map(HeroResponse::from).toList(),
                 runeInventory.stream().map(InventoryRuneResponse::from).toList(),
@@ -100,164 +92,12 @@ public record AgencyStateResponse(
             int intelligence) {
     }
 
-    public record PartyResponse(UUID id, String name, UUID ownerManagerId, QuestResponse quest, List<UUID> heroIds) {
+    public record PartyResponse(UUID id, String name, UUID ownerManagerId, List<UUID> heroIds) {
 
         private static PartyResponse from(Party party, List<UUID> heroIds) {
             return new PartyResponse(
                     party.getId(), party.getName(), party.getOwnerManager().getId(),
-                    QuestResponse.from(party.getQuest()), heroIds);
-        }
-    }
-
-    public record QuestResponse(
-            UUID id,
-            String title,
-            String description,
-            String status,
-            String creatureName,
-            int creaturesDefeated,
-            int creaturesRequired,
-            int minimumHeroes,
-            int maximumHeroes,
-            int durationMinutes,
-            long goldReward,
-            Instant startedAt,
-            Instant expectedCompletionAt,
-            Instant finishedAt,
-            UUID partyId,
-            QuestCombatResponse combat) {
-
-        private static QuestResponse from(Quest quest) {
-            if (quest == null) {
-                return null;
-            }
-
-            return new QuestResponse(
-                    quest.getId(),
-                    quest.getTitle(),
-                    quest.getDescription(),
-                    quest.getStatus().name(),
-                    quest.getCreatureName(),
-                    quest.getCreaturesDefeated(),
-                    quest.getCreaturesRequired(),
-                    quest.getMinimumHeroes(),
-                    quest.getMaximumHeroes(),
-                    quest.getDurationMinutes(),
-                    quest.getGoldReward(),
-                    quest.getStartedAt(),
-                    quest.getExpectedCompletionAt(),
-                    quest.getFinishedAt(),
-                    quest.getParty() == null ? null : quest.getParty().getId(),
-                    QuestCombatResponse.from(quest.getCombat()));
-        }
-    }
-
-    public record QuestCombatResponse(
-            String status,
-            long currentTimeMilliseconds,
-            long nextRecoveryAt,
-            Instant lastSynchronizedAt,
-            List<CombatantResponse> combatants,
-            List<CombatEventResponse> events) {
-
-        private static QuestCombatResponse from(QuestCombat combat) {
-            if (combat == null) {
-                return null;
-            }
-            return new QuestCombatResponse(
-                    combat.getStatus().name(),
-                    combat.getCurrentTimeMilliseconds(),
-                    combat.getNextRecoveryAt(),
-                    combat.getLastSynchronizedAt(),
-                    combat.getCombatants().stream().map(CombatantResponse::from).toList(),
-                    combat.getEvents().stream().map(CombatEventResponse::from).toList());
-        }
-    }
-
-    public record CombatEventResponse(
-            UUID id,
-            long sequenceNumber,
-            long occurredAtMilliseconds,
-            String action,
-            UUID actorId,
-            int manaSpent,
-            int healthRecovered,
-            int manaRecovered,
-            List<CombatHitResponse> hits) {
-
-        private static CombatEventResponse from(QuestCombatEvent event) {
-            return new CombatEventResponse(
-                    event.getId(),
-                    event.getSequenceNumber(),
-                    event.getOccurredAtMilliseconds(),
-                    event.getAction().name(),
-                    event.getActor().getId(),
-                    event.getManaSpent(),
-                    event.getHealthRecovered(),
-                    event.getManaRecovered(),
-                    event.getHits().stream().map(CombatHitResponse::from).toList());
-        }
-    }
-
-    public record CombatHitResponse(
-            UUID targetId,
-            int damage,
-            boolean critical,
-            boolean defeated) {
-
-        private static CombatHitResponse from(QuestCombatHit hit) {
-            return new CombatHitResponse(
-                    hit.getTarget().getId(),
-                    hit.getDamage(),
-                    hit.isCritical(),
-                    hit.isDefeated());
-        }
-    }
-
-    public record CombatantResponse(
-            UUID id,
-            UUID heroId,
-            String team,
-            int formationIndex,
-            String name,
-            String heroClass,
-            int magicLevel,
-            int maxHealth,
-            int currentHealth,
-            int maxMana,
-            int currentMana,
-            int attackDamage,
-            long attackIntervalMilliseconds,
-            int healthRecoveryPerSecond,
-            int manaRecoveryPerSecond,
-            double criticalChance,
-            double criticalDamageMultiplier,
-            long nextBasicAttackAt,
-            Long fireBallNextCastAt,
-            Long lightningRailNextCastAt) {
-
-        private static CombatantResponse from(QuestCombatant combatant) {
-            return new CombatantResponse(
-                    combatant.getId(),
-                    combatant.getHero() == null ? null : combatant.getHero().getId(),
-                    combatant.getTeam().name(),
-                    combatant.getFormationIndex(),
-                    combatant.getName(),
-                    combatant.getHeroClass() == null ? null : combatant.getHeroClass().name(),
-                    combatant.getMagicLevel(),
-                    combatant.getMaxHealth(),
-                    combatant.getCurrentHealth(),
-                    combatant.getMaxMana(),
-                    combatant.getCurrentMana(),
-                    combatant.getAttackDamage(),
-                    combatant.getAttackIntervalMilliseconds(),
-                    combatant.getHealthRecoveryPerSecond(),
-                    combatant.getManaRecoveryPerSecond(),
-                    combatant.getCriticalChance(),
-                    combatant.getCriticalDamageMultiplier(),
-                    combatant.getNextBasicAttackAt(),
-                    combatant.getFireBallNextCastAt(),
-                    combatant.getLightningRailNextCastAt());
+                    heroIds);
         }
     }
 

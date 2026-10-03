@@ -17,91 +17,98 @@ spec:
     metadata:
       labels:
         app: bff
-        sidecar.istio.io/inject: "true"
+        sidecar.istio.io/inject: 'true'
     spec:
       serviceAccountName: hero-association-bff
       terminationGracePeriodSeconds: 45
       containers:
-        - name: bff
-          image: hero-association-bff:k3d
-          imagePullPolicy: Never
-          env:
-            - name: HERO_ASSOCIATION_ASSETS_BASE_URL
-              value: http://assets:8085
-            - name: HERO_ASSOCIATION_MARKET_BASE_URL
-              value: http://market:8084
-            - name: HERO_ASSOCIATION_CORE_BASE_URL
-              value: http://core:8081
-            - name: HERO_ASSOCIATION_FRONTEND_URL
-              value: https://heroassociation.test
-            - name: HERO_ASSOCIATION_OIDC_AUTH_SERVER_URL
-              value: http://keycloak:8080/realms/hero-association
-            - name: HERO_ASSOCIATION_OIDC_AUTHORIZATION_PATH
-              value: https://auth.heroassociation.test/realms/hero-association/protocol/openid-connect/auth
-            - name: HERO_ASSOCIATION_OIDC_ISSUER
-              value: https://auth.heroassociation.test/realms/hero-association
-            - name: QUARKUS_OIDC_END_SESSION_PATH
-              value: https://auth.heroassociation.test/realms/hero-association/protocol/openid-connect/logout
-            - name: HERO_ASSOCIATION_BFF_OIDC_CLIENT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: hero-association-k3d-credentials
-                  key: HERO_ASSOCIATION_BFF_OIDC_CLIENT_SECRET
-            - name: HERO_ASSOCIATION_BFF_OIDC_STATE_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: hero-association-k3d-credentials
-                  key: HERO_ASSOCIATION_BFF_OIDC_STATE_SECRET
-            - name: HERO_ASSOCIATION_BFF_CSRF_TOKEN_SIGNATURE_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: hero-association-k3d-credentials
-                  key: HERO_ASSOCIATION_BFF_CSRF_TOKEN_SIGNATURE_KEY
-            - name: HERO_ASSOCIATION_BFF_REDIS_URL
-              value: redis://redis-bff:6379
-            - name: HERO_ASSOCIATION_EDGE_AUTH_ENABLED
-              value: "true"
-            - name: HERO_ASSOCIATION_OTLP_ENDPOINT
-              value: http://otel-lgtm.hero-association-observability.svc.cluster.local:4317
-            - name: HERO_ASSOCIATION_OTEL_DISABLED
-              value: "false"
-            - name: HERO_ASSOCIATION_BFF_COOKIE_FORCE_SECURE
-              value: "true"
-            - name: QUARKUS_HTTP_PROXY_PROXY_ADDRESS_FORWARDING
-              value: "true"
-            - name: QUARKUS_HTTP_PROXY_ALLOW_X_FORWARDED
-              value: "true"
-            - name: QUARKUS_HTTP_PROXY_ENABLE_FORWARDED_HOST
-              value: "true"
-          ports:
-            - name: http
-              containerPort: 8080
-          lifecycle:
-            preStop:
-              exec:
-                command: ["/bin/sh", "-c", "sleep 15"]
-          startupProbe:
-            httpGet:
-              path: /q/health/started
-              port: http
-            periodSeconds: 5
-            failureThreshold: 60
-          readinessProbe:
-            httpGet:
-              path: /q/health/ready
-              port: http
-            periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /q/health/live
-              port: http
-            periodSeconds: 20
-          resources:
-            requests:
-              cpu: 300m
-              memory: 256Mi
-            limits:
-              memory: 1Gi
+      - name: bff
+        image: hero-association-bff:k3d
+        imagePullPolicy: Never
+        env:
+        - name: HERO_ASSOCIATION_ASSETS_BASE_URL
+          value: http://assets:8085
+        - name: HERO_ASSOCIATION_MARKET_BASE_URL
+          value: http://market:8084
+        - name: HERO_ASSOCIATION_CORE_BASE_URL
+          value: http://core:8081
+        - name: HERO_ASSOCIATION_FRONTEND_URL
+          value: https://heroassociation.test
+        - name: HERO_ASSOCIATION_OIDC_AUTH_SERVER_URL
+          value: http://keycloak:8080/realms/hero-association
+        - name: HERO_ASSOCIATION_OIDC_AUTHORIZATION_PATH
+          value: https://auth.heroassociation.test/realms/hero-association/protocol/openid-connect/auth
+        - name: HERO_ASSOCIATION_OIDC_ISSUER
+          value: https://auth.heroassociation.test/realms/hero-association
+        - name: QUARKUS_OIDC_END_SESSION_PATH
+          value: https://auth.heroassociation.test/realms/hero-association/protocol/openid-connect/logout
+        - name: HERO_ASSOCIATION_BFF_OIDC_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: hero-association-k3d-credentials
+              key: HERO_ASSOCIATION_BFF_OIDC_CLIENT_SECRET
+        - name: HERO_ASSOCIATION_BFF_OIDC_STATE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: hero-association-k3d-credentials
+              key: HERO_ASSOCIATION_BFF_OIDC_STATE_SECRET
+        - name: HERO_ASSOCIATION_BFF_CSRF_TOKEN_SIGNATURE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: hero-association-k3d-credentials
+              key: HERO_ASSOCIATION_BFF_CSRF_TOKEN_SIGNATURE_KEY
+        - name: HERO_ASSOCIATION_BFF_REDIS_URL
+          value: redis://redis-bff:6379
+        - name: HERO_ASSOCIATION_EDGE_AUTH_ENABLED
+          value: 'true'
+        - name: HERO_ASSOCIATION_OTLP_ENDPOINT
+          value: http://otel-lgtm.hero-association-observability.svc.cluster.local:4317
+        - name: HERO_ASSOCIATION_OTEL_DISABLED
+          value: 'false'
+        - name: HERO_ASSOCIATION_BFF_COOKIE_FORCE_SECURE
+          value: 'true'
+        - name: QUARKUS_HTTP_PROXY_PROXY_ADDRESS_FORWARDING
+          value: 'true'
+        - name: QUARKUS_HTTP_PROXY_ALLOW_X_FORWARDED
+          value: 'true'
+        - name: QUARKUS_HTTP_PROXY_ENABLE_FORWARDED_HOST
+          value: 'true'
+        - name: HERO_ASSOCIATION_WORLD_BASE_URL
+          value: http://world:8086
+        - name: HERO_ASSOCIATION_QUEST_BASE_URL
+          value: http://quest:8087
+        ports:
+        - name: http
+          containerPort: 8080
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep 15
+        startupProbe:
+          httpGet:
+            path: /q/health/started
+            port: http
+          periodSeconds: 5
+          failureThreshold: 60
+        readinessProbe:
+          httpGet:
+            path: /q/health/ready
+            port: http
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /q/health/live
+            port: http
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: 300m
+            memory: 256Mi
+          limits:
+            memory: 1Gi
 ---
 apiVersion: v1
 kind: Service
@@ -113,6 +120,6 @@ spec:
   selector:
     app: bff
   ports:
-    - name: http
-      port: 8080
-      targetPort: http
+  - name: http
+    port: 8080
+    targetPort: http
