@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-const appUrl = 'https://heroassociation.test'
+const appUrl = 'https://heroassociation.test:8443'
 
 test('gateway rejects market placement when rate-limit Redis is unavailable', async ({ page }) => {
   await page.goto('/')

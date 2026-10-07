@@ -256,7 +256,7 @@ if [[ "$service" != frontend ]]; then
   start_forward "$namespace" service/keycloak "$keycloak_port" 8080
   start_forward hero-association-observability service/otel-lgtm "$otlp_port" 4317
   export HERO_ASSOCIATION_OIDC_AUTH_SERVER_URL="http://127.0.0.1:$keycloak_port/realms/hero-association"
-  export HERO_ASSOCIATION_OIDC_ISSUER=https://auth.heroassociation.test/realms/hero-association
+  export HERO_ASSOCIATION_OIDC_ISSUER=https://auth.heroassociation.test:8443/realms/hero-association
   export HERO_ASSOCIATION_OTLP_ENDPOINT="http://127.0.0.1:$otlp_port"
   export HERO_ASSOCIATION_OTEL_DISABLED=false
 fi
@@ -287,6 +287,9 @@ case "$service" in
     export HERO_ASSOCIATION_CORE_SETTLEMENT_RABBITMQ_PASSWORD="$(secret_value hero-association-expedition-credentials HERO_ASSOCIATION_CORE_SETTLEMENT_RABBITMQ_PASSWORD)"
     ;;
   bff)
+    export HERO_ASSOCIATION_FRONTEND_URL=https://heroassociation.test:8443
+    export HERO_ASSOCIATION_OIDC_AUTHORIZATION_PATH=https://auth.heroassociation.test:8443/realms/hero-association/protocol/openid-connect/auth
+    export QUARKUS_OIDC_END_SESSION_PATH=https://auth.heroassociation.test:8443/realms/hero-association/protocol/openid-connect/logout
     start_forward "$namespace" service/redis-bff 16379 6379
     start_forward "$namespace" service/core 18081 8081
     start_forward "$namespace" service/expedition 18083 8083
@@ -443,5 +446,5 @@ sed -e "s/__SERVICE__/$service/g" \
 kubectl -n "$namespace" rollout status "deployment/$service-hybrid-bridge" --timeout=3m
 kubectl -n "$namespace" patch "service/$service" --type=merge \
   -p "{\"spec\":{\"selector\":{\"app\":\"$service\",\"hybrid\":\"wsl\"}}}"
-printf 'Host %s is live through Envoy at https://heroassociation.test. Press Ctrl-C to restore k3d.\n' "$service"
+printf 'Host %s is live through Envoy at https://heroassociation.test:8443. Press Ctrl-C to restore k3d.\n' "$service"
 wait "$app_pid"

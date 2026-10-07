@@ -99,7 +99,7 @@ try {
   const bffClientSummary = await findClient(bff.clientId);
   if (!bffClientSummary) throw new Error('BFF client is missing');
   const bffClient = await request('GET', `/clients/${bffClientSummary.id}`);
-  const origin = 'https://heroassociation.test';
+  const origin = 'https://heroassociation.test:8443';
   const redirectUris = [`${origin}/auth/callback`, `${origin}/auth/post-logout`];
   const webOrigins = [origin];
   if (JSON.stringify(bffClient.redirectUris) !== JSON.stringify(redirectUris) ||

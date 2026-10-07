@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
-const appUrl = 'https://heroassociation.test/'
-const authUrl = /https:\/\/auth\.heroassociation\.test\/realms\/hero-association\//
+const appUrl = 'https://heroassociation.test:8443/'
+const authUrl = /https:\/\/auth\.heroassociation\.test:8443\/realms\/hero-association\//
 const dawnwatchAgencyId = '019c4c00-0001-7000-8000-000000000001'
 
 async function signIn(page, email, password, managerName) {

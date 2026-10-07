@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { marketLimitBurst } from '../market-limit-burst.js'
 
-const appUrl = 'https://heroassociation.test'
+const appUrl = 'https://heroassociation.test:8443'
 const dawnwatchAgencyId = '019c4c00-0001-7000-8000-000000000001'
 const ironridgeAgencyId = '019c4c00-0001-7000-8000-000000000002'
 

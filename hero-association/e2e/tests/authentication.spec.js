@@ -4,8 +4,8 @@ import net from 'node:net'
 
 const redisHost = 'host.docker.internal'
 const redisPort = 16380
-const primaryBffUrl = 'https://heroassociation.test'
-const secondaryBffUrl = 'https://heroassociation.test/__e2e-secondary'
+const primaryBffUrl = 'https://heroassociation.test:8443'
+const secondaryBffUrl = 'https://heroassociation.test:8443/__e2e-secondary'
 const dawnwatchAgencyId = '019c4c00-0001-7000-8000-000000000001'
 const ironridgeAgencyId = '019c4c00-0001-7000-8000-000000000002'
 
@@ -117,11 +117,11 @@ async function redisTokenKeys() {
 async function signIn(page, email = 'user1@mail.com', password = 'user1') {
   await page.goto('/')
   await page.getByRole('button', { name: 'Sign in' }).click()
-  await expect(page).toHaveURL(/https:\/\/auth\.heroassociation\.test\/realms\/hero-association\//)
+  await expect(page).toHaveURL(/https:\/\/auth\.heroassociation\.test:8443\/realms\/hero-association\//)
   await page.locator('#username').fill(email)
   await page.locator('#password').fill(password)
   await page.locator('#kc-login').click()
-  await expect(page).toHaveURL('https://heroassociation.test/')
+  await expect(page).toHaveURL('https://heroassociation.test:8443/')
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
 }
 
@@ -131,7 +131,7 @@ test.beforeEach(async () => {
 })
 test('returns an already signed-out logout visit to the frontend', async ({ page }) => {
   await page.goto('/auth/logout')
-  await expect(page).toHaveURL('https://heroassociation.test/')
+  await expect(page).toHaveURL('https://heroassociation.test:8443/')
   await expect(page.getByRole('heading', { name: 'Welcome to Hero Association' })).toBeVisible()
 })
 
@@ -144,7 +144,7 @@ test('registers a new player, signs out, and signs back into the same account', 
   await expect(page.getByRole('button', { name: 'Create account' })).toBeVisible()
   await page.getByRole('button', { name: 'Create account' }).click()
 
-  await expect(page).toHaveURL(/https:\/\/auth\.heroassociation\.test\/realms\/hero-association\//)
+  await expect(page).toHaveURL(/https:\/\/auth\.heroassociation\.test:8443\/realms\/hero-association\//)
   await expect(page.locator('#kc-register-form')).toBeVisible()
   await expect(page.locator('#firstName')).toHaveCount(0)
   await expect(page.locator('#lastName')).toHaveCount(0)
@@ -154,7 +154,7 @@ test('registers a new player, signs out, and signs back into the same account', 
   await page.locator('#password-confirm').fill(password)
   await page.getByRole('button', { name: 'Register', exact: true }).click()
 
-  await expect(page).toHaveURL('https://heroassociation.test/')
+  await expect(page).toHaveURL('https://heroassociation.test:8443/')
   await expect(page.getByRole('heading', { name: 'Choose your manager name' })).toBeVisible()
 
   const firstAccountResponse = await page.request.get(`${primaryBffUrl}/api/v1/account`, { maxRedirects: 0 })
@@ -173,7 +173,7 @@ test('registers a new player, signs out, and signs back into the same account', 
   await page.locator('#password').fill(password)
   await page.locator('#kc-login').click()
 
-  await expect(page).toHaveURL('https://heroassociation.test/')
+  await expect(page).toHaveURL('https://heroassociation.test:8443/')
   await expect(page.getByRole('heading', { name: 'Choose your manager name' })).toBeVisible()
 
   const secondAccountResponse = await page.request.get(`${primaryBffUrl}/api/v1/account`, { maxRedirects: 0 })
@@ -194,12 +194,12 @@ test('signs in and fully signs out of the Keycloak session', async ({ page }) =>
   await expect(page.getByRole('heading', { name: 'Welcome to Hero Association' })).toBeVisible()
   await page.getByRole('button', { name: 'Sign in' }).click()
 
-  await expect(page).toHaveURL(/https:\/\/auth\.heroassociation\.test\/realms\/hero-association\//)
+  await expect(page).toHaveURL(/https:\/\/auth\.heroassociation\.test:8443\/realms\/hero-association\//)
   await page.locator('#username').fill('user1@mail.com')
   await page.locator('#password').fill('user1')
   await page.locator('#kc-login').click()
 
-  await expect(page).toHaveURL('https://heroassociation.test/')
+  await expect(page).toHaveURL('https://heroassociation.test:8443/')
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
   await expect(page.getByText('User 1', { exact: true })).toBeVisible()
   await expect(page.locator('.player-card__avatar')).toHaveText('U')
@@ -207,11 +207,11 @@ test('signs in and fully signs out of the Keycloak session', async ({ page }) =>
 
   await page.getByRole('button', { name: 'Sign out' }).click()
 
-  await expect(page).toHaveURL('https://heroassociation.test/')
+  await expect(page).toHaveURL('https://heroassociation.test:8443/')
   await expect(page.getByRole('heading', { name: 'Welcome to Hero Association' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Sign in' }).click()
-  await expect(page).toHaveURL(/https:\/\/auth\.heroassociation\.test\/realms\/hero-association\//)
+  await expect(page).toHaveURL(/https:\/\/auth\.heroassociation\.test:8443\/realms\/hero-association\//)
   await expect(page.locator('#kc-form-login')).toBeVisible()
 })
 

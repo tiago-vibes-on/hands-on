@@ -31,7 +31,7 @@ spec:
         - name: HERO_ASSOCIATION_OIDC_AUTH_SERVER_URL
           value: http://keycloak:8080/realms/hero-association
         - name: HERO_ASSOCIATION_OIDC_ISSUER
-          value: https://auth.heroassociation.test/realms/hero-association
+          value: https://auth.heroassociation.test:8443/realms/hero-association
         - name: HERO_ASSOCIATION_CORE_BASE_URL
           value: http://core:8081
         - name: HERO_ASSOCIATION_EXPEDITION_REDIS_URL

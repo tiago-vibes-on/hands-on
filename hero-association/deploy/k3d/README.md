@@ -32,10 +32,10 @@ If the pinned CLIs are cached in this checkout's ignored `.tools/` directory,
 run `export PATH="$PWD/.tools:$PATH"` from `deploy/k3d` before the commands
 below. Otherwise install `k3d` and `istioctl` on your normal `PATH`.
 
-The config pins K3s 1.34.7 because this Docker Desktop engine exposes cgroup
-v1 and Kubernetes 1.35's kubelet does not start on cgroup v1 by default. It
+The config retains the verified K3s 1.34.7 pin. After the WSL update, the
+Docker Desktop engine exposes cgroup v2. It
 creates one server and two agents, disables K3s's bundled Traefik, and reserves
-host ports `16550` for the Kubernetes API, `80` for HTTP, and `443` for
+host ports `16550` for the Kubernetes API, `8088` for HTTP, and `8443` for
 HTTPS. It does not modify the default kubeconfig or switch the current context,
 protecting the existing WSL K3s context.
 
@@ -56,17 +56,29 @@ pauses only this lab; `k3d cluster start hero-association` resumes it. Deleting 
 lab with `k3d cluster delete hero-association` permanently removes its own
 cluster data—never use that command to reset normal development.
 
-For an existing cluster created with the old `19080`/`19443` bindings,
-changing `cluster.yaml` does not update its Docker port mappings. First
-back up any k3d data you need to keep, then run
-`k3d cluster delete hero-association` and repeat the creation and deployment
-steps below. This deletes and recreates the k3d databases and telemetry.
+Changing `cluster.yaml` does not update an existing cluster's Docker bindings.
+For the existing 80/443 cluster, first migrate Raydow to 80/443 using its own
+runbook, which releases 8088/8443. Then stop Raydow before testing Hero:
+
+```bash
+python3 change-browser-ports.py ports
+k3d cluster start hero-association
+python3 change-browser-ports.py reconcile
+```
+
+The first command recreates only Hero's load balancer and preserves its node
+containers/volumes. The second maintenance command patches existing application
+URLs, the HTTP redirect, and Keycloak callbacks without changing application
+images, schemas, or users. Its private receipt is
+`secrets/browser-port-change.json`; rerun `reconcile` after an interruption.
+Restore hybrid sessions first. Other legacy mappings require separate reviewed
+maintenance; do not delete a cluster to change browser ports.
 
 For daily development, keep this cluster running and use
 [`./hybrid.sh`](../../LOCAL_DEVELOPMENT.md#switch-a-service-to-wsl-hot-reload)
 to move only the service being edited to WSL. Press Ctrl-C to restore its
 Deployment and HPA. Envoy Gateway is the only Hero Association listener on
-ports 80 and 443.
+host ports 8088 and 8443.
 
 The Windows hosts file (`C:\\Windows\\System32\\drivers\\etc\\hosts`) or
 Linux `/etc/hosts` needs only these entries:
@@ -76,15 +88,13 @@ Linux `/etc/hosts` needs only these entries:
 127.0.0.1 auth.heroassociation.test
 ```
 
-Both names use standard HTTPS port 443 and the ignored CA in
+Both names use HTTPS port 8443 and the ignored CA in
 `../../tls/certs/local-ca.crt`. Trust it in the browser's OS as described in
 the [local development guide](../../LOCAL_DEVELOPMENT.md#requirements-and-first-setup).
 
-On WSL with the separate, pre-existing K3s installation, WSL `curl` to
-`127.0.0.1:80` or `:443` may reach K3s's Traefik instead of Docker Desktop's
-k3d port forwarding. Verify these URLs from the Windows browser or Windows
-`curl.exe` (with `--ssl-revoke-best-effort` for the offline development CA),
-or run the containerized E2E tests. Do not stop the separate WSL K3s service.
+Hero's alternate ports leave 80/443 for Raydow Games. The normal workstation
+workflow still runs one project's daily cluster and Jenkins at a time.
+Do not stop a separate native WSL K3s service without operator approval.
 
 Envoy Gateway owns browser ingress in k3d. Istio is separate: workload-level
 sidecars will observe and secure BFF-to-Core traffic. There is no Istio ingress
@@ -119,8 +129,9 @@ applies the versioned resources under `../k8s/`:
 KUBECONFIG="$PWD/.kubeconfig" kubectl -n hero-association wait --for=condition=Programmed gateway/hero-association --timeout=150s
 ```
 
-The Gateway listens through k3d's mapped ports `80` and `443`. HTTP
-redirects to HTTPS on port `443`. `deploy-backend.sh` adds the BFF `/api` and
+The Gateway keeps internal ports `80` and `443`, published by k3d on host
+ports `8088` and `8443`. HTTP redirects to HTTPS on host port `8443`.
+`deploy-backend.sh` adds the BFF `/api` and
 `/auth` routes plus Keycloak's hostname; `deploy-frontend.sh` adds the app
 root route. More-specific BFF paths continue to reach BFF.
 
@@ -130,7 +141,7 @@ check the response, and remove them immediately:
 ```bash
 KUBECONFIG="$PWD/.kubeconfig" kubectl apply -f gateway-smoke.yaml
 KUBECONFIG="$PWD/.kubeconfig" kubectl -n hero-association rollout status deploy/gateway-smoke
-curl --cacert ../../tls/certs/local-ca.crt --resolve 'heroassociation.test:443:127.0.0.1' https://heroassociation.test/__gateway_smoke
+curl --cacert ../../tls/certs/local-ca.crt --resolve 'heroassociation.test:8443:127.0.0.1' https://heroassociation.test:8443/__gateway_smoke
 KUBECONFIG="$PWD/.kubeconfig" kubectl delete -f gateway-smoke.yaml
 ```
 
@@ -380,11 +391,11 @@ Check the Pods and browser-facing routes:
 
 ```bash
 KUBECONFIG="$PWD/.kubeconfig" kubectl -n hero-association get pods,svc,httproute
-curl --cacert ../../tls/certs/local-ca.crt --resolve 'heroassociation.test:443:127.0.0.1' https://heroassociation.test/api/v1/session
-curl --cacert ../../tls/certs/local-ca.crt --resolve 'auth.heroassociation.test:443:127.0.0.1' https://auth.heroassociation.test/realms/hero-association
+curl --cacert ../../tls/certs/local-ca.crt --resolve 'heroassociation.test:8443:127.0.0.1' https://heroassociation.test:8443/api/v1/session
+curl --cacert ../../tls/certs/local-ca.crt --resolve 'auth.heroassociation.test:8443:127.0.0.1' https://auth.heroassociation.test:8443/realms/hero-association
 ```
 
-The frontend is served at `https://heroassociation.test`. The
+The frontend is served at `https://heroassociation.test:8443`. The
 imported test users include `user1@mail.com` / `user1`, `user2@mail.com` /
 `user2`, and `manager1@mail.com` through `manager10@mail.com` with matching
 `managerN` passwords, for this disposable lab only. See the
@@ -627,8 +638,9 @@ npm run test:k3d
 ```
 
 The Playwright container joins the isolated k3d Docker network and maps both
-public hostnames to the k3d load balancer, avoiding unrelated WSL port-443
-listeners. It ignores the local CA warning for tests only. For a trusted
+public hostnames to Docker's host gateway, exercising the published 8443 port.
+The separate disposable stack keeps its internal gateway origins and callbacks.
+It ignores the local CA warning for tests only. For a trusted
 Windows browser, import the development CA as described in
 [`../../backend/README.md`](../../backend/README.md#local-https-gateway).
 

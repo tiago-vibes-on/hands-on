@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -9,19 +9,12 @@ const playwrightVersion = packageLock.packages['node_modules/@playwright/test'].
 const playwrightImage = `mcr.microsoft.com/playwright:v${playwrightVersion}-noble`
 const configFile = process.env.HERO_ASSOCIATION_K3D_PLAYWRIGHT_CONFIG || 'playwright.k3d.config.js'
 const k3dNetwork = 'k3d-hero-association'
-const gatewayIp = execFileSync('docker', [
-  'inspect', 'k3d-hero-association-serverlb', '--format',
-  '{{(index .NetworkSettings.Networks "k3d-hero-association").IPAddress}}',
-], { encoding: 'utf8' }).trim()
-if (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(gatewayIp)) {
-  throw new Error(`Invalid k3d load balancer IPv4 address: ${gatewayIp}`)
-}
 
 const argumentsForDocker = [
   'run', '--rm', '--init',
   '--network', k3dNetwork,
-  '--add-host', `heroassociation.test:${gatewayIp}`,
-  '--add-host', `auth.heroassociation.test:${gatewayIp}`,
+  '--add-host', 'heroassociation.test:host-gateway',
+  '--add-host', 'auth.heroassociation.test:host-gateway',
   '--ipc', 'host',
   '--user', `${process.getuid()}:${process.getgid()}`,
   '--volume', `${e2eDirectory}:/work`,

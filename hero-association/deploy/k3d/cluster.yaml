@@ -8,13 +8,13 @@ kubeAPI:
   host: 127.0.0.1
   hostIP: 127.0.0.1
   hostPort: "16550"
-# Kubernetes 1.35 refuses cgroup v1, which this Docker Desktop engine uses.
+# Keep the verified K3s pin; the current Docker Desktop engine uses cgroup v2.
 image: rancher/k3s:v1.34.7-k3s1
 ports:
-  - port: "127.0.0.1:80:80"
+  - port: "127.0.0.1:8088:80"
     nodeFilters:
       - loadbalancer
-  - port: "127.0.0.1:443:443"
+  - port: "127.0.0.1:8443:443"
     nodeFilters:
       - loadbalancer
 options:

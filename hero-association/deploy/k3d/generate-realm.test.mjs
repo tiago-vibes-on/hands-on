@@ -13,7 +13,7 @@ const generator = path.join(directory, 'generate-realm.mjs')
 const source = path.join(directory, '../../backend/keycloak/realm/hero-association-realm.json')
 
 for (const [name, origin, optionalArguments] of [
-  ['daily', 'https://heroassociation.test', []],
+  ['daily', 'https://heroassociation.test:8443', []],
   ['isolated E2E', 'https://app.e2e.heroassociation.test', ['https://app.e2e.heroassociation.test']],
 ]) {
   test(`${name} realm uses only its own callback origin`, async () => {

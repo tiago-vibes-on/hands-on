@@ -235,7 +235,7 @@ k3d cluster start hero-association
 Each `run` command belongs in its own terminal. Use only the services you
 are editing; the others remain in k3d. Press Ctrl-C to restore the matching
 Deployment, Service route, and HPA. The browser stays at
-`https://heroassociation.test`; Core remains private. The
+`https://heroassociation.test:8443`; Core remains private. The
 [local development guide](../LOCAL_DEVELOPMENT.md) covers the first setup,
 port allocations, secrets, interruption recovery, and Vite.
 

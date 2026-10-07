@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 
-const [source, target, origin = 'https://heroassociation.test'] = process.argv.slice(2);
+const [source, target, origin = 'https://heroassociation.test:8443'] = process.argv.slice(2);
 if (!source || !target || process.argv.length > 5) {
   throw new Error('Usage: node generate-realm.mjs SOURCE TARGET [HTTPS_ORIGIN]');
 }

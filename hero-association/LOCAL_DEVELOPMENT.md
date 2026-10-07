@@ -1,8 +1,8 @@
 # Local development with k3d
 
 The active development environment uses one k3d cluster. Envoy Gateway serves
-`https://heroassociation.test` and Keycloak serves
-`https://auth.heroassociation.test`. PostgreSQL, Redis, RabbitMQ, Keycloak,
+`https://heroassociation.test:8443` and Keycloak serves
+`https://auth.heroassociation.test:8443`. PostgreSQL, Redis, RabbitMQ, Keycloak,
 observability, and the Gateway stay in k3d. You can run any application service
 on WSL with hot reload while the others remain in k3d. The old
 Compose/Traefik gateway and E2E runner were retired during the
@@ -58,7 +58,10 @@ first setup, all eight application Deployments should be ready. To pause the
 whole environment, restore any hybrid services first, then run
 `k3d cluster stop hero-association`; this keeps the cluster data. The `status`
 command reads only the isolated k3d context; it does not change another
-Kubernetes cluster. Envoy alone owns the local browser ports 80 and 443.
+Kubernetes cluster. Envoy uses host browser ports 8088 and 8443, leaving
+80/443 for Raydow Games. Normally run one project's daily cluster and Jenkins
+at a time. For an existing 80/443 cluster, follow the non-destructive
+[port maintenance](deploy/k3d/README.md#create-the-cluster) before starting it.
 
 ## Switch a service to WSL hot reload
 

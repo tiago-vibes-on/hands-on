@@ -55,7 +55,7 @@ Build and deploy the Map-enabled frontend (the k3d build script defaults to
 The deploy script restarts the frontend Deployment so a newly imported fixed
 `:k3d` image tag is loaded by fresh Pods.
 
-Open `https://heroassociation.test`, sign in as User2, and choose
+Open `https://heroassociation.test:8443`, sign in as User2, and choose
 **Map → Troll Field** with the seeded three-Hero Main Party. Continue starts another fight only
 after a win; Return waits for the current fight to finish before settling.
 The standalone Dockerfile and ordinary Vite development default to Map off.

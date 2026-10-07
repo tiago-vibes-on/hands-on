@@ -33,7 +33,7 @@ k3d cluster start hero-association
 ```
 
 The hybrid command starts Vite on WSL port `15172`, stops only the k3d
-frontend Pod, and routes `https://heroassociation.test` through the
+frontend Pod, and routes `https://heroassociation.test:8443` through the
 unchanged Envoy Gateway. Vite HMR connects to the same HTTPS origin over
 WebSocket. Press Ctrl-C to restore the frontend Pod. Core, BFF, Expedition,
 and Keycloak can remain in k3d or be switched separately using
@@ -59,7 +59,7 @@ public BFF; the browser never calls Game Core directly.
 The hosts entries and one-time certificate trust steps are in the
 [local development guide](../LOCAL_DEVELOPMENT.md#requirements-and-first-setup).
 
-Keycloak is available through `https://auth.heroassociation.test`. The frontend begins
+Keycloak is available through `https://auth.heroassociation.test:8443`. The frontend begins
 at a sign-in screen, uses the BFF's `/auth/login` redirect, and receives no
 Keycloak tokens in browser storage. The first signed-in visit provisions an
 Account and requires a unique Manager name before the game opens. A Manager
@@ -106,7 +106,7 @@ Build and deploy it after the k3d backend from `../deploy/k3d`:
 ./deploy-frontend.sh
 ```
 
-Open `https://heroassociation.test`. Envoy Gateway serves the UI
+Open `https://heroassociation.test:8443`. Envoy Gateway serves the UI
 and routes `/api` and `/auth` to BFF on the same origin. The k3d Playwright
 suite runs with `npm run test:k3d` from `../e2e` without resetting lab data.
 See [`../deploy/k3d/README.md`](../deploy/k3d/README.md#build-and-deploy-the-frontend)

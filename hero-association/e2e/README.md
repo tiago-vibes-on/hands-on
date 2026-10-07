@@ -45,7 +45,7 @@ MVP gate.
 
 ## Manually test dungeon repeats and loot
 
-Open `https://heroassociation.test` and sign in with the local test account
+Open `https://heroassociation.test:8443` and sign in with the local test account
 `user2@mail.com` / `user2`. Use a freshly admitted Expedition after the verified
 loot build and its matching World seed data are deployed; an older admitted run
 retains its original drop tables.
@@ -101,7 +101,7 @@ reset. The [private Expedition integration](../deploy/k3d/EXPEDITION_INTEGRATION
 synchronizes its client and audience mapper without resetting Keycloak.
 This k3d smoke suite does not start Compose, flush Redis, or delete
 volumes. `npm test` now runs this same k3d smoke configuration. The Playwright container joins the isolated k3d Docker network and
-maps both hostnames to its load balancer, bypassing unrelated WSL port-443
+maps both hostnames to Docker's host gateway on published port 8443, bypassing unrelated WSL standard-port
 listeners. It ignores local certificate errors only inside the test browser.
 
 After enabling the k3d integration and deploying the Map-enabled frontend, run:

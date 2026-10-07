@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
-const primaryBffUrl = 'https://heroassociation.test'
-const secondaryBffUrl = 'https://heroassociation.test/__e2e-secondary'
+const primaryBffUrl = 'https://heroassociation.test:8443'
+const secondaryBffUrl = 'https://heroassociation.test:8443/__e2e-secondary'
 const dawnwatchAgencyId = '019c4c00-0001-7000-8000-000000000001'
 const ironridgeAgencyId = '019c4c00-0001-7000-8000-000000000002'
 
@@ -12,7 +12,7 @@ async function signIn(page, email, password) {
   await page.locator('#username').fill(email)
   await page.locator('#password').fill(password)
   await page.locator('#kc-login').click()
-  await expect(page).toHaveURL('https://heroassociation.test/')
+  await expect(page).toHaveURL('https://heroassociation.test:8443/')
   await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible()
 }
 

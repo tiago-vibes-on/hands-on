@@ -734,8 +734,13 @@ hybrid hot-reload modes. Its backend runs JVM BFF and Core images
 with private ClusterIP Services and opt-in Istio sidecars. Separate PostgreSQL
 databases serve Core and Keycloak, and a
 separate Redis instance stores BFF sessions. Generated lab-only credentials
-and a local Keycloak realm register callbacks and issuer URLs on standard
-HTTPS port 443. Standalone Compose JVM/native runs use separate development
+and a local Keycloak realm register callbacks and issuer URLs on HTTPS port
+8443. The host maps HTTP 8088 to gateway port 80 and HTTPS 8443 to gateway
+port 443; redirects include 8443. This allocation leaves host 80/443 for
+Raydow Games, while the normal workflow still runs one project's cluster at
+a time. Port maintenance preserves cluster nodes, databases, and users, and
+updates existing Keycloak callbacks without reimporting or resetting the realm.
+Standalone Compose JVM/native runs use separate development
 ports and do not provide a second public gateway.
 Kubernetes startup, readiness, and liveness probes use Quarkus SmallRye Health.
 BFF and Core use rolling updates and separate CPU-based `autoscaling/v2` HPAs with

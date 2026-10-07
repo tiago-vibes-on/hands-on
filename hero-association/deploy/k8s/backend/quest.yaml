@@ -42,7 +42,7 @@ spec:
         - name: HERO_ASSOCIATION_OTEL_DISABLED
           value: 'false'
         - name: HERO_ASSOCIATION_OIDC_ISSUER
-          value: https://auth.heroassociation.test/realms/hero-association
+          value: https://auth.heroassociation.test:8443/realms/hero-association
         - name: HERO_ASSOCIATION_QUEST_CORE_SERVICE_KEY
           valueFrom:
             secretKeyRef:
