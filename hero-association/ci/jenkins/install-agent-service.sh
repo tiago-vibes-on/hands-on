@@ -18,5 +18,6 @@ install -d -m 700 "$unit_dir"
 } > "$unit_file"
 chmod 600 "$unit_file"
 systemctl --user daemon-reload
-systemctl --user enable --now hero-association-jenkins-agent.service
-printf 'Installed and started %s\n' "$unit_file"
+systemctl --user disable hero-association-jenkins-agent.service
+systemctl --user start hero-association-jenkins-agent.service
+printf 'Installed and started %s for this session; automatic startup is disabled\n' "$unit_file"

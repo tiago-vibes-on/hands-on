@@ -91,7 +91,8 @@ files. The default agent workspace is under the current user's
 and downloads that controller's matching `agent.jar`. Both files are ignored
 and owner-only. Re-run it if the Jenkins controller volume is replaced, then
 restart the agent service. The service installer creates a user-level systemd
-unit and starts it; no `sudo` is needed. The agent connects over Jenkins
+unit and starts it for the current session with automatic startup disabled;
+no `sudo` is needed. The agent connects over Jenkins
 WebSocket, so no extra Jenkins agent TCP port is published.
 
 Open <http://localhost:15180> from the Windows browser. Sign in as `admin`;
@@ -158,7 +159,9 @@ docker compose -f compose.yaml down
 ```
 
 To start it again, run `docker compose -f compose.yaml up --detach` and
-`systemctl --user start hero-association-jenkins-agent.service`. Do not run
+`systemctl --user start hero-association-jenkins-agent.service`. The controller
+uses Docker `restart=no` and the agent unit stays disabled at WSL login, so both
+require a manual start after Docker/WSL restarts. Do not run
 `docker compose down --volumes` unless you intentionally want to discard the
 Jenkins controller's users, configuration, and build history. The systemd
 service can be disabled with

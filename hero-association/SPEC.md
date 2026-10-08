@@ -91,6 +91,9 @@ changed baseline, promotes only the candidate image, verifies all eight
 running Pod digests, runs browser E2E and market k6, and rolls back the
 target service if a post-rollout gate fails. The latest successful deployment
 of a service wins; this local lab does not coordinate cross-service releases.
+The local Jenkins controller and WSL agent start manually; their startup and
+history-preserving stop commands are owned by the
+[CI guide](ci/jenkins/README.md#status-and-stopping).
 
 ## API contract
 

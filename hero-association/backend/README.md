@@ -175,6 +175,7 @@ The [local Jenkins setup](../ci/jenkins/README.md) has separate Core, BFF,
 Expedition, and frontend worktree and trusted-`main` builds, plus a
 verified-artifact deploy job for each service. Builds and deployments are
 manual; pushing to Git does not change the running k3d environment.
+The controller and WSL agent also start manually; the CI guide owns their lifecycle.
 Normal Quarkus dev mode remains independent.
 
 ## World catalogs and optional Quests
